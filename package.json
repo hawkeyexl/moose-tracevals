@@ -19,6 +19,7 @@
     "dev": "tsc --watch",
     "start": "node dist/cli.js",
     "test": "node --import tsx --test 'tests/**/*.test.ts'",
+    "test:live": "npx tsx tests/live-e2e.ts",
     "lint": "tsc --noEmit"
   },
   "dependencies": {
