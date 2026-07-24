@@ -3,6 +3,12 @@ import { writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { loadConfig } from "../core/config.js";
 import { runEvals } from "../core/engine.js";
+import {
+  appendHistory,
+  compareToLast,
+  loadHistory,
+  type HistoryComparison,
+} from "../history.js";
 import { makeJudgeProvider } from "../judge/provider.js";
 import { makeTraceJudge, type TraceJudge } from "../judge/trace-judge.js";
 import { render, type ReportFormat } from "../reporters/index.js";
@@ -19,6 +25,8 @@ export interface RunCommandOptions {
   maxCostUsd?: number;
   format?: ReportFormat;
   output?: string;
+  /** Append this run to history and compare against the previous run. */
+  history?: boolean;
   /** Directory holding agentevals.config.yaml; defaults to cwd. */
   configDir?: string;
   env?: Record<string, string | undefined>;
@@ -29,6 +37,7 @@ export interface RunCommandOptions {
 export interface RunCommandResult {
   report: RunReport;
   rendered: string;
+  comparison?: HistoryComparison;
 }
 
 export async function runRun(
@@ -66,9 +75,36 @@ export async function runRun(
       : {}),
   });
 
-  const rendered = render(report, options.format ?? "human");
+  let comparison: HistoryComparison | undefined;
+  if (options.history) {
+    const historyFile = resolve(configDir, config.history.file);
+    comparison =
+      compareToLast(await loadHistory(historyFile), report) ?? undefined;
+    await appendHistory(historyFile, report);
+  }
+
+  let rendered = render(report, options.format ?? "human");
+  if (comparison && (options.format ?? "human") !== "json") {
+    rendered += `\n\n${renderComparison(comparison)}`;
+  }
   if (options.output) {
     await writeFile(options.output, rendered, "utf-8");
   }
-  return { report, rendered };
+  return { report, rendered, ...(comparison ? { comparison } : {}) };
+}
+
+function renderComparison(comparison: HistoryComparison): string {
+  const lines = [`History vs ${comparison.previousTimestamp}:`];
+  for (const r of comparison.regressions) {
+    lines.push(`  regression: ${r.evalName} (${r.outcome})`);
+  }
+  for (const i of comparison.improvements) {
+    lines.push(`  improvement: ${i.evalName} (${i.outcome})`);
+  }
+  if (comparison.added.length) lines.push(`  added: ${comparison.added.join(", ")}`);
+  if (comparison.removed.length) {
+    lines.push(`  removed: ${comparison.removed.join(", ")}`);
+  }
+  if (lines.length === 1) lines.push("  no changes");
+  return lines.join("\n");
 }

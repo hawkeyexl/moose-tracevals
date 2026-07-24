@@ -52,3 +52,12 @@ export {
   type RunCommandResult,
 } from "./commands/run.js";
 export { pickTrace, type PickerChoice, type PromptFn } from "./trace/picker.js";
+export {
+  appendHistory,
+  compareToLast,
+  entryFor,
+  loadHistory,
+  type HistoryComparison,
+  type HistoryEntry,
+  type HistoryEval,
+} from "./history.js";

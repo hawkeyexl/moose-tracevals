@@ -28,6 +28,7 @@ interface RunFlags {
   maxCostUsd?: number;
   format?: string;
   output?: string;
+  history?: boolean;
 }
 
 async function executeRun(trace: string | undefined, opts: RunFlags) {
@@ -52,6 +53,7 @@ async function executeRun(trace: string | undefined, opts: RunFlags) {
     maxCostUsd: opts.maxCostUsd,
     format: (opts.format as ReportFormat | undefined) ?? "human",
     output: opts.output,
+    history: opts.history,
   });
   console.log(rendered);
   process.exitCode = report.exitCode;
@@ -70,7 +72,8 @@ function addRunFlags(cmd: Command): Command {
     .option("--no-cache", "bypass the judge cache")
     .option("--max-cost-usd <usd>", "judge cost budget", (v) => parseFloat(v))
     .option("-f, --format <format>", "human | json | markdown", "human")
-    .option("-o, --output <file>", "also write the report to a file");
+    .option("-o, --output <file>", "also write the report to a file")
+    .option("--history", "append to history and compare with the previous run");
 }
 
 addRunFlags(
