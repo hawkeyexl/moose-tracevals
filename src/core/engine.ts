@@ -110,6 +110,9 @@ export async function runEvals(options: EngineOptions): Promise<RunReport> {
 
   if (llmPlans.length > 0) {
     if (options.deterministicOnly || options.judge === undefined) {
+      const skipReason = options.deterministicOnly
+        ? "llm evals skipped (deterministic-only run)"
+        : "llm evals skipped (no judge provided)";
       for (const plan of llmPlans) {
         results.push({
           evalName: plan.evalName,
@@ -119,16 +122,15 @@ export async function runEvals(options: EngineOptions): Promise<RunReport> {
           grader: plan.grader,
           implicit: plan.implicit,
           outcome: "skipped",
-          skipReason: "llm evals skipped (deterministic-only run)",
+          skipReason,
           durationMs: 0,
         });
       }
     } else {
       const rendered = renderTrace(trace, config.render);
       const judged = await options.judge(llmPlans, rendered);
-      const planByIndex = new Map(llmPlans.map((p, i) => [i, p]));
       judged.forEach((j, i) => {
-        const plan = planByIndex.get(i);
+        const plan = llmPlans[i];
         results.push({
           evalName: j.evalName,
           artifact: j.artifact,

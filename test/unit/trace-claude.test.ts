@@ -1,6 +1,6 @@
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { detectFormat } from "../../src/trace/detect.js";
+import { detectContentFormat, detectFormat } from "../../src/trace/detect.js";
 import { parseTraceFile } from "../../src/trace/claude.js";
 import { AgentevalsError } from "../../src/types.js";
 
@@ -30,6 +30,32 @@ describe("detectFormat", () => {
   it("rejects unknown formats with an operational error", () => {
     expect(() => detectFormat(`{"hello":"world"}`)).toThrow(AgentevalsError);
     expect(() => detectFormat("not json at all")).toThrow(AgentevalsError);
+  });
+});
+
+describe("detectContentFormat", () => {
+  it("scans past a leading unidentifiable record (e.g. summary) to the format-bearing line", () => {
+    const content = [
+      `{"type":"summary","summary":"prior session","leafUuid":"abc"}`,
+      `{"parentUuid":null,"isSidechain":false,"type":"user","sessionId":"x","message":{"role":"user","content":"hi"}}`,
+    ].join("\n");
+    expect(detectContentFormat(content)).toBe("claude-session");
+  });
+
+  it("scans past malformed leading lines", () => {
+    const content = [
+      `not json`,
+      `{"type":"system","subtype":"init","session_id":"y","model":"m"}`,
+    ].join("\n");
+    expect(detectContentFormat(content)).toBe("claude-stream");
+  });
+
+  it("throws when no line identifies a format", () => {
+    const content = [
+      `{"type":"summary","leafUuid":"abc"}`,
+      `{"type":"other","foo":1}`,
+    ].join("\n");
+    expect(() => detectContentFormat(content)).toThrow(AgentevalsError);
   });
 });
 

@@ -41,4 +41,28 @@ describe("cost grader", () => {
     });
     expect(result.findings).toHaveLength(1);
   });
+
+  it("still checks the token budget when maxUsd is unavailable but both are set", async () => {
+    // Claude session files carry token usage but no totalCostUsd. The missing
+    // cost data must not suppress the token check.
+    const over = await grader.grade({
+      trace: makeTrace({ usage: { inputTokens: 900, outputTokens: 200 } }),
+      plan: makePlan({
+        grader: "cost",
+        options: { maxUsd: 0.1, maxTokens: 1000 },
+      }),
+    });
+    expect(over.findings).toHaveLength(1);
+    expect(over.skipped).toBeUndefined();
+
+    const under = await grader.grade({
+      trace: makeTrace({ usage: { inputTokens: 100, outputTokens: 50 } }),
+      plan: makePlan({
+        grader: "cost",
+        options: { maxUsd: 0.1, maxTokens: 1000 },
+      }),
+    });
+    expect(under.findings).toEqual([]);
+    expect(under.skipped).toBeUndefined();
+  });
 });

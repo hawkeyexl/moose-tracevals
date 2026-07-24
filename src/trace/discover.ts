@@ -3,7 +3,7 @@
  * projects) under the user's home directory. AGENTEVALS_HOME overrides the
  * home dir so tests and CI can point at a fixture tree.
  */
-import { readdir, readFile, stat } from "node:fs/promises";
+import { open, readdir, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 
@@ -96,18 +96,26 @@ export async function discoverTraces(
 /** Bytes read from the head of a session file when summarizing for a list. */
 const SUMMARY_WINDOW = 256 * 1024;
 
+/** Read only the first `bytes` of a file — session files run to many MB. */
+async function readHead(file: string, bytes: number): Promise<string | null> {
+  let handle;
+  try {
+    handle = await open(file, "r");
+    const buffer = Buffer.alloc(bytes);
+    const { bytesRead } = await handle.read(buffer, 0, bytes, 0);
+    return buffer.toString("utf-8", 0, bytesRead);
+  } catch {
+    return null;
+  } finally {
+    await handle?.close();
+  }
+}
+
 async function summarizeTrace(
   file: string,
 ): Promise<Pick<TraceListing, "sessionId" | "project" | "firstPrompt">> {
-  let content: string;
-  try {
-    content = await readFile(file, "utf-8");
-  } catch {
-    return {};
-  }
-  if (content.length > SUMMARY_WINDOW) {
-    content = content.slice(0, SUMMARY_WINDOW);
-  }
+  const content = await readHead(file, SUMMARY_WINDOW);
+  if (content === null) return {};
 
   const summary: Pick<TraceListing, "sessionId" | "project" | "firstPrompt"> =
     {};
