@@ -10,14 +10,14 @@ import { extractFrontmatter, Validator, type FieldError } from "docmeta";
 import type { ResolvedArtifact } from "../artifacts/types.js";
 
 export const ARTIFACT_EVALS_SCHEMA_ID =
-  "https://raw.githubusercontent.com/hawkeyexl/agentevals/main/schemas/artifact-evals-0.1.json";
+  "https://raw.githubusercontent.com/hawkeyexl/agentevals/main/schemas/artifact-evals-0.2.json";
 
 /** Absolute path of the packaged schema (works from src and dist). */
 export function artifactEvalsSchemaPath(): string {
   // src/criteria/ and dist/ are both one hop from the package root.
   const here = dirname(fileURLToPath(import.meta.url));
-  const fromSrc = join(here, "..", "..", "schemas", "artifact-evals-0.1.json");
-  const fromDist = join(here, "..", "schemas", "artifact-evals-0.1.json");
+  const fromSrc = join(here, "..", "..", "schemas", "artifact-evals-0.2.json");
+  const fromDist = join(here, "..", "schemas", "artifact-evals-0.2.json");
   // tsup bundles to dist/ flat; src runs nested. Prefer whichever exists at
   // require time — but stat here would make this async, so decide by marker.
   return here.endsWith("criteria") ? fromSrc : fromDist;
@@ -25,9 +25,16 @@ export function artifactEvalsSchemaPath(): string {
 
 export type Severity = "error" | "warning" | "info";
 
+/**
+ * `capability` probes a boundary and is expected to fail sometimes;
+ * `regression` protects behavior that already works. Reported, not enforced.
+ */
+export type CriterionType = "capability" | "regression";
+
 export interface Criterion {
   name: string;
   assertion: string;
+  type: CriterionType;
   /** "llm" or a deterministic grader kind. */
   grader: string;
   options?: Record<string, unknown>;
@@ -81,6 +88,7 @@ function normalizeCriterion(raw: unknown, index: number): Criterion {
     return {
       name: `criterion-${index + 1}`,
       assertion: raw,
+      type: "regression",
       grader: "llm",
       severity: "error",
     };
@@ -90,6 +98,7 @@ function normalizeCriterion(raw: unknown, index: number): Criterion {
     name:
       typeof obj.name === "string" ? obj.name : `criterion-${index + 1}`,
     assertion: obj.assertion as string,
+    type: (obj.type as CriterionType | undefined) ?? "regression",
     grader: typeof obj.grader === "string" ? obj.grader : "llm",
     severity: (obj.severity as Severity | undefined) ?? "error",
   };

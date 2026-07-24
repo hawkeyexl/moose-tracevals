@@ -31,6 +31,14 @@ export interface AgentevalsConfig {
   history: {
     file: string;
   };
+  fill: {
+    /** Minimum self-reported confidence a proposal needs to be written. */
+    confidenceThreshold: number;
+    maxCriteriaPerArtifact: number;
+    temperature: number;
+    cacheDir: string;
+    maxCostUsd?: number;
+  };
   failOnNeedsReview: boolean;
 }
 
@@ -63,10 +71,21 @@ export function parseConfig(raw: unknown): AgentevalsConfig {
     history: {
       file: r.history?.file ?? ".agentevals/history.jsonl",
     },
+    fill: {
+      // 0.7 matches the manuscript's calibration bar for judged agreement.
+      confidenceThreshold: r.fill?.confidenceThreshold ?? 0.7,
+      maxCriteriaPerArtifact: r.fill?.maxCriteriaPerArtifact ?? 8,
+      temperature: r.fill?.temperature ?? 0,
+      // Separate from the judge cache: different key scheme and value shape.
+      cacheDir: r.fill?.cacheDir ?? ".agentevals/cache/fill",
+    },
     failOnNeedsReview: r.failOnNeedsReview ?? true,
   };
   if (typeof r.judge?.maxCostUsd === "number") {
     config.judge.maxCostUsd = r.judge.maxCostUsd;
+  }
+  if (typeof r.fill?.maxCostUsd === "number") {
+    config.fill.maxCostUsd = r.fill.maxCostUsd;
   }
   return config;
 }

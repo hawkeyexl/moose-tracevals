@@ -2,6 +2,7 @@
 import { createRequire } from "node:module";
 import { Command } from "commander";
 import { renderList, runList } from "./commands/list.js";
+import { renderFill, runFill } from "./commands/fill.js";
 import { runRun } from "./commands/run.js";
 import { AgentevalsError } from "./types.js";
 import type { ReportFormat } from "./reporters/index.js";
@@ -81,6 +82,54 @@ addRunFlags(
     .command("run [trace]", { isDefault: true })
     .description("Evaluate a trace against the skills and instructions it used"),
 ).action(executeRun);
+
+program
+  .command("fill [paths...]")
+  .description(
+    "Propose eval criteria for skills, agent definitions, and project rules, and write those above the confidence threshold",
+  )
+  .option("--project <dir>", "project root to scan (default: current directory)")
+  .option("--dry-run", "report proposals without writing them")
+  .option(
+    "--confidence <n>",
+    "minimum confidence to write (0-1)",
+    (v) => parseFloat(v),
+  )
+  .option("--max-cost-usd <usd>", "proposal cost budget", (v) => parseFloat(v))
+  .option("--no-cache", "bypass the proposal cache")
+  .option("--provider <name>", "provider: claude-cli, anthropic, openai, mock")
+  .option("--model <model>", "model override")
+  .option("-f, --format <format>", "human | json", "human")
+  .action(async (paths: string[], opts: {
+    project?: string;
+    dryRun?: boolean;
+    confidence?: number;
+    maxCostUsd?: number;
+    cache?: boolean;
+    provider?: string;
+    model?: string;
+    format?: string;
+  }) => {
+    if (opts.confidence !== undefined && (opts.confidence < 0 || opts.confidence > 1)) {
+      throw new AgentevalsError(
+        `--confidence must be between 0 and 1, got ${opts.confidence}`,
+      );
+    }
+    const { report, rendered } = await runFill({
+      ...(paths.length > 0 ? { paths } : {}),
+      ...(opts.project !== undefined ? { project: opts.project } : {}),
+      ...(opts.dryRun !== undefined ? { dryRun: opts.dryRun } : {}),
+      ...(opts.confidence !== undefined ? { confidence: opts.confidence } : {}),
+      ...(opts.maxCostUsd !== undefined ? { maxCostUsd: opts.maxCostUsd } : {}),
+      ...(opts.cache === false ? { noCache: true } : {}),
+      ...(opts.provider !== undefined ? { provider: opts.provider } : {}),
+      ...(opts.model !== undefined ? { model: opts.model } : {}),
+    });
+    console.log(
+      opts.format === "json" ? JSON.stringify(report, null, 2) : rendered,
+    );
+    process.exitCode = report.exitCode;
+  });
 
 program
   .command("list")

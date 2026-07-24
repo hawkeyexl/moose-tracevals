@@ -4,9 +4,9 @@
  * only — no LLM guessing. Unresolved refs degrade to coverage entries and
  * warnings, never a crash (ADR 01003).
  */
-import { access, readdir, readFile } from "node:fs/promises";
 import { basename, dirname, join, resolve } from "node:path";
 import { homeDir } from "../trace/discover.js";
+import { findGitRoot, findInTree, safeRead } from "./fs.js";
 import type { Trace } from "../trace/types.js";
 import type {
   CoverageEntry,
@@ -21,6 +21,16 @@ export interface ResolveOptions {
   projectRoot?: string;
   env?: Record<string, string | undefined>;
 }
+
+/**
+ * Project-rules filenames, in the order they are checked. Different agent
+ * tools use different names for the same artifact; all are read the same way.
+ */
+export const PROJECT_RULES_FILENAMES = [
+  "CLAUDE.md",
+  "AGENTS.md",
+  "GEMINI.md",
+] as const;
 
 /** Agents that ship with Claude Code and have no definition file on disk. */
 const BUILTIN_AGENTS = new Set([
@@ -266,7 +276,7 @@ async function resolveProjectRules(
   dirs.push(join(projectRoot, ".claude"));
 
   for (const dir of dirs) {
-    for (const filename of ["CLAUDE.md", "AGENTS.md"]) {
+    for (const filename of PROJECT_RULES_FILENAMES) {
       const path = join(dir, filename);
       tried.push(path);
       const content = await safeRead(path);
@@ -284,46 +294,4 @@ async function resolveProjectRules(
   return { artifacts, tried };
 }
 
-// ── Helpers ──────────────────────────────────────────────────────
-
-async function findGitRoot(start: string): Promise<string | null> {
-  let current = resolve(start);
-  for (let depth = 0; depth < 64; depth += 1) {
-    try {
-      await access(join(current, ".git"));
-      return current;
-    } catch {
-      // keep walking
-    }
-    const parent = dirname(current);
-    if (parent === current) return null;
-    current = parent;
-  }
-  return null;
-}
-
-async function findInTree(
-  root: string,
-  match: (path: string) => boolean,
-): Promise<string | null> {
-  let entries;
-  try {
-    entries = await readdir(root, { withFileTypes: true, recursive: true });
-  } catch {
-    return null;
-  }
-  for (const entry of entries) {
-    if (!entry.isFile()) continue;
-    const full = join(entry.parentPath ?? root, entry.name);
-    if (match(full)) return full;
-  }
-  return null;
-}
-
-async function safeRead(path: string): Promise<string | null> {
-  try {
-    return await readFile(path, "utf-8");
-  } catch {
-    return null;
-  }
-}
+// Filesystem helpers live in ./fs.js, shared with static discovery.

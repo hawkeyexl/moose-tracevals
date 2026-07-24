@@ -15,16 +15,30 @@ import {
 import { AgentevalsError } from "../types.js";
 import type { AgentevalsConfig } from "../core/config.js";
 
+/** docevals declares this shape but does not export the type. */
+export type MockResponse = ConstructorParameters<typeof MockProvider>[0][number];
+
 export function makeJudgeProvider(
   config: AgentevalsConfig,
-  options: { provider?: string; model?: string } = {},
+  options: {
+    provider?: string;
+    model?: string;
+    /**
+     * Responses for the `mock` provider. The default is verdict-shaped, which
+     * suits judging; callers with a different response schema (criteria
+     * proposals, say) must supply their own.
+     */
+    mockResponses?: MockResponse[];
+  } = {},
 ): JudgeProvider {
   const name =
     options.provider ??
     (config.provider.default as string | undefined) ??
     "claude-cli";
   if (name === "mock") {
-    return new MockProvider([mockVerdict("pass", 0.95)]);
+    return new MockProvider(
+      options.mockResponses ?? [mockVerdict("pass", 0.95)],
+    );
   }
   try {
     // docevals' parseConfig takes YAML text; serialize the provider section.
