@@ -1,0 +1,161 @@
+import { mkdtemp, mkdir, rm } from "node:fs/promises";
+import { join } from "node:path";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import {
+  FILL_PROMPT_VERSION,
+  MAX_BODY_CHARS,
+  buildFillUser,
+  isValidProposal,
+  systemPromptFor,
+} from "../../src/fill/prompt.js";
+import { FillCache, fillCacheKey } from "../../src/fill/cache.js";
+import { makeArtifact } from "../helpers.js";
+
+describe("fill prompt", () => {
+  const artifact = makeArtifact({
+    type: "agent",
+    name: "doc-writer",
+    path: "/p/.claude/agents/doc-writer.md",
+    content: "---\nname: doc-writer\ntools: Read, Grep\n---\nNever modify code.\n",
+  });
+
+  it("names only the graders the artifact type may carry", () => {
+    const skill = systemPromptFor("skill");
+    expect(skill).toContain("tool-usage");
+    expect(skill).not.toContain("json-output");
+
+    const rules = systemPromptFor("project-rules");
+    expect(rules).toContain("skill-invoked");
+  });
+
+  it("states the binary pass/fail bar and demands examples", () => {
+    const prompt = systemPromptFor("skill");
+    expect(prompt).toMatch(/pass\/fail|pass or fail/i);
+    expect(prompt).toContain("examples");
+    expect(prompt).toContain("confidence");
+  });
+
+  it("carries the body, existing names, and static grounding facts", () => {
+    const user = buildFillUser({
+      artifact,
+      existingNames: ["already-there"],
+      maxCriteria: 3,
+      facts: { name: "doc-writer", declaredTools: ["Read", "Grep"] },
+      knownSkills: ["fix-bug"],
+    });
+
+    expect(user).toContain("Never modify code.");
+    expect(user).toContain("already-there");
+    expect(user).toContain("Read, Grep");
+    expect(user).toContain("fix-bug");
+    expect(user).toContain("3");
+  });
+
+  it("truncates a long body rather than sending it whole", () => {
+    const user = buildFillUser({
+      artifact: makeArtifact({ content: "x".repeat(MAX_BODY_CHARS + 500) }),
+      existingNames: [],
+      maxCriteria: 3,
+      facts: { declaredTools: [] },
+      knownSkills: [],
+    });
+    expect(user).toContain("truncated");
+    expect(user.length).toBeLessThan(MAX_BODY_CHARS + 2000);
+  });
+
+  it("validates the provider response shape", () => {
+    expect(
+      isValidProposal({
+        criteria: [
+          {
+            name: "no-shell",
+            assertion: "No shell commands were run.",
+            grader: "tool-usage",
+            options: { tool: "Bash", expect: "not-used" },
+            examples: { pass: "no Bash calls", fail: "ran npm test" },
+            confidence: 0.8,
+          },
+        ],
+        needsSharpening: [
+          { instruction: "Produce high-quality docs.", reason: "no measurable bar" },
+        ],
+      }),
+    ).toBe(true);
+
+    // confidence is mandatory — the gate has nothing to work with without it.
+    expect(
+      isValidProposal({ criteria: [{ name: "x", assertion: "y", grader: "llm" }] }),
+    ).toBe(false);
+    expect(isValidProposal({ criteria: [], extra: 1 })).toBe(false);
+    expect(isValidProposal({ criteria: [], needsSharpening: [] })).toBe(true);
+  });
+});
+
+describe("fill cache", () => {
+  let dir: string;
+
+  beforeAll(async () => {
+    await mkdir(".tmp", { recursive: true });
+    dir = await mkdtemp(join(".tmp", "fill-cache-"));
+  });
+  afterAll(async () => {
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  const key = (over: Partial<Parameters<typeof fillCacheKey>[0]> = {}) =>
+    fillCacheKey({
+      provider: "mock",
+      model: "m",
+      temperature: 0,
+      maxCriteria: 3,
+      artifactType: "skill",
+      path: "/p/.claude/skills/a/SKILL.md",
+      body: "body",
+      existingNames: [],
+      knownSkills: [],
+      ...over,
+    });
+
+  it("is stable for identical inputs", () => {
+    expect(key()).toBe(key());
+  });
+
+  it("changes when the artifact or the existing criteria change", () => {
+    expect(key({ body: "different" })).not.toBe(key());
+    // A post-fill re-run must miss, so the model is asked for *additional*
+    // coverage rather than replaying its earlier proposal.
+    expect(key({ existingNames: ["added"] })).not.toBe(key());
+    expect(key({ maxCriteria: 5 })).not.toBe(key());
+    expect(key({ artifactType: "agent" })).not.toBe(key());
+    expect(key({ model: "other" })).not.toBe(key());
+    // Two artifacts with identical content at different paths are distinct.
+    expect(key({ path: "/p/.claude/skills/b/SKILL.md" })).not.toBe(key());
+    // The skill list is the prompt's grounding vocabulary, so adding a skill
+    // must invalidate every artifact's proposal, not just that skill's own.
+    expect(key({ knownSkills: ["fix-bug"] })).not.toBe(key());
+  });
+
+  it("cannot be forged by a name containing the separator", () => {
+    expect(key({ existingNames: ["a,b"] })).not.toBe(
+      key({ existingNames: ["a", "b"] }),
+    );
+  });
+
+  it("round-trips a proposal and treats corruption as a miss", async () => {
+    const cache = new FillCache(dir, true);
+    const proposal = { criteria: [], needsSharpening: [] };
+    expect(cache.get("k1")).toBeUndefined();
+    cache.set("k1", proposal);
+    expect(cache.get("k1")).toEqual(proposal);
+
+    const { writeFile } = await import("node:fs/promises");
+    await writeFile(join(dir, "k2.json"), "{ not json");
+    expect(cache.get("k2")).toBeUndefined();
+  });
+
+  it("does nothing when disabled", () => {
+    const cache = new FillCache(dir, false);
+    cache.set("k3", { criteria: [] });
+    expect(cache.get("k3")).toBeUndefined();
+  });
+});

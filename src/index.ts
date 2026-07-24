@@ -12,15 +12,37 @@ export {
 } from "./trace/discover.js";
 export { renderList, runList, type ListOptions, type ListRun } from "./commands/list.js";
 export * from "./artifacts/types.js";
-export { resolveArtifacts, type ResolveOptions } from "./artifacts/resolve.js";
+export {
+  PROJECT_RULES_FILENAMES,
+  resolveArtifacts,
+  type ResolveOptions,
+} from "./artifacts/resolve.js";
+export {
+  discoverArtifacts,
+  type DiscoverOptions as DiscoverArtifactsOptions,
+  type DiscoveredArtifact,
+  type DiscoveryResult,
+} from "./artifacts/discover.js";
+export {
+  PRUNED_DIRS,
+  findGitRoot,
+  findInTree,
+  listInTree,
+  safeRead,
+} from "./artifacts/fs.js";
 export {
   ARTIFACT_EVALS_SCHEMA_ID,
   artifactEvalsSchemaPath,
   extractCriteria,
   type Criterion,
+  type CriterionType,
   type ExtractedCriteria,
   type Severity,
 } from "./criteria/extract.js";
+export {
+  appendArtifactCriteria,
+  type NewCriterion,
+} from "./criteria/write.js";
 export { IMPLICIT_EVAL_NAME, planEvals, type EvalPlan } from "./core/plan.js";
 export * from "./graders/types.js";
 export { graderFor, listGraderKinds, registerGrader } from "./graders/registry.js";
@@ -51,6 +73,38 @@ export {
   type RunCommandOptions,
   type RunCommandResult,
 } from "./commands/run.js";
+export {
+  renderFill,
+  runFill,
+  type FillArtifactResult,
+  type FillOptions,
+  type FillReport,
+  type FillRun,
+  type FillStatus,
+  type SharpeningNote,
+} from "./commands/fill.js";
+export {
+  ALLOWED_GRADERS,
+  gateProposals,
+  type GateOptions,
+  type GateResult,
+  type ProposedCriterion,
+  type Rejection,
+  type RejectionReason,
+  type Vocabulary,
+} from "./fill/gate.js";
+export {
+  FILL_PROMPT_VERSION,
+  MAX_BODY_CHARS,
+  PROPOSAL_SCHEMA,
+  buildFillUser,
+  isValidProposal,
+  systemPromptFor,
+} from "./fill/prompt.js";
+export { FillCache, fillCacheKey, type FillCacheKeyParts } from "./fill/cache.js";
+export { artifactFacts, type ArtifactFacts } from "./fill/facts.js";
+export { BUILTIN_TOOLS, buildVocabulary } from "./fill/vocabulary.js";
+export { mockFillProposal } from "./fill/mock.js";
 export { pickTrace, type PickerChoice, type PromptFn } from "./trace/picker.js";
 export {
   appendHistory,

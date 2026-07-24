@@ -102,7 +102,7 @@ Only the **first line** is parsed as the header.
 - Don't use `--no-verify` to skip a failing hook — fix the cause.
 - Don't add commitizen, standard-version, release-please, or changesets — they conflict with semantic-release.
 - Don't use `npm ci` (see "Environment setup").
-- Don't register `schemas/artifact-evals-0.1.json` as a built-in inside docmeta — schemas are published by the tool that owns them (decision inherited from docevals; a docmeta built-in was tried there and reversed).
+- Don't register `schemas/artifact-evals-*.json` as a built-in inside docmeta — schemas are published by the tool that owns them (decision inherited from docevals; a docmeta built-in was tried there and reversed).
 - Don't add `@anthropic-ai/sdk` as a direct dependency — it arrives transitively via docevals' provider layer.
 
 ## Testing behavior
@@ -123,6 +123,7 @@ mkdir -p .tmp && npm test > .tmp/output.txt 2>&1
 - `AGENTEVALS_LIVE=1 npm test` — adds the live smoke test (real judge provider)
 - `npm run typecheck` / `npm run build`
 - `node dist/cli.js run test/fixtures/traces/claude-session.jsonl --project test/fixtures/project --deterministic-only` — dogfood run against the fixture corpus
+- `node dist/cli.js fill test/fixtures/project --provider mock --dry-run` — dogfood the authoring path. **Always `--dry-run` against the fixtures**; CI asserts `git diff --quiet` on the corpus.
 
 ## Architecture
 
@@ -130,8 +131,9 @@ Pipeline: **select trace → parse (adapter) → resolve artifacts → extract c
 
 - `src/trace/` — trace adapters behind a normalized `Trace` model. `claude.ts` parses both Claude Code session files (`~/.claude/projects/<slug>/*.jsonl`) and legacy `claude -p` stream-json. `discover.ts` scans the session store (`AGENTEVALS_HOME` overrides the home dir for tests). The `TraceSource` union is the seam for future adapters (Codex is deferred, not rejected — see ADR 01003).
 - `src/artifacts/` — deterministic resolution of every skill/agent/project-rule artifact the trace used: `Skill` tool calls and `<command-name>` injections → `SKILL.md`; `Agent` spawns (`subagent_type`) → agent definitions; `CLAUDE.md`/`AGENTS.md` at the trace cwd, `.claude/`, and parent dirs up to the git root. Unresolved refs go to the report's coverage table, never crash the run.
-- `src/criteria/` — reads the `metadata.evals` frontmatter block from artifacts via docmeta `extractFrontmatter`, validated against `schemas/artifact-evals-0.1.json` (a **published artifact** — ships in the package, pinned by `test/unit/schema.test.ts`). Artifacts without declared criteria get one implicit whole-artifact adherence eval (ADR 01002).
-- `src/graders/` — deterministic `TraceGrader` registry: `tool-usage`, `skill-invoked`, `file-access`, `turn-count`, `cost`, `regex`, `json-output`.
+- `src/criteria/` — reads the `metadata.evals` frontmatter block from artifacts via docmeta `extractFrontmatter`, validated against `schemas/artifact-evals-0.2.json` (a **published artifact** — ships in the package, pinned by `test/unit/schema.test.ts`; 0.1 still ships for pinned consumers). Artifacts without declared criteria get one implicit whole-artifact adherence eval (ADR 01002).
+- `src/graders/` — deterministic `TraceGrader` registry: `tool-usage`, `skill-invoked`, `file-access`, `turn-count`, `cost`, `regex`, `json-output`. Each implements `validateOptions()` so options are ground-checked without a trace (ADR 01004).
+- `src/fill/` + `src/commands/fill.ts` — authoring: propose criteria for artifacts found by `src/artifacts/discover.ts` (the static inverse of `resolve.ts`), gate them on grader allowlist → option validation → target grounding → confidence, then append via `src/criteria/write.ts`. Project rules are proposed but never written (ADR 01005).
 - `src/judge/` — trace-adherence LLM judge built on docevals' provider layer (`makeProvider`, `JudgeProvider`, `MockProvider`) and ensemble math (`computeConsensus`, `zoneFor`). docevals' `makeJudge` is page-coupled and deliberately **not** reused (ADR 01001). N-run ensemble at temperature 0, content-addressed cache under `.agentevals/cache`.
 - `src/core/engine.ts` — orchestration; the judge and graders are injected so the engine tests offline.
 - `src/reporters/` — human / json / markdown, each with an artifact-coverage section.
@@ -141,10 +143,10 @@ Pipeline: **select trace → parse (adapter) → resolve artifacts → extract c
 - Errored judge runs count against consensus — they may push an eval to human-review, never to a silent pass.
 - Deterministic evals fail only on `error`-severity findings; warnings and info report but pass.
 - Exit codes: `0` pass, `1` any fail/error, `2` operational (`AgentevalsError`).
-- Bump `PROMPT_VERSION` (`src/judge/prompt.ts`) whenever judge prompts change — it is part of the cache key.
-- Evaluation is **read-only**: agentevals never mutates trace files or the artifacts it evaluates.
+- Bump `PROMPT_VERSION` (`src/judge/prompt.ts`) whenever judge prompts change, and `FILL_PROMPT_VERSION` (`src/fill/prompt.ts`) whenever the fill prompt or proposal schema changes — both are cache-key components, and a stale cache silently replays old output.
+- Evaluation is **read-only**: `run` never mutates trace files or the artifacts it evaluates. `fill` is the one write path — an explicitly-invoked authoring command that `run` never calls, appends only, and never writes project rules (ADR 01005). Trace files are never written by anything.
 - Artifact resolution is deterministic: trace content + filesystem lookup, no LLM guessing. Unresolved or absent artifacts degrade to warnings and coverage notes, never a crash; zero artifacts → skipped evals, exit 0.
-- `schemas/artifact-evals-0.1.json` is a published artifact — keep the `$id` a resolvable URL and pin its behavior in `test/unit/schema.test.ts`.
+- `schemas/artifact-evals-*.json` are published artifacts — keep each `$id` a resolvable URL, never edit a released version in place (add the next one), and pin behavior in `test/unit/schema.test.ts`.
 
 ## Config ↔ CLI flags (required pattern)
 

@@ -26,5 +26,12 @@ export interface TraceGraderContext {
 
 export interface TraceGrader {
   kind: string;
+  /**
+   * Ground-check `options` without a trace: a message when invalid, undefined
+   * when usable. `grade()` calls this first, and criteria authoring (`fill`)
+   * calls it before proposing a criterion. Optional so consumer-registered
+   * graders stay source-compatible; a kind without it cannot be proposed.
+   */
+  validateOptions?(options: Record<string, unknown>): string | undefined;
   grade(ctx: TraceGraderContext): GradeResult | Promise<GradeResult>;
 }

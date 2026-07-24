@@ -22,7 +22,7 @@ report (human / json / markdown) + artifact coverage + history
 ```
 
 - **Deterministic lookup.** Skill invocations (`Skill` tool calls and `/command` injections), agent spawns (`subagent_type`), and project rules (`CLAUDE.md`/`AGENTS.md` from the session's cwd up to the project root) are resolved from the trace plus the filesystem — no LLM guessing. Unresolved references degrade to warnings and a coverage table, never a crash.
-- **Declared criteria.** Artifacts can declare criteria in a `metadata.evals` frontmatter block (validated against the published [artifact-evals schema](schemas/artifact-evals-0.1.json)). A criterion is either a string (LLM-judged assertion) or an object selecting a deterministic grader.
+- **Declared criteria.** Artifacts can declare criteria in a `metadata.evals` frontmatter block (validated against the published [artifact-evals schema](schemas/artifact-evals-0.2.json)). A criterion is either a string (LLM-judged assertion) or an object selecting a deterministic grader.
 - **Implicit eval.** Artifacts with no declared criteria still get one judged eval: *"the session adhered to the instructions in this artifact"* — so every used artifact is evaluated with zero configuration.
 - **Trustworthy judging.** N independent runs at temperature 0, consensus where errored runs can never produce a silent pass, and confidence zones that route anything non-unanimous to `needs-review`.
 
@@ -98,7 +98,48 @@ metadata:
 | `regex` | a pattern does / doesn't appear in session text (`pattern`, `flags`, `on`, `expect`) |
 | `json-output` | the final assistant message validates against a JSON Schema (`schema`) |
 
+Options are validated before grading, so a typo'd enum (`expect: usd`) or a
+criterion with no bound at all (`turn-count` with neither `min` nor `max`) is
+reported as an `error` rather than passing silently.
+
 Severities: `error` findings fail the eval; `warning` and `info` report but pass.
+
+## Filling in criteria
+
+Writing criteria by hand is the slow part, so `fill` proposes them. It scans a
+project for skills, agent definitions, and project rules — no trace needed —
+asks a model to extract the criteria each artifact's own instructions already
+imply, and appends the ones that survive the gate:
+
+```bash
+agentevals fill --dry-run
+```
+
+Drop `--dry-run` to write. Everything lands in a reviewable diff; existing
+criteria are never modified, and a name collision is an error, not an
+overwrite.
+
+Confidence is the *last* gate, not the only one. Every proposal is first
+checked mechanically, and no confidence score overrides those checks:
+
+| Rejection reason | Meaning |
+|---|---|
+| `grader-not-allowed` | the grader's scope doesn't fit the artifact type |
+| `invalid-options` | the grader itself refused the options |
+| `ungrounded-target` | names a tool, skill, or path that doesn't exist here |
+| `duplicate-name` | a criterion by that name already exists |
+| `low-confidence` | below `--confidence` (default `0.7`) |
+
+Instructions too vague to test are reported under **needs sharpening** rather
+than turned into soft assertions — an instruction no session could fail is a
+defect in the artifact, and naming it beats papering over it.
+
+Two deliberate limits. Whole-session graders (`cost`, `turn-count`,
+`json-output`) are never proposed, because a budget declared inside one
+artifact silently constrains the entire session. And **project rules are
+proposed but never written**: criteria inside a file the agent reads before it
+acts would be teaching to the test. Copy the ones you want by hand. See
+[ADR 01005](adrs/01005-fill-proposes-criteria-at-authoring-time.md).
 
 ## Configuration
 
@@ -118,6 +159,12 @@ render:
   maxTotalChars: 150000
 history:
   file: .agentevals/history.jsonl
+fill:
+  confidenceThreshold: 0.7   # minimum self-reported confidence to write
+  maxCriteriaPerArtifact: 8
+  temperature: 0
+  cacheDir: .agentevals/cache/fill
+  maxCostUsd: 2.5
 failOnNeedsReview: true
 ```
 

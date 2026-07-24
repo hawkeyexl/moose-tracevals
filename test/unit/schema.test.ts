@@ -56,4 +56,23 @@ describe("artifact-evals schema", () => {
     const validate = new Ajv2020().compile(await loadSchema());
     expect(validate({ criterias: [] })).toBe(false);
   });
+
+  it("accepts a capability/regression type and rejects anything else", async () => {
+    const validate = new Ajv2020().compile(await loadSchema());
+    for (const type of ["capability", "regression"]) {
+      expect(validate({ criteria: [{ assertion: "x", type }] })).toBe(true);
+    }
+    expect(validate({ criteria: [{ assertion: "x", type: "smoke" }] })).toBe(
+      false,
+    );
+  });
+
+  it("is versioned 0.2 and still ships 0.1 for pinned consumers", async () => {
+    expect(artifactEvalsSchemaPath()).toMatch(/artifact-evals-0\.2\.json$/);
+    const legacy = artifactEvalsSchemaPath().replace("0.2.json", "0.1.json");
+    const previous = JSON.parse(await readFile(legacy, "utf-8")) as {
+      $id: string;
+    };
+    expect(previous.$id).toMatch(/artifact-evals-0\.1\.json$/);
+  });
 });

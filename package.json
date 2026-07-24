@@ -14,6 +14,7 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
+    "./schemas/artifact-evals-0.2.json": "./schemas/artifact-evals-0.2.json",
     "./schemas/artifact-evals-0.1.json": "./schemas/artifact-evals-0.1.json",
     "./package.json": "./package.json"
   },

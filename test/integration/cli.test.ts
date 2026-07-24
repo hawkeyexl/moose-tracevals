@@ -101,6 +101,59 @@ describe.skipIf(!built)("built CLI", () => {
     expect(stderr).toContain("no trace given");
   });
 
+  it("fill --dry-run reports proposals without touching the corpus", async () => {
+    const { code, stdout } = await runCli(
+      // --no-cache keeps this hermetic: without it the run writes into
+      // <repo>/.agentevals/cache/fill and a later run replays it.
+      [
+        "fill",
+        "test/fixtures/project",
+        "--provider",
+        "mock",
+        "--dry-run",
+        "--no-cache",
+        "--format",
+        "json",
+      ],
+      { AGENTEVALS_HOME: "test/fixtures/home" },
+    );
+    expect(code).toBe(0);
+    const report = JSON.parse(stdout);
+
+    const paths = report.results.map((r: { artifact: string }) =>
+      r.artifact.replace(/\\/g, "/"),
+    );
+    expect(paths.some((p: string) => p.endsWith("fix-bug/SKILL.md"))).toBe(true);
+    expect(paths.some((p: string) => p.endsWith("doc-writer.md"))).toBe(true);
+    expect(paths.some((p: string) => p.endsWith("CLAUDE.md"))).toBe(true);
+    // A plain doc is not an instruction artifact.
+    expect(paths.some((p: string) => p.endsWith("README.md"))).toBe(false);
+
+    expect(report.dryRun).toBe(true);
+    // Project rules are proposed but never written, dry run or not.
+    const rules = report.results.filter(
+      (r: { type: string }) => r.type === "project-rules",
+    );
+    expect(rules.every((r: { status: string }) => r.status === "propose-only")).toBe(true);
+
+    // Proves the gate ran rather than rubber-stamping the proposal.
+    const reasons = report.results.flatMap((r: { rejected: { reason: string }[] }) =>
+      r.rejected.map((x) => x.reason),
+    );
+    expect(reasons).toContain("low-confidence");
+    expect(
+      report.results.some(
+        (r: { needsSharpening: unknown[] }) => r.needsSharpening.length > 0,
+      ),
+    ).toBe(true);
+  });
+
+  it("fill exits 2 for a path that does not exist", async () => {
+    const { code, stderr } = await runCli(["fill", "does-not-exist-here"]);
+    expect(code).toBe(2);
+    expect(stderr).toContain("no such file or directory");
+  });
+
   it("legacy stream-json traces still parse", async () => {
     const { code, stdout } = await runCli(
       [

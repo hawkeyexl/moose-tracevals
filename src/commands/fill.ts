@@ -1,0 +1,397 @@
+/**
+ * `agentevals fill [paths...]` — propose eval criteria for a project's
+ * instruction artifacts and append the survivors to their frontmatter.
+ *
+ * Authoring, not evaluation: `run` never calls this, and everything written is
+ * the same declared-criteria contract a human would type by hand. Project
+ * rules are proposed but never written — criteria inside a file the agent
+ * reads before acting would be teaching to the test (ADR 01005).
+ */
+import { writeFile } from "node:fs/promises";
+import { relative, resolve } from "node:path";
+import pc from "picocolors";
+import { discoverArtifacts, type DiscoveredArtifact } from "../artifacts/discover.js";
+import { appendArtifactCriteria, type NewCriterion } from "../criteria/write.js";
+import { loadConfig } from "../core/config.js";
+import { AgentevalsError } from "../types.js";
+import { costOfUsage, pricingFor } from "../judge/cost.js";
+import { makeJudgeProvider } from "../judge/provider.js";
+import { FillCache, fillCacheKey } from "../fill/cache.js";
+import { artifactFacts } from "../fill/facts.js";
+import {
+  gateProposals,
+  type ProposedCriterion,
+  type Rejection,
+} from "../fill/gate.js";
+import {
+  PROPOSAL_SCHEMA,
+  buildFillUser,
+  isValidProposal,
+  systemPromptFor,
+} from "../fill/prompt.js";
+import { mockFillProposal } from "../fill/mock.js";
+import { buildVocabulary } from "../fill/vocabulary.js";
+import type { JudgeProvider } from "docevals";
+
+export interface FillOptions {
+  /** Files or directories to scan; defaults to the whole project. */
+  paths?: string[];
+  /** Project root; defaults to cwd. */
+  project?: string;
+  configDir?: string;
+  cwd?: string;
+  /** Report proposals without writing. */
+  dryRun?: boolean;
+  confidence?: number;
+  /** Ceiling on an artifact's total criteria, existing ones included. */
+  maxCriteria?: number;
+  maxCostUsd?: number;
+  noCache?: boolean;
+  provider?: string;
+  model?: string;
+  /** Test seam: bypasses provider construction entirely. */
+  providerInstance?: JudgeProvider;
+}
+
+export type FillStatus =
+  | "filled"
+  | "proposed"
+  | "nothing-proposed"
+  | "propose-only"
+  | "skipped"
+  | "unreadable"
+  | "error";
+
+export interface SharpeningNote {
+  instruction: string;
+  reason: string;
+  suggestion?: string;
+}
+
+export interface FillArtifactResult {
+  artifact: string;
+  type: string;
+  status: FillStatus;
+  /** Criteria written, or that would be written in a dry run. */
+  written: ProposedCriterion[];
+  rejected: Rejection[];
+  capped: ProposedCriterion[];
+  /** Instructions the model judged untestable as written. */
+  needsSharpening: SharpeningNote[];
+  cached: boolean;
+  error?: string;
+}
+
+export interface FillReport {
+  results: FillArtifactResult[];
+  threshold: number;
+  /** True when nothing was written because this was a dry run. */
+  dryRun: boolean;
+  warnings: string[];
+  exitCode: 0 | 1;
+}
+
+export interface FillRun {
+  report: FillReport;
+  rendered: string;
+}
+
+/** Proposals become inline criteria; confidence and rationale stay report-only. */
+function toCriterion(proposed: ProposedCriterion): NewCriterion {
+  const criterion: NewCriterion = {
+    name: proposed.name,
+    assertion: proposed.assertion,
+    // New criteria start as regression: they describe behavior the artifact
+    // already asks for, not a boundary being probed.
+    type: "regression",
+    grader: proposed.grader,
+    // The published schema takes lists; the model proposes one of each.
+    examples: { pass: [proposed.examples.pass], fail: [proposed.examples.fail] },
+  };
+  if (proposed.options !== undefined) criterion.options = proposed.options;
+  if (proposed.evidence !== undefined) criterion.evidence = proposed.evidence;
+  if (proposed.severity !== undefined) criterion.severity = proposed.severity;
+  return criterion;
+}
+
+export async function runFill(options: FillOptions = {}): Promise<FillRun> {
+  const cwd = options.cwd ?? process.cwd();
+  const root = resolve(options.project ?? cwd);
+  const config = await loadConfig(options.configDir ?? cwd);
+
+  const threshold = options.confidence ?? config.fill.confidenceThreshold;
+  const maxCriteria = options.maxCriteria ?? config.fill.maxCriteriaPerArtifact;
+  const temperature = config.fill.temperature;
+  const maxCostUsd = options.maxCostUsd ?? config.fill.maxCostUsd;
+  const cache = new FillCache(
+    resolve(options.configDir ?? cwd, config.fill.cacheDir),
+    options.noCache !== true,
+  );
+
+  const discovery = await discoverArtifacts({
+    root,
+    cwd,
+    ...(options.paths !== undefined ? { paths: options.paths } : {}),
+  });
+  const vocabulary = buildVocabulary(discovery.artifacts);
+  const knownSkills = [...vocabulary.skills].sort();
+
+  // Constructed lazily so a fully-cached or all-skipped run needs no API key.
+  let provider = options.providerInstance;
+  const getProvider = (): JudgeProvider =>
+    (provider ??= makeJudgeProvider(config, {
+      ...(options.provider !== undefined ? { provider: options.provider } : {}),
+      ...(options.model !== undefined ? { model: options.model } : {}),
+      // The default mock response is judge-shaped and would fail this
+      // command's schema, so seed the mock with a proposal instead.
+      mockResponses: [mockFillProposal()],
+    }));
+  // Identity is resolved without constructing the provider so a fully-cached
+  // run needs no API key. The model is read the same way makeProvider would,
+  // so changing it in config invalidates the cache rather than replaying
+  // proposals generated by a different model.
+  const providerName =
+    options.provider ?? (config.provider.default as string) ?? "claude-cli";
+  const identity = provider
+    ? { name: provider.provider(), model: provider.modelName() }
+    : {
+        name: providerName,
+        model:
+          options.model ??
+          ((config.provider[providerName] as { model?: string } | undefined)
+            ?.model ??
+            ""),
+      };
+  const pricing = pricingFor(identity.model);
+
+  let costUsd = 0;
+  const results: FillArtifactResult[] = [];
+
+  for (const discovered of discovery.artifacts) {
+    results.push(await fillOne(discovered));
+  }
+
+  const report: FillReport = {
+    results,
+    threshold,
+    dryRun: options.dryRun === true,
+    warnings: discovery.warnings,
+    exitCode: results.some((r) => r.status === "error") ? 1 : 0,
+  };
+  return { report, rendered: renderFill(report, { cwd }) };
+
+  async function fillOne(
+    discovered: DiscoveredArtifact,
+  ): Promise<FillArtifactResult> {
+    const { artifact } = discovered;
+    const base: FillArtifactResult = {
+      artifact: artifact.path,
+      type: artifact.type,
+      status: "nothing-proposed",
+      written: [],
+      rejected: [],
+      capped: [],
+      needsSharpening: [],
+      cached: false,
+    };
+
+    if (discovered.status !== "ok") {
+      return {
+        ...base,
+        status: discovered.status === "unreadable" ? "unreadable" : "error",
+        ...(discovered.error !== undefined ? { error: discovered.error } : {}),
+      };
+    }
+    if (discovered.skip) return { ...base, status: "skipped" };
+
+    const facts = artifactFacts(artifact);
+    const key = fillCacheKey({
+      provider: identity.name,
+      model: identity.model,
+      temperature,
+      maxCriteria,
+      artifactType: artifact.type,
+      path: artifact.path,
+      body: artifact.content,
+      existingNames: discovered.existingNames,
+      knownSkills,
+    });
+
+    let raw = cache.get(key);
+    const cached = raw !== undefined;
+    if (raw === undefined) {
+      if (maxCostUsd !== undefined && costUsd >= maxCostUsd) {
+        return { ...base, status: "skipped", error: "cost budget exhausted" };
+      }
+      try {
+        const response = await getProvider().completeJSON({
+          system: systemPromptFor(artifact.type),
+          user: buildFillUser({
+            artifact,
+            existingNames: discovered.existingNames,
+            maxCriteria,
+            facts,
+            knownSkills,
+          }),
+          schema: PROPOSAL_SCHEMA as unknown as Record<string, unknown>,
+          temperature,
+        });
+        costUsd += costOfUsage(response.usage, pricing);
+        if (!isValidProposal(response.json)) {
+          return {
+            ...base,
+            status: "error",
+            error: "provider returned a proposal that does not match the schema",
+          };
+        }
+        raw = response.json as Record<string, unknown>;
+        cache.set(key, raw);
+      } catch (err) {
+        // An operational failure (no API key, unknown provider) is not this
+        // artifact's fault and would repeat for every one: let it out so the
+        // CLI reports it once and exits 2.
+        if (err instanceof AgentevalsError) throw err;
+        return {
+          ...base,
+          status: "error",
+          error: err instanceof Error ? err.message : String(err),
+        };
+      }
+    }
+
+    const gated = gateProposals(raw.criteria as ProposedCriterion[], {
+      artifactType: artifact.type,
+      threshold,
+      existingNames: discovered.existingNames,
+      // The cap is a ceiling on the artifact's total, not on one run's
+      // additions, so repeated fills cannot grow it without bound.
+      maxCriteria: Math.max(0, maxCriteria - discovered.existingNames.length),
+      vocabulary,
+    });
+    const result: FillArtifactResult = {
+      ...base,
+      written: gated.accepted,
+      rejected: gated.rejected,
+      capped: gated.capped,
+      needsSharpening: (raw.needsSharpening as SharpeningNote[]) ?? [],
+      cached,
+    };
+
+    if (gated.accepted.length === 0) return result;
+    // Project rules are read by the agent under test before it acts, so
+    // writing criteria there would leak the rubric into the system prompt.
+    if (artifact.type === "project-rules") {
+      return { ...result, status: "propose-only" };
+    }
+    if (options.dryRun === true) return { ...result, status: "proposed" };
+
+    try {
+      const updated = appendArtifactCriteria(
+        artifact.content,
+        artifact.path,
+        gated.accepted.map(toCriterion),
+      );
+      await writeFile(artifact.path, updated);
+    } catch (err) {
+      return {
+        ...result,
+        status: "error",
+        written: [],
+        error: err instanceof Error ? err.message : String(err),
+      };
+    }
+    return { ...result, status: "filled" };
+  }
+}
+
+const STATUS_LABEL: Record<FillStatus, string> = {
+  filled: "filled",
+  proposed: "proposed",
+  "propose-only": "proposed",
+  "nothing-proposed": "no-op",
+  skipped: "skipped",
+  unreadable: "skipped",
+  error: "error",
+};
+
+function names(criteria: ProposedCriterion[]): string {
+  return criteria
+    .map((c) => `${c.name} ${c.confidence.toFixed(2)}`)
+    .join(", ");
+}
+
+export function renderFill(
+  report: FillReport,
+  opts: { color?: boolean; cwd?: string } = {},
+): string {
+  const color = opts.color ?? true;
+  const from = opts.cwd ?? process.cwd();
+  /** Absolute paths stay in the report; the human view is relative. */
+  const show = (path: string): string => {
+    const rel = relative(from, path);
+    return rel === "" || rel.startsWith("..") ? path : rel;
+  };
+  const paint = (fn: (s: string) => string) => (s: string) =>
+    color ? fn(s) : s;
+  const green = paint(pc.green);
+  const cyan = paint(pc.cyan);
+  const dim = paint(pc.dim);
+  const red = paint(pc.red);
+
+  const lines: string[] = [];
+  for (const result of report.results) {
+    const label = STATUS_LABEL[result.status].padEnd(9);
+    const tag = result.cached ? dim(" [cached]") : "";
+    switch (result.status) {
+      case "filled":
+        lines.push(`${green(label)} ${show(result.artifact)}  +${result.written.length} (${names(result.written)})${tag}`);
+        break;
+      case "proposed":
+        lines.push(`${cyan(label)} ${show(result.artifact)}  +${result.written.length} (${names(result.written)})${tag} — dry run, not written`);
+        break;
+      case "propose-only":
+        lines.push(`${cyan(label)} ${show(result.artifact)}  +${result.written.length} (${names(result.written)})${tag} — project rules are never written; copy what you want`);
+        break;
+      case "nothing-proposed":
+        lines.push(`${dim(label)} ${show(result.artifact)}  (nothing new proposed)${tag}`);
+        break;
+      case "skipped":
+        lines.push(`${dim(label)} ${show(result.artifact)}  (${result.error ?? "metadata.evals.skip"})`);
+        break;
+      case "unreadable":
+        lines.push(`${dim(label)} ${show(result.artifact)}  (${result.error ?? "unreadable frontmatter"})`);
+        break;
+      case "error":
+        lines.push(`${red(label)} ${show(result.artifact)}: ${result.error ?? "unknown error"}`);
+        break;
+    }
+    const belowThreshold = result.rejected.filter((r) => r.reason === "low-confidence");
+    if (belowThreshold.length > 0) {
+      lines.push(dim(`          below ${report.threshold}: ${names(belowThreshold.map((r) => r.criterion))}`));
+    }
+    for (const rejection of result.rejected) {
+      if (rejection.reason === "low-confidence") continue;
+      lines.push(dim(`          ${rejection.reason}: ${rejection.criterion.name}${rejection.detail ? ` — ${rejection.detail}` : ""}`));
+    }
+    if (result.capped.length > 0) {
+      lines.push(dim(`          over per-artifact cap: ${names(result.capped)}`));
+    }
+    for (const note of result.needsSharpening) {
+      lines.push(dim(`          needs sharpening: "${note.instruction}" — ${note.reason}`));
+    }
+  }
+
+  if (report.results.length === 0) {
+    lines.push("No skills, agent definitions, or project rules found.");
+  }
+  for (const warning of report.warnings) lines.push(dim(`warning: ${warning}`));
+
+  lines.push("");
+  const total = report.results.reduce((n, r) => n + r.written.length, 0);
+  lines.push(
+    report.dryRun
+      ? `Threshold ${report.threshold} · ${total} criteria proposed, none written (dry run)`
+      : `Threshold ${report.threshold} · ${total} criteria written`,
+  );
+  return lines.join("\n");
+}

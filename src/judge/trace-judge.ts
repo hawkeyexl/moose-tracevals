@@ -17,6 +17,7 @@ import {
 } from "docevals";
 import type { EvalPlan } from "../core/plan.js";
 import { cacheKey, JudgeCache } from "./cache.js";
+import { costOfUsage, pricingFor } from "./cost.js";
 import { buildUserContent, JUDGE_SYSTEM_PROMPT } from "./prompt.js";
 
 const verdictSchema = verdictSchemaJson as Record<string, unknown>;
@@ -25,25 +26,12 @@ const ajv = new Ajv2020({ allErrors: true });
 const validateVerdict = ajv.compile(verdictSchema);
 
 /** USD per million tokens; unknown models cost 0 (unknown), never a guess. */
-const PRICE_TABLE: Record<string, { inputPerMTok: number; outputPerMTok: number }> = {
-  "claude-sonnet-4-5": { inputPerMTok: 3, outputPerMTok: 15 },
-  "claude-sonnet-4-6": { inputPerMTok: 3, outputPerMTok: 15 },
-  "claude-haiku-4-5": { inputPerMTok: 1, outputPerMTok: 5 },
-  "claude-opus-4-8": { inputPerMTok: 15, outputPerMTok: 75 },
-  "gpt-4o-mini": { inputPerMTok: 0.15, outputPerMTok: 0.6 },
-  "gpt-4o": { inputPerMTok: 2.5, outputPerMTok: 10 },
-};
-
 function costOfRuns(runs: JudgeRun[], model: string): number {
-  const base = Object.keys(PRICE_TABLE).find((k) => model.startsWith(k));
-  const pricing = base ? PRICE_TABLE[base] : undefined;
-  if (!pricing) return 0;
+  const pricing = pricingFor(model);
   let usd = 0;
   for (const run of runs) {
-    if (!run.usage || run.cached) continue;
-    usd +=
-      (run.usage.inputTokens / 1_000_000) * pricing.inputPerMTok +
-      (run.usage.outputTokens / 1_000_000) * pricing.outputPerMTok;
+    if (run.cached) continue;
+    usd += costOfUsage(run.usage, pricing);
   }
   return usd;
 }

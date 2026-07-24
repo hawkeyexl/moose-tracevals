@@ -127,6 +127,119 @@ jobs:
             if (judged.length === 0) { console.error("expected judged evals with consensus objects"); process.exitCode = 1; }
           '
 
+      # `fill` is the only command that writes, so the gate proves two things:
+      # that it discovers exactly the instruction artifacts (and no plain
+      # docs), and that a default run leaves the corpus byte-identical.
+      - name: Dogfood fill (dry run, corpus must not change)
+        shell: bash
+        working-directory: agentevals
+        env:
+          AGENTEVALS_HOME: test/fixtures/home
+        run: |
+          # --no-cache is load-bearing: `npm test` runs earlier in this job and
+          # would otherwise leave a populated cache, turning this gate into a
+          # replay that never exercises the provider wiring in dist/.
+          set +e
+          node dist/cli.js fill test/fixtures/project --provider mock --dry-run --no-cache --format json > agentevals-fill.json
+          code=$?
+          set -e
+          if [ "$code" -ne 0 ]; then
+            echo "Expected exit 0 from a dry-run fill, got $code"
+            cat agentevals-fill.json
+            exit 1
+          fi
+          node -e '
+            let raw = require("fs").readFileSync("agentevals-fill.json", "utf8");
+            if (raw.charCodeAt(0) === 0xfeff) raw = raw.slice(1);
+            const r = JSON.parse(raw);
+            const paths = r.results.map((x) => x.artifact.replace(/\\/g, "/"));
+            const want = ["fix-bug/SKILL.md", "doc-writer.md", "CLAUDE.md", "AGENTS.md"];
+            for (const suffix of want) {
+              if (!paths.some((p) => p.endsWith(suffix))) {
+                console.error(`expected to discover ${suffix}`);
+                process.exitCode = 1;
+              }
+            }
+            // A plain doc is not an instruction artifact.
+            if (paths.some((p) => p.endsWith("README.md"))) {
+              console.error("README.md must not be discovered as an artifact");
+              process.exitCode = 1;
+            }
+            if (r.dryRun !== true) { console.error("expected dryRun: true"); process.exitCode = 1; }
+            // Project rules are proposed, never written.
+            const rules = r.results.filter((x) => x.type === "project-rules");
+            if (rules.length === 0 || !rules.every((x) => x.status === "propose-only")) {
+              console.error("project rules must be propose-only");
+              process.exitCode = 1;
+            }
+            // Proves the gate ran instead of rubber-stamping the proposal.
+            const reasons = r.results.flatMap((x) => x.rejected.map((y) => y.reason));
+            if (!reasons.includes("low-confidence")) {
+              console.error("expected at least one low-confidence rejection");
+              process.exitCode = 1;
+            }
+            if (!r.results.some((x) => x.needsSharpening.length > 0)) {
+              console.error("expected at least one needs-sharpening note");
+              process.exitCode = 1;
+            }
+          '
+          # The assertion that actually protects the corpus: if dry-run ever
+          # stops being honoured, this fails loudly rather than silently
+          # rewriting the fixtures. --porcelain, not `diff --quiet`, so a
+          # newly *created* file inside the corpus is caught too.
+          dirty=$(git status --porcelain -- test/fixtures/project)
+          if [ -n "$dirty" ]; then
+            echo "fill modified the fixture corpus during a dry run:"
+            echo "$dirty"
+            git --no-pager diff -- test/fixtures/project
+            exit 1
+          fi
+
+      # The dry-run gate above never exercises the write path. Fill a scratch
+      # copy for real, then prove the output is consumable by the reader: this
+      # is the round trip that matters, checked on both OS legs.
+      - name: Dogfood fill (write path, on a scratch copy)
+        shell: bash
+        working-directory: agentevals
+        run: |
+          rm -rf .tmp/fill-ci && mkdir -p .tmp/fill-ci
+          cp -r test/fixtures/project .tmp/fill-ci/project
+          node dist/cli.js fill .tmp/fill-ci/project --provider mock --no-cache --format json > agentevals-fill-write.json
+          node -e '
+            let raw = require("fs").readFileSync("agentevals-fill-write.json", "utf8");
+            if (raw.charCodeAt(0) === 0xfeff) raw = raw.slice(1);
+            const r = JSON.parse(raw);
+            const filled = r.results.filter((x) => x.status === "filled");
+            if (filled.length === 0) { console.error("expected at least one filled artifact"); process.exitCode = 1; }
+            // Project rules must stay propose-only even on the write path.
+            if (r.results.some((x) => x.type === "project-rules" && x.status === "filled")) {
+              console.error("project rules must never be written");
+              process.exitCode = 1;
+            }
+          '
+          # The written frontmatter must still parse and plan.
+          node dist/cli.js run test/fixtures/traces/claude-session.jsonl --project .tmp/fill-ci/project --deterministic-only --format json > agentevals-postfill.json || true
+          node -e '
+            let raw = require("fs").readFileSync("agentevals-postfill.json", "utf8");
+            if (raw.charCodeAt(0) === 0xfeff) raw = raw.slice(1);
+            const r = JSON.parse(raw);
+            const errored = r.evalResults.filter((x) => x.outcome === "error");
+            if (errored.length > 0) {
+              console.error("filled criteria did not survive a real run:", JSON.stringify(errored, null, 2));
+              process.exitCode = 1;
+            }
+            if (!r.evalResults.some((x) => x.evalName === "reads-before-editing")) {
+              console.error("expected the filled criterion to be planned and graded");
+              process.exitCode = 1;
+            }
+          '
+          rm -rf .tmp/fill-ci
+          # And the real corpus is still untouched.
+          dirty=$(git status --porcelain -- test/fixtures/project)
+          if [ -n "$dirty" ]; then
+            echo "the write-path gate leaked into the real corpus:"; echo "$dirty"; exit 1
+          fi
+
       - name: Dogfood list (fixture session store)
         shell: bash
         working-directory: agentevals

@@ -78,7 +78,20 @@ export async function runEvals(options: EngineOptions): Promise<RunReport> {
       continue;
     }
     const graded = Date.now();
-    const result = await grader.grade({ trace, plan });
+    // A grader that throws must fail its own eval, not the whole run: one
+    // malformed criterion should never cost the report every other verdict.
+    let result;
+    try {
+      result = await grader.grade({ trace, plan });
+    } catch (err) {
+      results.push({
+        ...base,
+        outcome: "error",
+        error: `${plan.grader}: ${err instanceof Error ? err.message : String(err)}`,
+        durationMs: Date.now() - graded,
+      });
+      continue;
+    }
     if (result.error !== undefined) {
       results.push({
         ...base,
