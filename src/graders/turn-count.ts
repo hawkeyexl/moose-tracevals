@@ -1,11 +1,32 @@
 /** turn-count: assert the session stayed within turn bounds. */
 import type { TraceGrader } from "./types.js";
-import { fail, pass } from "./util.js";
+import {
+  fail,
+  firstError,
+  optionalNumber,
+  optionsError,
+  orderedBounds,
+  pass,
+  requireOneOf,
+  type Options,
+} from "./util.js";
+
+function validateOptions(options: Options): string | undefined {
+  return firstError(
+    requireOneOf(options, ["min", "max"]),
+    optionalNumber(options, "min", { min: 0 }),
+    optionalNumber(options, "max", { min: 0 }),
+    orderedBounds(options, "min", "max"),
+  );
+}
 
 export const turnCountGrader: TraceGrader = {
   kind: "turn-count",
+  validateOptions,
   grade({ trace, plan }) {
     const options = plan.options ?? {};
+    const invalid = validateOptions(options);
+    if (invalid !== undefined) return optionsError("turn-count", invalid);
     const { turnCount } = trace;
     if (typeof options.max === "number" && turnCount > options.max) {
       return fail(plan, `${turnCount} turn(s); at most ${options.max} allowed`);

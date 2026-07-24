@@ -1,11 +1,30 @@
 /** cost: assert the session stayed within cost/token budgets. */
 import type { TraceGrader } from "./types.js";
-import { fail, pass } from "./util.js";
+import {
+  fail,
+  firstError,
+  optionalNumber,
+  optionsError,
+  pass,
+  requireOneOf,
+  type Options,
+} from "./util.js";
+
+function validateOptions(options: Options): string | undefined {
+  return firstError(
+    requireOneOf(options, ["maxUsd", "maxTokens"]),
+    optionalNumber(options, "maxUsd", { min: 0 }),
+    optionalNumber(options, "maxTokens", { min: 0 }),
+  );
+}
 
 export const costGrader: TraceGrader = {
   kind: "cost",
+  validateOptions,
   grade({ trace, plan }) {
     const options = plan.options ?? {};
+    const invalid = validateOptions(options);
+    if (invalid !== undefined) return optionsError("cost", invalid);
     const usage = trace.usage;
     // Each configured budget is evaluated independently: a missing-data skip on
     // one must not suppress the other. Only skip the whole eval when no

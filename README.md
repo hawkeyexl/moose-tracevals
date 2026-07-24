@@ -98,6 +98,10 @@ metadata:
 | `regex` | a pattern does / doesn't appear in session text (`pattern`, `flags`, `on`, `expect`) |
 | `json-output` | the final assistant message validates against a JSON Schema (`schema`) |
 
+Options are validated before grading, so a typo'd enum (`expect: usd`) or a
+criterion with no bound at all (`turn-count` with neither `min` nor `max`) is
+reported as an `error` rather than passing silently.
+
 Severities: `error` findings fail the eval; `warning` and `info` report but pass.
 
 ## Configuration

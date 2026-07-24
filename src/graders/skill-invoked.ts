@@ -1,15 +1,30 @@
 /** skill-invoked: assert a skill was invoked (or not) during the session. */
 import type { TraceGrader } from "./types.js";
-import { fail, optionsError, pass } from "./util.js";
+import {
+  fail,
+  firstError,
+  optionalEnum,
+  optionsError,
+  pass,
+  requiredString,
+  type Options,
+} from "./util.js";
+
+function validateOptions(options: Options): string | undefined {
+  return firstError(
+    requiredString(options, "skill"),
+    optionalEnum(options, "expect", ["used", "not-used"]),
+  );
+}
 
 export const skillInvokedGrader: TraceGrader = {
   kind: "skill-invoked",
+  validateOptions,
   grade({ trace, plan }) {
     const options = plan.options ?? {};
-    const skill = options.skill;
-    if (typeof skill !== "string" || skill.length === 0) {
-      return optionsError("skill-invoked", "options.skill is required");
-    }
+    const invalid = validateOptions(options);
+    if (invalid !== undefined) return optionsError("skill-invoked", invalid);
+    const skill = options.skill as string;
     const expect = (options.expect as string | undefined) ?? "used";
     const used = trace.skillInvocations.some((s) => s.name === skill);
 

@@ -1,15 +1,37 @@
 /** tool-usage: assert a tool was used / not used / used within count bounds. */
 import type { TraceGrader } from "./types.js";
-import { fail, optionsError, pass } from "./util.js";
+import {
+  fail,
+  firstError,
+  optionalBoolean,
+  optionalEnum,
+  optionalNumber,
+  optionsError,
+  orderedBounds,
+  pass,
+  requiredString,
+  type Options,
+} from "./util.js";
+
+function validateOptions(options: Options): string | undefined {
+  return firstError(
+    requiredString(options, "tool"),
+    optionalEnum(options, "expect", ["used", "not-used"]),
+    optionalNumber(options, "min", { min: 0 }),
+    optionalNumber(options, "max", { min: 0 }),
+    orderedBounds(options, "min", "max"),
+    optionalBoolean(options, "includeSidechains"),
+  );
+}
 
 export const toolUsageGrader: TraceGrader = {
   kind: "tool-usage",
+  validateOptions,
   grade({ trace, plan }) {
     const options = plan.options ?? {};
-    const tool = options.tool;
-    if (typeof tool !== "string" || tool.length === 0) {
-      return optionsError("tool-usage", `options.tool is required`);
-    }
+    const invalid = validateOptions(options);
+    if (invalid !== undefined) return optionsError("tool-usage", invalid);
+    const tool = options.tool as string;
     const expect = (options.expect as string | undefined) ?? "used";
     const includeSidechains = options.includeSidechains === true;
 
