@@ -1,0 +1,32 @@
+name: Commitlint
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, edited]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+
+      # npm install, not ci — see the lockfile note in CLAUDE.md.
+      # HUSKY=0 skips hook installation; this job only lints messages.
+      # The file:../docevals dependency is absent here, so install without it:
+      # commitlint needs only its own packages.
+      - run: npm install --no-fund --no-audit --no-save @commitlint/cli @commitlint/config-conventional
+        env:
+          HUSKY: "0"
+
+      - name: Validate PR commits
+        run: npx commitlint --from ${{ github.event.pull_request.base.sha }} --to ${{ github.event.pull_request.head.sha }} --verbose

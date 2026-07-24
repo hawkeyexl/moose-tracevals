@@ -1,0 +1,87 @@
+# Release pipeline. On a push to a release branch, semantic-release reads the
+# conventional commits since the last tag, computes the next version, and (when
+# warranted) updates CHANGELOG/package.json, tags, creates a GitHub Release, and
+# publishes to npm.
+#
+#   main      -> @latest
+#   next      -> @next prerelease
+#   feat/**   -> per-branch prerelease channel
+#
+# OPT-IN, and currently BLOCKED: agentevals depends on docevals via a
+# `file:../docevals` link, which npm cannot publish. Keep RELEASE_ENABLED unset
+# until docevals is on npm; switch the dependency to a semver range in the same
+# commit that enables releases:
+#
+#   gh variable set RELEASE_ENABLED --body true --repo hawkeyexl/agentevals
+#
+# Before enabling, configure npm trusted publishing for the package so the
+# publish step can authenticate without an NPM_TOKEN. On npmjs.com, add a
+# trusted publisher for `agentevals` naming this repository and this workflow
+# file (release.yml). npm then exchanges the workflow's OIDC token for a
+# short-lived, scoped publish credential — which is what `id-token: write`
+# below authorizes — and mints provenance automatically.
+
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+      - next
+      - "feat/**"
+  workflow_dispatch:
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+  id-token: write # OIDC trusted publishing to npm + provenance
+
+jobs:
+  release:
+    if: vars.RELEASE_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      # The husky commit-msg hook isn't useful in CI, and semantic-release's
+      # release commit embeds the full changelog (long lines).
+      HUSKY: "0"
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          path: agentevals
+
+      # Sibling checkout for the file:../docevals dependency; remove when the
+      # dependency moves to a semver range.
+      - uses: actions/checkout@v7
+        with:
+          repository: hawkeyexl/docevals
+          path: docevals
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: agentevals/package-lock.json
+
+      # npm install, not ci — see the lockfile note in CLAUDE.md.
+      - run: npm install --no-fund --no-audit
+        working-directory: agentevals
+      - run: npm run typecheck
+        working-directory: agentevals
+      - run: npm run build
+        working-directory: agentevals
+      - run: npm test
+        working-directory: agentevals
+
+      - name: Release
+        working-directory: agentevals
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npx semantic-release
