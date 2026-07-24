@@ -11,3 +11,5 @@ export {
   type TraceListing,
 } from "./trace/discover.js";
 export { renderList, runList, type ListOptions, type ListRun } from "./commands/list.js";
+export * from "./artifacts/types.js";
+export { resolveArtifacts, type ResolveOptions } from "./artifacts/resolve.js";

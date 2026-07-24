@@ -65,6 +65,7 @@ describe("parseTraceFile (session dialect)", () => {
     const trace = await parseTraceFile(sessionFixture);
     expect(trace.agentSpawns).toEqual([
       { subagentType: "Explore", description: "Explore crash site" },
+      { subagentType: "doc-writer", description: "Document the fix" },
     ]);
   });
 
@@ -103,8 +104,8 @@ describe("parseTraceFile (session dialect)", () => {
 
   it("sums usage across non-sidechain assistant messages", async () => {
     const trace = await parseTraceFile(sessionFixture);
-    // 100+200+150+120+90+60 input, 50+25+30+40+35+20 output (sidechain 80/10 excluded)
-    expect(trace.usage).toMatchObject({ inputTokens: 720, outputTokens: 200 });
+    // 100+200+150+120+90+70+60 input, 50+25+30+40+35+15+20 output (sidechain 80/10 excluded)
+    expect(trace.usage).toMatchObject({ inputTokens: 790, outputTokens: 215 });
   });
 
   it("collects user prompts and assistant texts", async () => {
