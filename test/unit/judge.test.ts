@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { MockProvider, mockVerdict } from "docevals";
@@ -8,6 +8,8 @@ import { makePlan } from "../helpers.js";
 
 let tmpDir: string;
 beforeAll(async () => {
+  // .tmp/ is gitignored, so a fresh checkout won't have it yet.
+  await mkdir(".tmp", { recursive: true });
   tmpDir = await mkdtemp(join(".tmp", "judge-"));
 });
 afterAll(async () => {
