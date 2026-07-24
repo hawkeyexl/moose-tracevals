@@ -37,3 +37,18 @@ export {
   type TraceJudge,
   type TraceJudgeOptions,
 } from "./judge/trace-judge.js";
+export { makeJudgeProvider } from "./judge/provider.js";
+export {
+  DEFAULT_CONFIG_FILENAME,
+  loadConfig,
+  parseConfig,
+  type AgentevalsConfig,
+} from "./core/config.js";
+export { runEvals, type EngineOptions } from "./core/engine.js";
+export { render, type ReportFormat } from "./reporters/index.js";
+export {
+  runRun,
+  type RunCommandOptions,
+  type RunCommandResult,
+} from "./commands/run.js";
+export { pickTrace, type PickerChoice, type PromptFn } from "./trace/picker.js";

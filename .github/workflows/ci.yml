@@ -55,6 +55,10 @@ jobs:
       - name: Dogfood run (deterministic graders)
         shell: bash
         working-directory: agentevals
+        env:
+          # Resolve user-level artifacts (the fixture plugin skill) from the
+          # fixture home on every machine, not the runner's real home.
+          AGENTEVALS_HOME: test/fixtures/home
         # Paths are relative on purpose: on windows-latest Git Bash and node.exe
         # resolve absolute POSIX paths differently. See CLAUDE.md.
         run: |
@@ -90,6 +94,8 @@ jobs:
       - name: Dogfood run (mock judge)
         shell: bash
         working-directory: agentevals
+        env:
+          AGENTEVALS_HOME: test/fixtures/home
         run: |
           set +e
           node dist/cli.js run test/fixtures/traces/claude-session.jsonl --project test/fixtures/project --provider mock --format json > agentevals-mock.json

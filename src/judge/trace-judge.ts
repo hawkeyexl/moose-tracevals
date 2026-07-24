@@ -5,8 +5,8 @@
  * invalid verdict, then the run records as an error that counts against
  * consensus (ADR 01001).
  */
-import { createRequire } from "node:module";
 import { Ajv2020 } from "ajv/dist/2020.js";
+import verdictSchemaJson from "./verdict-schema.json" with { type: "json" };
 import {
   computeConsensus,
   zoneFor,
@@ -19,11 +19,7 @@ import type { EvalPlan } from "../core/plan.js";
 import { cacheKey, JudgeCache } from "./cache.js";
 import { buildUserContent, JUDGE_SYSTEM_PROMPT } from "./prompt.js";
 
-const require = createRequire(import.meta.url);
-const verdictSchema = require("./verdict-schema.json") as Record<
-  string,
-  unknown
->;
+const verdictSchema = verdictSchemaJson as Record<string, unknown>;
 
 const ajv = new Ajv2020({ allErrors: true });
 const validateVerdict = ajv.compile(verdictSchema);

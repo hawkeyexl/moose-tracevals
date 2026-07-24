@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "agentevals:config:0.1",
+  "title": "agentevals.config.yaml",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "provider": {
+      "type": "object",
+      "description": "Judge provider configuration, passed through to docevals' provider factory (default, anthropic, openai, claude-cli sections)."
+    },
+    "judge": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ensembleRuns": { "type": "integer", "minimum": 1 },
+        "temperature": { "type": "number", "minimum": 0, "maximum": 2 },
+        "zones": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "autoPass": { "type": "number", "minimum": 0, "maximum": 1 },
+            "autoFail": { "type": "number", "minimum": 0, "maximum": 1 }
+          }
+        },
+        "cacheDir": { "type": "string" },
+        "maxCostUsd": { "type": "number", "minimum": 0 }
+      }
+    },
+    "render": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "maxBlockChars": { "type": "integer", "minimum": 100 },
+        "maxTotalChars": { "type": "integer", "minimum": 1000 }
+      }
+    },
+    "history": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "file": { "type": "string" }
+      }
+    },
+    "failOnNeedsReview": { "type": "boolean" }
+  }
+}
