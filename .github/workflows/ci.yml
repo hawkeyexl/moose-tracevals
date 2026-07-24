@@ -1,0 +1,145 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build-test:
+    # Developed on Windows, deployed in Linux CI: path building, session-store
+    # scanning, and JSONL parsing all touch platform-specific ground, so test
+    # the pair rather than trusting one.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      # docevals is consumed as a file: dependency, so its `prepare` (husky)
+      # runs during the agentevals install below. HUSKY=0 makes husky a clean
+      # no-op in CI; the build step also puts husky on PATH so the script
+      # resolves at all. Without this the install fails with `husky: not found`.
+      HUSKY: "0"
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          path: agentevals
+
+      # The docevals dependency is a file:../docevals link until docevals
+      # publishes to npm, so CI provides the sibling checkout the spec expects.
+      - uses: actions/checkout@v7
+        with:
+          repository: hawkeyexl/docevals
+          path: docevals
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+
+      # Build the sibling so agentevals can import its dist/, and so its own
+      # devDeps (husky) exist on PATH when npm runs the file-dep lifecycle
+      # during the agentevals install.
+      - name: Build the docevals sibling
+        working-directory: docevals
+        run: |
+          npm install --no-fund --no-audit
+          npm run build
+
+      # npm install, not ci — the lockfile is authored on Windows, where npm
+      # prunes optional-dependency subtrees; `npm ci`'s sync check then fails on
+      # every runner. See CLAUDE.md.
+      - run: npm install --no-fund --no-audit
+        working-directory: agentevals
+      - run: npm run typecheck
+        working-directory: agentevals
+      - run: npm run build
+        working-directory: agentevals
+      - run: npm test
+        working-directory: agentevals
+
+      # The suite mocks the judge provider and injects prompts, so it never
+      # reaches the network. Prove the built CLI works end to end against the
+      # fixture corpus — this is what catches a broken bin entry, a bad dist
+      # build, or a module that only resolves under vitest.
+      # Exit 1 is the expected, asserted outcome: the fixture project declares
+      # one deterministic criterion the fixture trace deliberately violates.
+      - name: Dogfood run (deterministic graders)
+        shell: bash
+        working-directory: agentevals
+        env:
+          # Resolve user-level artifacts (the fixture plugin skill) from the
+          # fixture home on every machine, not the runner's real home.
+          AGENTEVALS_HOME: test/fixtures/home
+        # Paths are relative on purpose: on windows-latest Git Bash and node.exe
+        # resolve absolute POSIX paths differently. See CLAUDE.md.
+        run: |
+          set +e
+          node dist/cli.js run test/fixtures/traces/claude-session.jsonl --project test/fixtures/project --deterministic-only --format json > agentevals-run.json
+          code=$?
+          set -e
+          if [ "$code" -ne 1 ]; then
+            echo "Expected exit 1 from the fixture corpus, got $code"
+            cat agentevals-run.json
+            exit 1
+          fi
+          node -e '
+            let raw = require("fs").readFileSync("agentevals-run.json", "utf8");
+            if (raw.charCodeAt(0) === 0xfeff) raw = raw.slice(1); // tolerate a BOM
+            const r = JSON.parse(raw);
+            const find = (a, e) => r.evalResults.find((x) => x.artifact.endsWith(a) && x.evalName === e);
+            const check = (label, actual, expected) => {
+              if (actual !== expected) {
+                console.error(`${label}: expected ${expected}, got ${actual}`);
+                process.exitCode = 1;
+              }
+            };
+            // The fixture skill declares a tool-usage criterion the trace violates.
+            check("SKILL.md forbidden-tool", find("SKILL.md", "forbidden-tool")?.outcome, "fail");
+            // And one it satisfies.
+            check("SKILL.md used-read", find("SKILL.md", "used-read")?.outcome, "pass");
+            // LLM-graded evals are skipped under --deterministic-only, not failed.
+            const skipped = r.evalResults.filter((x) => x.outcome === "skipped");
+            if (skipped.length === 0) { console.error("expected skipped llm evals under --deterministic-only"); process.exitCode = 1; }
+          '
+
+      - name: Dogfood run (mock judge)
+        shell: bash
+        working-directory: agentevals
+        env:
+          AGENTEVALS_HOME: test/fixtures/home
+        run: |
+          set +e
+          node dist/cli.js run test/fixtures/traces/claude-session.jsonl --project test/fixtures/project --provider mock --format json > agentevals-mock.json
+          code=$?
+          set -e
+          if [ "$code" -ne 1 ]; then
+            echo "Expected exit 1 (deterministic failure persists), got $code"
+            cat agentevals-mock.json
+            exit 1
+          fi
+          node -e '
+            let raw = require("fs").readFileSync("agentevals-mock.json", "utf8");
+            if (raw.charCodeAt(0) === 0xfeff) raw = raw.slice(1);
+            const r = JSON.parse(raw);
+            const judged = r.evalResults.filter((x) => x.consensus);
+            if (judged.length === 0) { console.error("expected judged evals with consensus objects"); process.exitCode = 1; }
+          '
+
+      - name: Dogfood list (fixture session store)
+        shell: bash
+        working-directory: agentevals
+        env:
+          AGENTEVALS_HOME: test/fixtures/home
+        run: |
+          node dist/cli.js list --all-projects --json --limit 5 > agentevals-list.json
+          node -e '
+            let raw = require("fs").readFileSync("agentevals-list.json", "utf8");
+            if (raw.charCodeAt(0) === 0xfeff) raw = raw.slice(1);
+            const r = JSON.parse(raw);
+            if (!Array.isArray(r.traces) || r.traces.length === 0) {
+              console.error("expected discovered traces from the fixture home");
+              process.exit(1);
+            }
+          '

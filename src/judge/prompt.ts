@@ -1,0 +1,45 @@
+/**
+ * Judge prompts. PROMPT_VERSION is part of the cache key — bump it on ANY
+ * change to the prompts in this file, or stale cached verdicts survive the
+ * revision.
+ */
+import type { EvalPlan } from "../core/plan.js";
+
+export const PROMPT_VERSION = 1;
+
+export const JUDGE_SYSTEM_PROMPT = `You are an adherence judge for AI agent sessions. You are given the transcript of an agent session (messages, tool calls, skills used) and one assertion drawn from the instructions the session was operating under — a skill definition, an agent definition, or project rules.
+
+Decide whether the session adhered to the assertion:
+- "pass" only when the session fully satisfied it.
+- "partial" when it partly satisfied it.
+- "fail" when it violated it or plainly did not do it.
+
+Ground every judgment in the transcript: cite the specific messages, tool calls, or omissions that support your verdict in the "observed" field. If the assertion concerns something the transcript cannot show (e.g. events outside the session), say so and lower your confidence.
+
+Respond with a single JSON object matching the provided schema. No prose outside the JSON.`;
+
+/** Cap for the artifact excerpt included alongside the assertion. */
+const MAX_ARTIFACT_CHARS = 8_000;
+
+export function buildUserContent(plan: EvalPlan, renderedTrace: string): string {
+  const parts: string[] = [];
+  parts.push(`# Assertion\n${plan.assertion}`);
+  if (plan.evidence) {
+    parts.push(`# Where to look\n${plan.evidence}`);
+  }
+  if (plan.examples?.pass?.length) {
+    parts.push(`# Examples of passing behavior\n- ${plan.examples.pass.join("\n- ")}`);
+  }
+  if (plan.examples?.fail?.length) {
+    parts.push(`# Examples of failing behavior\n- ${plan.examples.fail.join("\n- ")}`);
+  }
+  let artifactBody = plan.artifact.content;
+  if (artifactBody.length > MAX_ARTIFACT_CHARS) {
+    artifactBody = `${artifactBody.slice(0, MAX_ARTIFACT_CHARS)}\n[... artifact truncated ...]`;
+  }
+  parts.push(
+    `# Source ${plan.artifact.type} ("${plan.artifact.name}")\n${artifactBody}`,
+  );
+  parts.push(`# Session transcript\n${renderedTrace}`);
+  return parts.join("\n\n");
+}

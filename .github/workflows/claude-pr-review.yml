@@ -1,0 +1,134 @@
+name: Claude PR Review - Auto
+
+on:
+  pull_request:
+    types: [opened, ready_for_review, reopened, synchronize]
+
+concurrency:
+  group: claude-auto-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    if: '!github.event.pull_request.draft'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      id-token: write
+    env:
+      # `secrets` is not available in a job-level `if`, so surface it as an env
+      # flag and gate the steps. Without this the action hard-fails on every PR
+      # until the token is configured; a skipped review is the better default.
+      HAS_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN != '' }}
+    steps:
+      - name: Skip when no token is configured
+        if: env.HAS_TOKEN != 'true'
+        run: |
+          echo "::notice title=Claude review skipped::CLAUDE_CODE_OAUTH_TOKEN is not set on this repository. Set it with: gh secret set CLAUDE_CODE_OAUTH_TOKEN --repo ${{ github.repository }}"
+
+      - name: Checkout repository
+        if: env.HAS_TOKEN == 'true'
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create MCP config
+        if: env.HAS_TOKEN == 'true'
+        run: |
+          cat > /tmp/mcp-config.json << 'EOF'
+          {
+            "mcpServers": {
+              "github": {
+                "type": "http",
+                "url": "https://api.githubcopilot.com/mcp/",
+                "headers": {
+                  "Authorization": "Bearer ${{ secrets.GITHUB_TOKEN }}"
+                }
+              }
+            }
+          }
+          EOF
+
+      - name: Run Claude Code
+        if: env.HAS_TOKEN == 'true'
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          # Branches here are pushed by agents under the claude[bot] actor;
+          # without this the action refuses with "Workflow initiated by
+          # non-human actor" instead of reviewing. Posting a review is not a
+          # push/synchronize event, so this cannot loop.
+          allowed_bots: 'claude[bot]'
+          track_progress: true
+          prompt: |
+            REPO: ${{ github.repository }}
+            PR NUMBER: ${{ github.event.pull_request.number }}
+            PR TITLE: ${{ github.event.pull_request.title }}
+            PR DESCRIPTION: ${{ github.event.pull_request.body }}
+            PR AUTHOR: ${{ github.event.pull_request.user.login }}
+
+            Review this pull request to agentevals, a CLI that runs
+            deterministic and LLM-as-judge adherence evals against AI agent
+            session traces (Claude Code sessions).
+
+            Read CLAUDE.md first. It states the architecture and a short list of
+            invariants; a change that quietly breaks one of them is the single
+            most valuable thing to catch here. In particular:
+            - An errored judge run must count against consensus. It may push an
+              eval to human-review, but never to a silent pass.
+            - Deterministic evals fail only on `error`-severity findings;
+              warnings and info report but pass.
+            - Exit codes: 0 pass, 1 any fail/error, 2 operational.
+            - PROMPT_VERSION must be bumped when judge prompts change, or stale
+              cached verdicts survive a prompt revision.
+            - Evaluation is read-only: agentevals never mutates trace files or
+              the artifacts it evaluates.
+            - Artifact resolution is deterministic (trace content + filesystem
+              lookup); unresolved refs degrade to warnings and coverage notes,
+              never a crash.
+
+            Other focus areas, roughly in priority order:
+
+            Correctness
+            - Logic errors in trace parsing (session-file vs stream-json
+              dialects, sidechain handling, tool_use extraction), consensus,
+              confidence-zone routing, and exit-code derivation.
+            - Parsing against the captured fixtures in test/fixtures/traces/ —
+              malformed JSONL lines must be tolerated, not fatal.
+            - Missing error handling at boundaries — provider calls, JSON
+              parsing, filesystem lookups. A failure in an optional path
+              (caching, history) must not abort a whole run.
+
+            Cross-platform
+            - The code is developed on Windows and runs in Linux CI. Scrutinize
+              path building (the project-slug computation maps cwd paths to
+              session-store directory names), home-dir resolution, and CRLF
+              handling.
+
+            Testing
+            - The suite must stay offline: providers are mocked and prompts are
+              injected. Flag any test that would reach the network or spawn a
+              real agent CLI outside the AGENTEVALS_LIVE gate.
+            - Flag new logic without coverage, especially new trace-adapter and
+              judge/consensus branches.
+
+            Keep feedback concise and specific. Use suggested fixes where
+            possible. Do not restate what the PR description already says.
+
+            You MUST submit a proper GitHub Pull Request Review (not loose line comments). Flow:
+            1. mcp__github__get_pull_request_diff — load exact changed lines before commenting.
+            2. mcp__github__create_pending_pull_request_review — start a pending review.
+            3. mcp__github__add_pull_request_review_comment_to_pending_review — one call per specific-line issue, targeting a line present in the diff.
+            4. mcp__github__submit_pending_pull_request_review — submit with event = APPROVE, REQUEST_CHANGES, or COMMENT.
+
+            The review body is your summary comment. Structure it as:
+              - One-line verdict with reasoning.
+              - Issues grouped by severity: **Blocking**, **Important**, **Nit**. Each entry: short description + file:line link.
+              - If no issues: confirm the PR looks good.
+          claude_args: |
+            --model claude-sonnet-4-6
+            --max-turns 50
+            --mcp-config /tmp/mcp-config.json
+            --allowedTools "Bash(git diff:*),Bash(git log:*),Read,Glob,Grep,mcp__github__get_pull_request_diff,mcp__github__create_pending_pull_request_review,mcp__github__add_pull_request_review_comment_to_pending_review,mcp__github__submit_pending_pull_request_review,mcp__github__get_issue_comments"

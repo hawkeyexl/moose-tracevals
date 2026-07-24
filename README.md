@@ -1,310 +1,145 @@
-# agent-evals
+# agentevals
 
-Evaluation framework for [Claude Code](https://docs.anthropic.com/en/docs/claude-code) agents, skills, and project rules. Define eval specs as YAML or frontmatter, run trials via `claude -p`, and grade results with deterministic code checks and LLM-as-judge.
+Adherence evals for AI agent session traces. Point agentevals at a [Claude Code](https://docs.anthropic.com/en/docs/claude-code) session, and it deterministically looks up every skill, agent definition, and project-rules file the session used, then evaluates whether the session **adhered to the instructions in those artifacts** — with deterministic graders where possible and an ensemble LLM judge everywhere else.
+
+Built on two sibling tools: [docevals](https://github.com/hawkeyexl/docevals) (judge providers, ensemble consensus, confidence zones) and [docmeta](https://github.com/hawkeyexl/docmeta) (frontmatter extraction, JSON-Schema validation).
 
 ## How it works
 
 ```
-eval spec (YAML/frontmatter)
+trace (~/.claude/projects/<project>/*.jsonl, or a file you name)
   |
   v
-discover --> parse --> extract criteria from artifact
+parse ──> resolve artifacts used ──> extract criteria ──> plan evals
+              (skills, agents,          (metadata.evals
+               CLAUDE.md/AGENTS.md)      frontmatter)
   |
   v
-execute trial (claude -p)
+deterministic graders ──> ensemble LLM judge (N runs, consensus, zones)
   |
   v
-grade (code graders + LLM judge)
-  |
-  v
-report (JSON, Markdown, CLI) + history tracking
+report (human / json / markdown) + artifact coverage + history
 ```
 
-agent-evals has three modes:
-
-- **Spec mode** — discover eval specs, run trials against Claude, grade results
-- **Transcript mode** — evaluate a saved `.jsonl` transcript against its referenced artifacts
-- **Prompt mode** — run a prompt via `claude -p`, then evaluate the resulting session
+- **Deterministic lookup.** Skill invocations (`Skill` tool calls and `/command` injections), agent spawns (`subagent_type`), and project rules (`CLAUDE.md`/`AGENTS.md` from the session's cwd up to the project root) are resolved from the trace plus the filesystem — no LLM guessing. Unresolved references degrade to warnings and a coverage table, never a crash.
+- **Declared criteria.** Artifacts can declare criteria in a `metadata.evals` frontmatter block (validated against the published [artifact-evals schema](schemas/artifact-evals-0.1.json)). A criterion is either a string (LLM-judged assertion) or an object selecting a deterministic grader.
+- **Implicit eval.** Artifacts with no declared criteria still get one judged eval: *"the session adhered to the instructions in this artifact"* — so every used artifact is evaluated with zero configuration.
+- **Trustworthy judging.** N independent runs at temperature 0, consensus where errored runs can never produce a silent pass, and confidence zones that route anything non-unanimous to `needs-review`.
 
 ## Quick start
+
+Requires Node.js 24+ and (until docevals ships to npm) a sibling checkout of [docevals](https://github.com/hawkeyexl/docevals) next to this repo.
 
 ```bash
 npm install
 npm run build
-
-# Discover and run evals in the current directory
-agent-evals
-
-# Run evals from a specific path
-agent-evals ./skills/my-skill/
-
-# Dry-run: validate specs without executing
-agent-evals --dry-run
-
-# Evaluate an existing transcript
-agent-evals --transcript ./session.jsonl
-
-# Run a prompt and evaluate the result
-agent-evals -p "Generate a test spec for my docs"
-
-# View history trend
-agent-evals --history
 ```
 
-## Writing eval specs
+Evaluate a past session interactively (TTY picker):
 
-### Standalone YAML
+```bash
+node dist/cli.js
+```
 
-Place `.yaml` files in an `evals/` directory:
+Or name a trace and a project:
+
+```bash
+node dist/cli.js run ~/.claude/projects/<project-slug>/<session>.jsonl
+```
+
+List what's evaluable:
+
+```bash
+node dist/cli.js list --all-projects --limit 10
+```
+
+Deterministic-only (no LLM calls, CI-friendly):
+
+```bash
+node dist/cli.js run <trace> --deterministic-only --format json
+```
+
+Full pipeline with zero network (mock judge):
+
+```bash
+node dist/cli.js run <trace> --provider mock
+```
+
+## Declaring criteria
+
+Add a `metadata.evals` block to a skill, agent, or rules file:
 
 ```yaml
-name: my-skill-eval
-description: Verify my-skill handles common cases
-type: capability
-artifact:
-  type: skill
-  path: ../skills/my-skill/SKILL.md
-
-trials: 3
-model: claude-sonnet-4-6
-judge_model: claude-sonnet-4-6
-
-cases:
-  - name: triggers-on-relevant-prompt
-    prompt: "Run my-skill on the project"
-    criteria:
-      - name: skill-triggered
-        type: code
-        grader: trigger-check
-        config:
-          skill_name: my-skill
-          should_trigger: true
-
-      - name: output-valid
-        type: code
-        grader: regex-match
-        config:
-          pattern: "completed"
-          expect: present
-
-      - name: quality
-        type: llm
-        grader: output-quality
-        config:
-          rubric: "Output should be complete and well-formatted."
-```
-
-### Frontmatter in artifact files
-
-Embed evals directly in skill/agent `.md` files:
-
-```markdown
 ---
-name: my-skill
-description: A skill that does things
+name: fix-bug
+description: Fix a reported bug, reproducing it with a failing test first.
 metadata:
   evals:
-    - name: basic-trigger
-      type: capability
-      trials: 2
-      cases:
-        - name: triggers-correctly
-          prompt: "Run my-skill"
-          criteria:
-            - name: triggered
-              type: code
-              grader: trigger-check
-              config:
-                skill_name: my-skill
-                should_trigger: true
+    criteria:
+      # String shorthand: judged by the LLM ensemble.
+      - Reproduce the bug with a failing test before applying the fix.
+      # Object form: deterministic grader.
+      - name: forbidden-tool
+        assertion: The session never ran shell commands; this skill is edit-only.
+        grader: tool-usage
+        options: { tool: Bash, expect: not-used }
 ---
-
-# My Skill
-
-## Entry Criteria
-- Input file exists
-
-## Exit Criteria
-- Output file created
 ```
 
-When evals are in frontmatter, the artifact type is inferred from the file path (`/skills/` -> skill, `/agents/` -> agent, `AGENTS.md` -> project-rules).
+### Deterministic grader kinds
 
-## Graders
+| Kind | Asserts |
+|---|---|
+| `tool-usage` | a tool was used / not used / within count bounds (`tool`, `expect`, `min`, `max`, `includeSidechains`) |
+| `skill-invoked` | a skill was / wasn't invoked (`skill`, `expect`) |
+| `file-access` | a file was / wasn't read, written, or edited (`path` suffix, `op`, `expect`) |
+| `turn-count` | conversation stayed within turn bounds (`min`, `max`) |
+| `cost` | session stayed within budget (`maxUsd`, `maxTokens`); skips with a reason when the trace has no usage data |
+| `regex` | a pattern does / doesn't appear in session text (`pattern`, `flags`, `on`, `expect`) |
+| `json-output` | the final assistant message validates against a JSON Schema (`schema`) |
 
-### Code graders (deterministic)
-
-| Grader | What it checks |
-|--------|---------------|
-| `trigger-check` | Whether a skill/agent was invoked (or not) |
-| `diff-check` | File changes match expectations (unchanged/changed/created/deleted) |
-| `regex-match` | Pattern present or absent in transcript or files |
-| `exit-code` | Command exited with expected code |
-| `file-exists` | Expected files exist (or don't) after trial |
-| `json-schema` | Output validates against a JSON schema (via AJV) |
-| `tool-usage` | Expected tools were used, forbidden tools weren't |
-| `turn-count` | Trial completed within turn limits |
-| `cost-check` | Trial stayed within budget |
-
-### LLM graders (via Claude as judge)
-
-| Grader | What it checks |
-|--------|---------------|
-| `criteria-adherence` | Entry/exit criteria followed |
-| `constraint-check` | Constraints not violated |
-| `escalation-check` | Escalation rules followed when needed |
-| `rule-adherence` | Project rules and conventions followed |
-| `behavior-check` | Expected behavior exhibited |
-| `output-quality` | Output is complete, correct, well-formatted |
-| `spec-requirements` | Spec requirements fulfilled |
-| `spec-acceptance` | Acceptance criteria met |
-| `faithfulness-check` | Claims faithful to provided sources |
-
-### Composite graders
-
-| Grader | Logic |
-|--------|-------|
-| `all-of` | All sub-criteria must pass |
-| `any-of` | At least one sub-criterion must pass |
-| `weighted` | Weighted average of sub-criteria scores >= 0.7 |
-
-```yaml
-criteria:
-  - name: combined-check
-    type: composite
-    grader: weighted
-    sub_criteria:
-      - name: correct-output
-        type: code
-        grader: regex-match
-        weight: 3
-        config:
-          pattern: "expected-value"
-      - name: efficient
-        type: code
-        grader: turn-count
-        weight: 1
-        config:
-          max_turns: 10
-```
-
-## Auto-extracted criteria
-
-When using transcript or prompt mode, agent-evals automatically extracts testable criteria from artifact files based on their type:
-
-| Artifact type | Extracted sections |
-|--------------|-------------------|
-| **skill** | Entry criteria, exit criteria, process steps, trigger description |
-| **agent** | Constraints, quality criteria, escalation rules, capabilities, tools |
-| **project-rules** | Rules, gates, conventions (by heading context) |
-| **spec** | Requirements, acceptance criteria, uncertainty markers |
-
-Use `--detect-criteria` to merge auto-extracted criteria into artifact frontmatter.
+Severities: `error` findings fail the eval; `warning` and `info` report but pass.
 
 ## Configuration
 
-Create `.agent-evals.yaml` in your project root:
+`agentevals.config.yaml` (all keys optional; CLI flags override, never bypass):
 
 ```yaml
-judge_model: claude-sonnet-4-6
-output_dir: ./eval-results
-verbose: false
-report: json          # json | markdown | both
-pass_threshold: 0.7
+provider:                 # passed through to docevals' provider factory
+  default: claude-cli     # or anthropic / openai
+judge:
+  ensembleRuns: 3
+  temperature: 0
+  zones: { autoPass: 0.8, autoFail: 0.8 }
+  cacheDir: .agentevals/cache
+  maxCostUsd: 2.5
+render:
+  maxBlockChars: 2000
+  maxTotalChars: 150000
+history:
+  file: .agentevals/history.jsonl
+failOnNeedsReview: true
 ```
 
-The config file is searched from the current directory up to the git root.
+## Exit codes
 
-## CLI reference
+| Code | Meaning |
+|---|---|
+| `0` | every eval passed (or was skipped) |
+| `1` | any fail or error (and `needs-review` unless `failOnNeedsReview: false`) |
+| `2` | operational error (bad usage, unreadable trace, unknown format) |
 
-```
-agent-evals [path]               Discover & run spec-based evals
-agent-evals --transcript <file>  Evaluate a saved transcript
-agent-evals -p <prompt>          Run prompt via Claude Code, then evaluate
+## Development
 
-Spec mode:
-  [path]                    Directory or spec file (default: .)
-  -t, --trials <n>          Override trial count
-  -m, --model <id>          Override model under test
-  -f, --filter <pattern>    Filter evals by name
-      --dry-run             Parse and validate without executing
-  -b, --bail                Stop on first failure
-  -c, --concurrency <n>     Parallel eval specs (default: 1)
-
-Transcript mode:
-      --transcript <file>   Path to JSONL transcript file
-  -p, --prompt <string>     Prompt to run via claude CLI
-      --detect-criteria     Extract & merge criteria into frontmatter
-
-Shared:
-  -j, --judge-model <id>    Judge model (default: claude-sonnet-4-6)
-  -o, --output <dir>        Output directory (default: ./eval-results)
-  -r, --report              Generate report
-      --report-format <fmt> json | markdown | both
-      --history             Show trend across stored runs
-  -v, --verbose             Detailed output
-```
-
-## Reports and history
-
-Each run produces:
-
-- **JSON report** (`eval-results/report.json`) — structured results for programmatic use
-- **Markdown report** (`eval-results/report.md`) — human-readable summary with tables
-- **History** (`eval-results/history.jsonl`) — append-only log of all runs
-
-Use `--history` to print a trend table across runs. The framework automatically compares each run against the previous one, flagging regressions, improvements, new criteria, and removed criteria.
-
-## Testing
+See [CLAUDE.md](CLAUDE.md) for the working agreements (TDD, hermetic offline tests, ADRs, Conventional Commits) and [adrs/](adrs/) for the decisions behind the architecture.
 
 ```bash
-# Unit + integration tests (132 tests, no Claude API calls)
-npm test
-
-# Live end-to-end test (calls Claude API, ~$0.05-0.15)
-npm run test:live
+npm test              # offline suite (mocked judge, fixture traces)
+npm run typecheck
+npm run build
+AGENTEVALS_LIVE=1 npm test   # adds the live judge smoke test
 ```
 
-The `test:live` script runs the full pipeline with real `claude -p` calls and prints verbose output at every step. It creates a temporary workspace, runs a trial, grades with both code and LLM graders, generates reports, and tracks history.
+## License
 
-## Project structure
-
-```
-src/
-  cli.ts                 CLI entry point
-  index.ts               Public API, mode routing
-  types.ts               Core type definitions
-  config.ts              .agent-evals.yaml loader
-  discovery.ts           Find eval specs in a directory tree
-  parser.ts              Parse YAML/frontmatter eval specs
-  extractor.ts           Auto-extract criteria from artifacts
-  runner.ts              Execute trials via claude -p
-  prompt-runner.ts       Spawn claude CLI processes
-  transcript-parser.ts   Parse JSONL transcripts
-  judge.ts               LLM-as-judge via claude CLI
-  criteria-assembler.ts  Assemble criteria from artifacts
-  artifact-resolver.ts   Resolve skill/agent references
-  history.ts             Result history and comparison
-  graders/
-    index.ts             Grader registry (21 graders)
-    composite.ts         all-of, any-of, weighted
-    code/                9 deterministic graders
-  reporter/
-    cli.ts               Stdout reports
-    json.ts              JSON file reports
-    markdown.ts          Markdown file reports
-tests/
-  helpers.ts             Shared test utilities
-  e2e.test.ts            End-to-end tests with real transcript fixture
-  live-e2e.ts            Live integration test (calls Claude API)
-  *.test.ts              Unit tests for each module
-  graders/               Grader-specific tests
-  reporter/              Reporter tests
-  fixtures/              Test fixtures including real transcripts
-  evals/                 Sample eval specs
-```
-
-## Requirements
-
-- Node.js >= 20
-- [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) installed and authenticated
+MIT
