@@ -24,3 +24,16 @@ export {
 export { IMPLICIT_EVAL_NAME, planEvals, type EvalPlan } from "./core/plan.js";
 export * from "./graders/types.js";
 export { graderFor, listGraderKinds, registerGrader } from "./graders/registry.js";
+export { renderTrace, type RenderOptions } from "./judge/render.js";
+export {
+  JUDGE_SYSTEM_PROMPT,
+  PROMPT_VERSION,
+  buildUserContent,
+} from "./judge/prompt.js";
+export { cacheKey, JudgeCache, sha256 } from "./judge/cache.js";
+export {
+  makeTraceJudge,
+  type JudgedEval,
+  type TraceJudge,
+  type TraceJudgeOptions,
+} from "./judge/trace-judge.js";
