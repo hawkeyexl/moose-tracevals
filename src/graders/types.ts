@@ -1,0 +1,30 @@
+/** Deterministic trace-grader contract. */
+import type { Trace } from "../trace/types.js";
+import type { EvalPlan } from "../core/plan.js";
+import type { Severity } from "../criteria/extract.js";
+
+export interface Finding {
+  evalName: string;
+  /** Path (or name) of the artifact the eval came from. */
+  artifact: string;
+  message: string;
+  severity: Severity;
+}
+
+export interface GradeResult {
+  findings: Finding[];
+  /** Set when the grader could not apply (e.g. no cost data in the trace). */
+  skipped?: string;
+  /** Set when the criterion's options are invalid — maps to outcome `error`. */
+  error?: string;
+}
+
+export interface TraceGraderContext {
+  trace: Trace;
+  plan: EvalPlan;
+}
+
+export interface TraceGrader {
+  kind: string;
+  grade(ctx: TraceGraderContext): GradeResult | Promise<GradeResult>;
+}

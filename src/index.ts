@@ -22,3 +22,5 @@ export {
   type Severity,
 } from "./criteria/extract.js";
 export { IMPLICIT_EVAL_NAME, planEvals, type EvalPlan } from "./core/plan.js";
+export * from "./graders/types.js";
+export { graderFor, listGraderKinds, registerGrader } from "./graders/registry.js";
