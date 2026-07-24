@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/hawkeyexl/agentevals/main/schemas/artifact-evals-0.1.json",
+  "title": "agentevals artifact evals block",
+  "description": "Shape of the `metadata.evals` frontmatter block agentevals reads from skill, agent, and project-rules artifacts. A criterion is either a plain string (shorthand for an LLM-judged assertion) or an object selecting a grader.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "criteria": {
+      "type": "array",
+      "items": {
+        "oneOf": [
+          {
+            "type": "string",
+            "minLength": 1,
+            "description": "Shorthand: an LLM-judged assertion at error severity."
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["assertion"],
+            "properties": {
+              "name": {
+                "type": "string",
+                "pattern": "^[a-z0-9][a-z0-9-]*$",
+                "description": "Stable identifier for the criterion; derived from its position when omitted."
+              },
+              "assertion": {
+                "type": "string",
+                "minLength": 1,
+                "description": "What must have held in the session."
+              },
+              "grader": {
+                "type": "string",
+                "enum": [
+                  "llm",
+                  "tool-usage",
+                  "skill-invoked",
+                  "file-access",
+                  "turn-count",
+                  "cost",
+                  "regex",
+                  "json-output"
+                ],
+                "default": "llm",
+                "description": "How the assertion is checked. `llm` uses the ensemble judge; every other kind is deterministic."
+              },
+              "options": {
+                "type": "object",
+                "description": "Grader-specific options; validated by the grader at run time."
+              },
+              "severity": {
+                "type": "string",
+                "enum": ["error", "warning", "info"],
+                "default": "error",
+                "description": "Only error-severity findings fail the eval; warning and info report but pass."
+              },
+              "evidence": {
+                "type": "string",
+                "description": "Hint telling the judge where in the session to look."
+              },
+              "examples": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "pass": { "type": "array", "items": { "type": "string" } },
+                  "fail": { "type": "array", "items": { "type": "string" } }
+                },
+                "description": "Anchor examples of passing and failing behavior for the judge."
+              }
+            }
+          }
+        ]
+      }
+    },
+    "skip": {
+      "type": "boolean",
+      "default": false,
+      "description": "Skip this artifact entirely (reported as skipped, not evaluated)."
+    }
+  }
+}

@@ -13,3 +13,12 @@ export {
 export { renderList, runList, type ListOptions, type ListRun } from "./commands/list.js";
 export * from "./artifacts/types.js";
 export { resolveArtifacts, type ResolveOptions } from "./artifacts/resolve.js";
+export {
+  ARTIFACT_EVALS_SCHEMA_ID,
+  artifactEvalsSchemaPath,
+  extractCriteria,
+  type Criterion,
+  type ExtractedCriteria,
+  type Severity,
+} from "./criteria/extract.js";
+export { IMPLICIT_EVAL_NAME, planEvals, type EvalPlan } from "./core/plan.js";
