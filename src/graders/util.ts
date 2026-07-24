@@ -55,12 +55,16 @@ export function optionalEnum(
 export function optionalNumber(
   options: Options,
   key: string,
-  bounds: { min?: number } = {},
+  bounds: { min?: number; integer?: boolean } = {},
 ): OptionCheck {
   const value = options[key];
   if (value === undefined) return undefined;
-  if (typeof value !== "number" || Number.isNaN(value)) {
-    return `options.${key} must be a number`;
+  // Number.isFinite also rejects NaN and both infinities.
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return `options.${key} must be a finite number`;
+  }
+  if (bounds.integer === true && !Number.isInteger(value)) {
+    return `options.${key} must be a whole number`;
   }
   if (bounds.min !== undefined && value < bounds.min) {
     return `options.${key} must be at least ${bounds.min}`;

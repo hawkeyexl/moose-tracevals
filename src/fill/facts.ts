@@ -33,16 +33,18 @@ function toolList(value: unknown): string[] {
 }
 
 export function artifactFacts(artifact: ResolvedArtifact): ArtifactFacts {
-  let data: Record<string, unknown>;
   try {
-    data = extractFrontmatter(artifact.content, "markdown").data;
+    const { data } = extractFrontmatter(artifact.content, "markdown");
+    const facts: ArtifactFacts = { declaredTools: toolList(data?.tools) };
+    if (typeof data?.name === "string") facts.name = data.name;
+    if (typeof data?.description === "string") {
+      facts.description = data.description;
+    }
+    return facts;
   } catch {
     // Malformed frontmatter yields no facts; discovery already reported it.
+    // This runs during vocabulary building, outside any per-artifact handler,
+    // so it must not throw.
     return { declaredTools: [] };
   }
-
-  const facts: ArtifactFacts = { declaredTools: toolList(data.tools) };
-  if (typeof data.name === "string") facts.name = data.name;
-  if (typeof data.description === "string") facts.description = data.description;
-  return facts;
 }

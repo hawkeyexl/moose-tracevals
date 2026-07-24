@@ -13,13 +13,31 @@ import {
   type Options,
 } from "./util.js";
 
+/**
+ * A criterion that can never pass is as useless as one that can never fail:
+ * `expect: not-used` with `min >= 1` demands the tool be both absent and
+ * called, and `expect: used` with `max: 0` is the mirror image.
+ */
+function checkContradiction(options: Options): string | undefined {
+  const expect = (options.expect as string | undefined) ?? "used";
+  const { min, max } = options;
+  if (expect === "not-used" && typeof min === "number" && min > 0) {
+    return "options.min is unsatisfiable with expect: not-used";
+  }
+  if (expect === "used" && typeof max === "number" && max === 0) {
+    return "options.max of 0 is unsatisfiable with expect: used";
+  }
+  return undefined;
+}
+
 function validateOptions(options: Options): string | undefined {
   return firstError(
     requiredString(options, "tool"),
     optionalEnum(options, "expect", ["used", "not-used"]),
-    optionalNumber(options, "min", { min: 0 }),
-    optionalNumber(options, "max", { min: 0 }),
+    optionalNumber(options, "min", { min: 0, integer: true }),
+    optionalNumber(options, "max", { min: 0, integer: true }),
     orderedBounds(options, "min", "max"),
+    checkContradiction(options),
     optionalBoolean(options, "includeSidechains"),
   );
 }

@@ -7,7 +7,14 @@
  *
  * Writing is an authoring-time operation, never part of evaluation (ADR 01005).
  */
-import { Document, isMap, isSeq, parseDocument, type YAMLSeq } from "yaml";
+import {
+  Document,
+  isMap,
+  isScalar,
+  isSeq,
+  parseDocument,
+  type YAMLSeq,
+} from "yaml";
 import { AgentevalsError } from "../types.js";
 import type { Severity } from "./extract.js";
 
@@ -97,10 +104,23 @@ function existingNames(seq: YAMLSeq): Set<string> {
   return names;
 }
 
+/**
+ * A key present with an empty value parses to a null node, not `undefined`.
+ * `metadata:` with nothing under it is ordinary in the wild, so treat it as
+ * the absent case and fill it in rather than refusing to write.
+ */
+function isEmptyNode(node: unknown): boolean {
+  return node === undefined || node === null || isNullScalar(node);
+}
+
+function isNullScalar(node: unknown): boolean {
+  return isScalar(node) && node.value === null;
+}
+
 /** Locate `metadata.evals.criteria`, creating each missing level. */
 function criteriaSeq(doc: Document, path: string): YAMLSeq {
   const existing = doc.getIn(["metadata", "evals", "criteria"], true);
-  if (existing !== undefined) {
+  if (!isEmptyNode(existing)) {
     if (!isSeq(existing)) {
       throw new AgentevalsError(
         `${path}: metadata.evals.criteria is not a list`,
@@ -108,13 +128,9 @@ function criteriaSeq(doc: Document, path: string): YAMLSeq {
     }
     return existing;
   }
-  for (const [key, parent] of [
-    ["metadata", [] as string[]],
-    ["evals", ["metadata"]],
-  ] as const) {
-    const at = [...parent, key];
+  for (const at of [["metadata"], ["metadata", "evals"]]) {
     const node = doc.getIn(at, true);
-    if (node === undefined) {
+    if (isEmptyNode(node)) {
       doc.setIn(at, doc.createNode({}));
     } else if (!isMap(node)) {
       throw new AgentevalsError(`${path}: ${at.join(".")} is not a mapping`);
@@ -155,7 +171,7 @@ export function appendArtifactCriteria(
     const doc = new Document({
       metadata: { evals: { criteria: criteria.map(criterionObject) } },
     });
-    let block = doc.toString();
+    let block = doc.toString({ lineWidth: 0 });
     if (eol === "\r\n") block = block.replace(/(?<!\r)\n/g, "\r\n");
     return `${bom}---${eol}${block}---${eol}${stripped}`;
   }
@@ -168,7 +184,19 @@ export function appendArtifactCriteria(
     );
   }
 
-  const seq = criteriaSeq(doc, path);
+  let seq: YAMLSeq;
+  try {
+    seq = criteriaSeq(doc, path);
+  } catch (err) {
+    // A block that is valid YAML but not a mapping (a sequence, a bare
+    // scalar, a `---` that was really a thematic break) makes the yaml
+    // library throw its own error type. Callers are promised AgentevalsError.
+    if (err instanceof AgentevalsError) throw err;
+    throw new AgentevalsError(
+      `${path}: cannot edit frontmatter — ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+
   const taken = existingNames(seq);
   for (const criterion of criteria) {
     if (taken.has(criterion.name)) {
@@ -180,7 +208,9 @@ export function appendArtifactCriteria(
     seq.add(doc.createNode(criterionObject(criterion)));
   }
 
-  let updated = doc.toString();
+  // lineWidth 0 disables folding: skill descriptions routinely run past 80
+  // columns, and reflowing one the user did not touch is gratuitous churn.
+  let updated = doc.toString({ lineWidth: 0 });
   if (eol === "\r\n") updated = updated.replace(/(?<!\r)\n/g, "\r\n");
   return open + updated + suffix;
 }

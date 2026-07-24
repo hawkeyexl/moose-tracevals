@@ -14,8 +14,8 @@ import {
 function validateOptions(options: Options): string | undefined {
   return firstError(
     requireOneOf(options, ["min", "max"]),
-    optionalNumber(options, "min", { min: 0 }),
-    optionalNumber(options, "max", { min: 0 }),
+    optionalNumber(options, "min", { min: 0, integer: true }),
+    optionalNumber(options, "max", { min: 0, integer: true }),
     orderedBounds(options, "min", "max"),
   );
 }

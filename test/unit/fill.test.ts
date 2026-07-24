@@ -1,4 +1,4 @@
-import { cp, mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -6,6 +6,7 @@ import { MockProvider } from "docevals";
 import { runFill } from "../../src/commands/fill.js";
 import { extractCriteria } from "../../src/criteria/extract.js";
 import { planEvals } from "../../src/core/plan.js";
+import { AgentevalsError } from "../../src/types.js";
 
 const fixtureProject = fileURLToPath(
   new URL("../fixtures/project", import.meta.url),
@@ -187,6 +188,75 @@ describe("runFill", () => {
     expect(report.results.some((r) => r.status === "error")).toBe(true);
     expect(report.results.some((r) => r.written.length > 0)).toBe(true);
     expect(report.exitCode).toBe(1);
+  });
+
+  it("stops proposing once the cost budget is spent", async () => {
+    // A budget can only bind against a model with known pricing, so this
+    // stub names one. MockProvider reports no usage and an unpriced model.
+    let calls = 0;
+    const pricey = {
+      provider: () => "anthropic",
+      modelName: () => "claude-opus-4-8",
+      completeJSON: async () => {
+        calls += 1;
+        return {
+          json: proposal().json,
+          usage: { inputTokens: 400_000, outputTokens: 100_000 },
+        };
+      },
+    };
+    const { report } = await run({
+      providerInstance: pricey as never,
+      maxCostUsd: 0.01,
+      noCache: true,
+      dryRun: true,
+    });
+
+    // The first artifact blows the budget; the rest are skipped, not proposed.
+    expect(calls).toBeLessThan(report.results.length);
+    expect(
+      report.results.some((r) => r.error === "cost budget exhausted"),
+    ).toBe(true);
+  });
+
+  it("lets an operational provider failure out so the CLI can exit 2", async () => {
+    // A missing API key would repeat for every artifact; reporting it once as
+    // operational beats N identical per-artifact errors and an exit 1.
+    await expect(
+      runFill({
+        project,
+        configDir: dir,
+        cwd: dir,
+        noCache: true,
+        provider: "no-such-provider",
+      }),
+    ).rejects.toThrow(AgentevalsError);
+  });
+
+  it("counts existing criteria against the per-artifact cap", async () => {
+    // fix-bug already declares 3 criteria; a cap of 3 leaves no room.
+    const { report } = await run({ maxCriteria: 3, dryRun: true, noCache: true });
+    const skill = report.results.find((r) => r.type === "skill");
+    expect(skill?.written).toEqual([]);
+    expect(skill?.capped.length).toBeGreaterThan(0);
+  });
+
+  it("skips an artifact that opts out with metadata.evals.skip", async () => {
+    const target = join(project, ".claude", "agents", "doc-writer.md");
+    await writeFile(
+      target,
+      "---\nname: doc-writer\nmetadata:\n  evals:\n    skip: true\n---\nbody\n",
+    );
+    const provider = new MockProvider([proposal()]);
+    const { report } = await run({ providerInstance: provider, noCache: true });
+
+    const agent = report.results.find((r) =>
+      r.artifact.endsWith("doc-writer.md"),
+    );
+    expect(agent?.status).toBe("skipped");
+    expect(agent?.written).toEqual([]);
+    // Skipped artifacts cost nothing.
+    expect(provider.requests.length).toBeLessThan(report.results.length);
   });
 
   it("produces frontmatter the real reader and planner accept", async () => {

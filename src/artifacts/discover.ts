@@ -10,7 +10,15 @@
  * plugin store, which hold third-party files that are not this project's to
  * edit.
  */
-import { basename, dirname, isAbsolute, join, resolve, sep } from "node:path";
+import {
+  basename,
+  dirname,
+  isAbsolute,
+  join,
+  relative,
+  resolve,
+  sep,
+} from "node:path";
 import { stat } from "node:fs/promises";
 import { extractCriteria } from "../criteria/extract.js";
 import { AgentevalsError } from "../types.js";
@@ -66,13 +74,21 @@ function classify(path: string): ArtifactType | undefined {
   if (RULES_NAMES.has(name)) return "project-rules";
   if (name === "SKILL.md") return "skill";
   if (!name.endsWith(".md")) return undefined;
-  const parts = segments(dirname(path));
-  const parent = parts.at(-1);
-  const grandparent = parts.at(-2);
-  if (parent === "agents" && (grandparent === ".claude" || grandparent !== undefined)) {
-    return "agent";
-  }
+  // Candidate only — `isRecognizedAgent` decides whether this particular
+  // `agents/` directory is one the resolver would ever look in.
+  if (segments(dirname(path)).at(-1) === "agents") return "agent";
   return undefined;
+}
+
+/**
+ * `path` split into segments relative to `anchor`, or null when it escapes.
+ * Slicing by prefix length silently mangles paths that are not underneath the
+ * anchor, so relative() does the work.
+ */
+function relativeSegments(anchor: string, path: string): string[] | null {
+  const rel = relative(resolve(anchor), resolve(path));
+  if (rel === "" || rel.startsWith("..") || isAbsolute(rel)) return null;
+  return segments(rel);
 }
 
 /**
@@ -85,28 +101,35 @@ function nameFor(type: ArtifactType, path: string): string {
   return basename(path);
 }
 
-/** A skill file must sit under one of the recognized skills roots. */
-function isRecognizedSkill(path: string, root: string): boolean {
-  const rel = resolve(path).slice(resolve(root).length + 1);
-  const parts = segments(rel);
+/** A skill file must sit as `<skillsDir>/<skillName>/SKILL.md`. */
+function isRecognizedSkill(path: string, anchor: string): boolean {
+  const parts = relativeSegments(anchor, path);
+  if (parts === null) return false;
   return SKILL_DIRS.some((dir) => {
     const want = segments(dir);
-    // .../<skillsDir>/<skillName>/SKILL.md
     const at = parts.length - want.length - 2;
     if (at < 0) return false;
     return want.every((part, i) => parts[at + i] === part);
   });
 }
 
-function isRecognizedAgent(path: string, root: string): boolean {
-  const rel = resolve(path).slice(resolve(root).length + 1);
-  const parts = segments(rel);
-  return AGENT_DIRS.some((dir) => {
-    const want = segments(dir);
-    const at = parts.length - want.length - 1;
-    if (at < 0) return false;
-    return want.every((part, i) => parts[at + i] === part);
-  });
+/**
+ * Agent definitions live in `.claude/agents/` at any depth, or in `agents/`
+ * directly at the project root — the two places `resolveArtifacts` looks.
+ *
+ * This is deliberately narrow. Matching any directory named `agents` would
+ * classify ordinary prose in `docs/agents/` as an agent definition, and `fill`
+ * writes by default, so the mistake would edit unrelated files.
+ */
+function isRecognizedAgent(path: string, anchor: string): boolean {
+  const parts = relativeSegments(anchor, path);
+  if (parts === null) return false;
+  if (parts.length === 2 && parts[0] === "agents") return true;
+  return (
+    parts.length >= 3 &&
+    parts.at(-3) === ".claude" &&
+    parts.at(-2) === "agents"
+  );
 }
 
 async function readOne(
@@ -181,11 +204,14 @@ export async function discoverArtifacts(
       continue;
     }
 
+    // Convention is anchored at the directory being scanned, so
+    // `fill packages/api` treats that package as its own project rather than
+    // silently finding nothing.
     const found = await listInTree(target, (path) => {
       const type = classify(path);
       if (type === undefined) return false;
-      if (type === "skill") return isRecognizedSkill(path, root);
-      if (type === "agent") return isRecognizedAgent(path, root);
+      if (type === "skill") return isRecognizedSkill(path, target);
+      if (type === "agent") return isRecognizedAgent(path, target);
       return true;
     });
     for (const path of found) {

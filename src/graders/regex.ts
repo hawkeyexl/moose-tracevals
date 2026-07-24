@@ -10,7 +10,7 @@ import {
   type Options,
 } from "./util.js";
 
-/** Flags are checked against an empty pattern so the message names the culprit. */
+/** Flags are checked alone first, so the message names the actual culprit. */
 function checkFlags(options: Options): string | undefined {
   const flags = options.flags;
   if (flags === undefined) return undefined;
@@ -23,11 +23,16 @@ function checkFlags(options: Options): string | undefined {
   return undefined;
 }
 
+/**
+ * Pattern and flags must be validated *together*, exactly as `grade()` builds
+ * them: `a{` is legal on its own but not under the `u` flag, so checking them
+ * separately would pass options that then throw at grade time.
+ */
 function checkPattern(options: Options): string | undefined {
   const required = requiredString(options, "pattern");
   if (required !== undefined) return required;
   try {
-    new RegExp(options.pattern as string);
+    new RegExp(options.pattern as string, (options.flags as string) ?? "");
   } catch (err) {
     return `options.pattern is not a valid regular expression: ${(err as Error).message}`;
   }
@@ -36,8 +41,8 @@ function checkPattern(options: Options): string | undefined {
 
 function validateOptions(options: Options): string | undefined {
   return firstError(
-    checkPattern(options),
     checkFlags(options),
+    checkPattern(options),
     optionalEnum(options, "on", ["assistant", "user", "all"]),
     optionalEnum(options, "expect", ["match", "no-match"]),
   );

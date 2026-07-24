@@ -143,7 +143,7 @@ Pipeline: **select trace → parse (adapter) → resolve artifacts → extract c
 - Errored judge runs count against consensus — they may push an eval to human-review, never to a silent pass.
 - Deterministic evals fail only on `error`-severity findings; warnings and info report but pass.
 - Exit codes: `0` pass, `1` any fail/error, `2` operational (`AgentevalsError`).
-- Bump `PROMPT_VERSION` (`src/judge/prompt.ts`) whenever judge prompts change — it is part of the cache key.
+- Bump `PROMPT_VERSION` (`src/judge/prompt.ts`) whenever judge prompts change, and `FILL_PROMPT_VERSION` (`src/fill/prompt.ts`) whenever the fill prompt or proposal schema changes — both are cache-key components, and a stale cache silently replays old output.
 - Evaluation is **read-only**: `run` never mutates trace files or the artifacts it evaluates. `fill` is the one write path — an explicitly-invoked authoring command that `run` never calls, appends only, and never writes project rules (ADR 01005). Trace files are never written by anything.
 - Artifact resolution is deterministic: trace content + filesystem lookup, no LLM guessing. Unresolved or absent artifacts degrade to warnings and coverage notes, never a crash; zero artifacts → skipped evals, exit 0.
 - `schemas/artifact-evals-*.json` are published artifacts — keep each `$id` a resolvable URL, never edit a released version in place (add the next one), and pin behavior in `test/unit/schema.test.ts`.

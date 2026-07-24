@@ -95,6 +95,11 @@ program
     "minimum confidence to write (0-1)",
     (v) => parseFloat(v),
   )
+  .option(
+    "--max-criteria <n>",
+    "maximum criteria per artifact, including existing ones",
+    (v) => parseInt(v, 10),
+  )
   .option("--max-cost-usd <usd>", "proposal cost budget", (v) => parseFloat(v))
   .option("--no-cache", "bypass the proposal cache")
   .option("--provider <name>", "provider: claude-cli, anthropic, openai, mock")
@@ -104,22 +109,38 @@ program
     project?: string;
     dryRun?: boolean;
     confidence?: number;
+    maxCriteria?: number;
     maxCostUsd?: number;
     cache?: boolean;
     provider?: string;
     model?: string;
     format?: string;
   }) => {
-    if (opts.confidence !== undefined && (opts.confidence < 0 || opts.confidence > 1)) {
-      throw new AgentevalsError(
-        `--confidence must be between 0 and 1, got ${opts.confidence}`,
-      );
-    }
+    // parseFloat("abc") is NaN, and every comparison against NaN is false —
+    // so range checks must test for a finite number, not just the range.
+    const numeric = (
+      name: string,
+      value: number | undefined,
+      min: number,
+      max: number,
+    ): void => {
+      if (value === undefined) return;
+      if (!Number.isFinite(value) || value < min || value > max) {
+        throw new AgentevalsError(
+          `${name} must be a number between ${min} and ${max}, got ${value}`,
+        );
+      }
+    };
+    numeric("--confidence", opts.confidence, 0, 1);
+    numeric("--max-criteria", opts.maxCriteria, 1, Number.MAX_SAFE_INTEGER);
+    numeric("--max-cost-usd", opts.maxCostUsd, 0, Number.MAX_SAFE_INTEGER);
+
     const { report, rendered } = await runFill({
       ...(paths.length > 0 ? { paths } : {}),
       ...(opts.project !== undefined ? { project: opts.project } : {}),
       ...(opts.dryRun !== undefined ? { dryRun: opts.dryRun } : {}),
       ...(opts.confidence !== undefined ? { confidence: opts.confidence } : {}),
+      ...(opts.maxCriteria !== undefined ? { maxCriteria: opts.maxCriteria } : {}),
       ...(opts.maxCostUsd !== undefined ? { maxCostUsd: opts.maxCostUsd } : {}),
       ...(opts.cache === false ? { noCache: true } : {}),
       ...(opts.provider !== undefined ? { provider: opts.provider } : {}),

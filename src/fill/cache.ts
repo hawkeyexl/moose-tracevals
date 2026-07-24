@@ -23,9 +23,22 @@ export interface FillCacheKeyParts {
   temperature: number;
   maxCriteria: number;
   artifactType: ArtifactType;
+  /** Artifact path — it appears in the prompt, so it belongs in the key. */
+  path: string;
   /** Full artifact content, hashed. */
   body: string;
   existingNames: string[];
+  /**
+   * Project-wide skill names. They are the grounding vocabulary in the
+   * prompt, so adding or renaming a skill must invalidate every artifact's
+   * cached proposal, not just that skill's own.
+   */
+  knownSkills: string[];
+}
+
+/** JSON-encoded so a name containing the separator cannot forge a boundary. */
+function listPart(values: string[]): string {
+  return JSON.stringify([...values].sort());
 }
 
 export function fillCacheKey(parts: FillCacheKeyParts): string {
@@ -37,8 +50,10 @@ export function fillCacheKey(parts: FillCacheKeyParts): string {
       `t${parts.temperature}`,
       `n${parts.maxCriteria}`,
       parts.artifactType,
+      parts.path,
       sha256(parts.body),
-      [...parts.existingNames].sort().join(","),
+      listPart(parts.existingNames),
+      listPart(parts.knownSkills),
     ].join("|"),
   );
 }

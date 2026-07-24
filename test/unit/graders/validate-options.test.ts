@@ -128,6 +128,24 @@ describe("grader option validation", () => {
       expect(validate({ pattern: "a", flags: "gi" })).toBeUndefined();
     });
 
+    it("validates the pattern against its flags, as grade() builds it", () => {
+      // `a{` is legal on its own but not under `u`. Validating them apart
+      // would accept options that then throw at grade time.
+      expect(validate({ pattern: "a{", flags: "u" })).toContain("pattern");
+      expect(validate({ pattern: "a{" })).toBeUndefined();
+    });
+
+    it("does not let a bad pattern escape grade() as an exception", async () => {
+      const result = await graderFor("regex")!.grade({
+        trace: makeTrace({ assistantTexts: ["hello"] }),
+        plan: makePlan({
+          grader: "regex",
+          options: { pattern: "a{", flags: "u" },
+        }),
+      });
+      expect(result.error).toContain("pattern");
+    });
+
     it("constrains on and expect", () => {
       expect(validate({ pattern: "a", on: "bad" })).toContain("on");
       expect(validate({ pattern: "a", expect: "bad" })).toContain("expect");

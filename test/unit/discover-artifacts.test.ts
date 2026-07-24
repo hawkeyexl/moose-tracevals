@@ -108,6 +108,41 @@ describe("discoverArtifacts", () => {
       expect(ids(result.artifacts)).toContain("agent:helper.md");
     });
 
+    it("does not treat prose under any agents/ directory as an agent", async () => {
+      // fill writes by default, so an over-broad match would edit unrelated
+      // markdown. Only .claude/agents/ and a root-level agents/ count.
+      await mkdir(join(dir, "docs", "agents"), { recursive: true });
+      await mkdir(join(dir, "vendor", "agents"), { recursive: true });
+      await writeFile(
+        join(dir, "docs", "agents", "hiring-guide.md"),
+        "# Hiring agents\n\nProse about recruiting.\n",
+      );
+      await writeFile(join(dir, "vendor", "agents", "thing.md"), "# Vendor\n");
+
+      const result = await discoverArtifacts({ root: dir });
+      const paths = result.artifacts.map((a) =>
+        a.artifact.path.replace(/\\/g, "/"),
+      );
+      expect(paths.some((p) => p.includes("docs/agents"))).toBe(false);
+      expect(paths.some((p) => p.includes("vendor/agents"))).toBe(false);
+      // The legitimate ones are still found.
+      expect(paths.some((p) => p.endsWith("agents/helper.md"))).toBe(true);
+    });
+
+    it("anchors convention at the scanned directory, not only the root", async () => {
+      // `fill packages/api` should treat that package as its own project
+      // rather than silently finding nothing.
+      const pkg = join(dir, "packages", "api");
+      await mkdir(join(pkg, ".claude", "agents"), { recursive: true });
+      await writeFile(
+        join(pkg, ".claude", "agents", "scoped.md"),
+        "---\nname: scoped\n---\nx\n",
+      );
+
+      const result = await discoverArtifacts({ root: dir, paths: [pkg] });
+      expect(ids(result.artifacts)).toContain("agent:scoped.md");
+    });
+
     it("accepts an explicit file path, bypassing convention", async () => {
       const target = join(dir, ".claude", "skills", "good", "SKILL.md");
       const result = await discoverArtifacts({ root: dir, paths: [target] });

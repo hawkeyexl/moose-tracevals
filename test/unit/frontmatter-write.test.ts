@@ -178,6 +178,38 @@ describe("appendArtifactCriteria", () => {
     expect(extracted.criteria[0]?.grader).toBe("tool-usage");
   });
 
+  it("fills in a metadata key that is present but empty", () => {
+    // `metadata:` with no value parses to null, not undefined. Discovery
+    // reports such a file as healthy, so the writer must not refuse it.
+    for (const head of ["metadata:", "metadata:\n  evals:"]) {
+      const source = `---\nname: x\n${head}\n---\nbody\n`;
+      const result = appendArtifactCriteria(source, "SKILL.md", ONE);
+      const criteria = (
+        frontmatterOf(result).metadata as { evals: { criteria: unknown[] } }
+      ).evals.criteria;
+      expect(criteria).toHaveLength(1);
+      expect(result.endsWith("body\n")).toBe(true);
+    }
+  });
+
+  it("does not reflow long values it was not asked to touch", () => {
+    const description =
+      "Use this skill when the user asks about provisioning infrastructure, databases, caching layers, or any third-party service credentials for their project.";
+    const source = `---\nname: x\ndescription: ${description}\n---\nbody\n`;
+    const result = appendArtifactCriteria(source, "SKILL.md", ONE);
+
+    expect(result).toContain(`description: ${description}`);
+  });
+
+  it("reports a non-mapping frontmatter block as an operational error", () => {
+    // A leading `---` that is really a thematic break, so the "block" is a
+    // sequence. The yaml library throws its own error type here.
+    const source = "---\n- one\n- two\n---\nbody\n";
+    expect(() => appendArtifactCriteria(source, "x.md", ONE)).toThrow(
+      AgentevalsError,
+    );
+  });
+
   it("is idempotent in shape: appending nothing returns the source unchanged", () => {
     const source = "---\nname: x\n---\nbody\n";
     expect(appendArtifactCriteria(source, "x.md", [])).toBe(source);

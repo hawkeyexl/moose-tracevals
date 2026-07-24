@@ -103,7 +103,18 @@ describe.skipIf(!built)("built CLI", () => {
 
   it("fill --dry-run reports proposals without touching the corpus", async () => {
     const { code, stdout } = await runCli(
-      ["fill", "test/fixtures/project", "--provider", "mock", "--dry-run", "--format", "json"],
+      // --no-cache keeps this hermetic: without it the run writes into
+      // <repo>/.agentevals/cache/fill and a later run replays it.
+      [
+        "fill",
+        "test/fixtures/project",
+        "--provider",
+        "mock",
+        "--dry-run",
+        "--no-cache",
+        "--format",
+        "json",
+      ],
       { AGENTEVALS_HOME: "test/fixtures/home" },
     );
     expect(code).toBe(0);

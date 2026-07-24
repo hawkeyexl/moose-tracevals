@@ -109,8 +109,10 @@ describe("fill cache", () => {
       temperature: 0,
       maxCriteria: 3,
       artifactType: "skill",
+      path: "/p/.claude/skills/a/SKILL.md",
       body: "body",
       existingNames: [],
+      knownSkills: [],
       ...over,
     });
 
@@ -125,6 +127,18 @@ describe("fill cache", () => {
     expect(key({ existingNames: ["added"] })).not.toBe(key());
     expect(key({ maxCriteria: 5 })).not.toBe(key());
     expect(key({ artifactType: "agent" })).not.toBe(key());
+    expect(key({ model: "other" })).not.toBe(key());
+    // Two artifacts with identical content at different paths are distinct.
+    expect(key({ path: "/p/.claude/skills/b/SKILL.md" })).not.toBe(key());
+    // The skill list is the prompt's grounding vocabulary, so adding a skill
+    // must invalidate every artifact's proposal, not just that skill's own.
+    expect(key({ knownSkills: ["fix-bug"] })).not.toBe(key());
+  });
+
+  it("cannot be forged by a name containing the separator", () => {
+    expect(key({ existingNames: ["a,b"] })).not.toBe(
+      key({ existingNames: ["a", "b"] }),
+    );
   });
 
   it("round-trips a proposal and treats corruption as a miss", async () => {

@@ -136,7 +136,18 @@ jobs:
         env:
           AGENTEVALS_HOME: test/fixtures/home
         run: |
-          node dist/cli.js fill test/fixtures/project --provider mock --dry-run --format json > agentevals-fill.json
+          # --no-cache is load-bearing: `npm test` runs earlier in this job and
+          # would otherwise leave a populated cache, turning this gate into a
+          # replay that never exercises the provider wiring in dist/.
+          set +e
+          node dist/cli.js fill test/fixtures/project --provider mock --dry-run --no-cache --format json > agentevals-fill.json
+          code=$?
+          set -e
+          if [ "$code" -ne 0 ]; then
+            echo "Expected exit 0 from a dry-run fill, got $code"
+            cat agentevals-fill.json
+            exit 1
+          fi
           node -e '
             let raw = require("fs").readFileSync("agentevals-fill.json", "utf8");
             if (raw.charCodeAt(0) === 0xfeff) raw = raw.slice(1);
@@ -174,12 +185,60 @@ jobs:
           '
           # The assertion that actually protects the corpus: if dry-run ever
           # stops being honoured, this fails loudly rather than silently
-          # rewriting the fixtures.
-          git diff --quiet -- test/fixtures/project || {
-            echo "fill mutated the fixture corpus during a dry run";
-            git --no-pager diff -- test/fixtures/project;
-            exit 1;
-          }
+          # rewriting the fixtures. --porcelain, not `diff --quiet`, so a
+          # newly *created* file inside the corpus is caught too.
+          dirty=$(git status --porcelain -- test/fixtures/project)
+          if [ -n "$dirty" ]; then
+            echo "fill modified the fixture corpus during a dry run:"
+            echo "$dirty"
+            git --no-pager diff -- test/fixtures/project
+            exit 1
+          fi
+
+      # The dry-run gate above never exercises the write path. Fill a scratch
+      # copy for real, then prove the output is consumable by the reader: this
+      # is the round trip that matters, checked on both OS legs.
+      - name: Dogfood fill (write path, on a scratch copy)
+        shell: bash
+        working-directory: agentevals
+        run: |
+          rm -rf .tmp/fill-ci && mkdir -p .tmp/fill-ci
+          cp -r test/fixtures/project .tmp/fill-ci/project
+          node dist/cli.js fill .tmp/fill-ci/project --provider mock --no-cache --format json > agentevals-fill-write.json
+          node -e '
+            let raw = require("fs").readFileSync("agentevals-fill-write.json", "utf8");
+            if (raw.charCodeAt(0) === 0xfeff) raw = raw.slice(1);
+            const r = JSON.parse(raw);
+            const filled = r.results.filter((x) => x.status === "filled");
+            if (filled.length === 0) { console.error("expected at least one filled artifact"); process.exitCode = 1; }
+            // Project rules must stay propose-only even on the write path.
+            if (r.results.some((x) => x.type === "project-rules" && x.status === "filled")) {
+              console.error("project rules must never be written");
+              process.exitCode = 1;
+            }
+          '
+          # The written frontmatter must still parse and plan.
+          node dist/cli.js run test/fixtures/traces/claude-session.jsonl --project .tmp/fill-ci/project --deterministic-only --format json > agentevals-postfill.json || true
+          node -e '
+            let raw = require("fs").readFileSync("agentevals-postfill.json", "utf8");
+            if (raw.charCodeAt(0) === 0xfeff) raw = raw.slice(1);
+            const r = JSON.parse(raw);
+            const errored = r.evalResults.filter((x) => x.outcome === "error");
+            if (errored.length > 0) {
+              console.error("filled criteria did not survive a real run:", JSON.stringify(errored, null, 2));
+              process.exitCode = 1;
+            }
+            if (!r.evalResults.some((x) => x.evalName === "reads-before-editing")) {
+              console.error("expected the filled criterion to be planned and graded");
+              process.exitCode = 1;
+            }
+          '
+          rm -rf .tmp/fill-ci
+          # And the real corpus is still untouched.
+          dirty=$(git status --porcelain -- test/fixtures/project)
+          if [ -n "$dirty" ]; then
+            echo "the write-path gate leaked into the real corpus:"; echo "$dirty"; exit 1
+          fi
 
       - name: Dogfood list (fixture session store)
         shell: bash
