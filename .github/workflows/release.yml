@@ -67,8 +67,14 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: 24
-          cache: npm
-          cache-dependency-path: agentevals/package-lock.json
+
+      # Build the sibling so agentevals can import its dist/, and so husky is on
+      # PATH when npm runs the file-dep lifecycle during the agentevals install.
+      - name: Build the docevals sibling
+        working-directory: docevals
+        run: |
+          npm install --no-fund --no-audit
+          npm run build
 
       # npm install, not ci — see the lockfile note in CLAUDE.md.
       - run: npm install --no-fund --no-audit

@@ -16,6 +16,12 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
+    env:
+      # docevals is consumed as a file: dependency, so its `prepare` (husky)
+      # runs during the agentevals install below. HUSKY=0 makes husky a clean
+      # no-op in CI; the build step also puts husky on PATH so the script
+      # resolves at all. Without this the install fails with `husky: not found`.
+      HUSKY: "0"
     steps:
       - uses: actions/checkout@v7
         with:
@@ -31,8 +37,15 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: 24
-          cache: npm
-          cache-dependency-path: agentevals/package-lock.json
+
+      # Build the sibling so agentevals can import its dist/, and so its own
+      # devDeps (husky) exist on PATH when npm runs the file-dep lifecycle
+      # during the agentevals install.
+      - name: Build the docevals sibling
+        working-directory: docevals
+        run: |
+          npm install --no-fund --no-audit
+          npm run build
 
       # npm install, not ci — the lockfile is authored on Windows, where npm
       # prunes optional-dependency subtrees; `npm ci`'s sync check then fails on
