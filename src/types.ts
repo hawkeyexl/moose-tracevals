@@ -1,5 +1,5 @@
 /** Shared result model and errors for agentevals. */
-import type { ConsensusResult } from "docevals";
+import type { ConsensusResult } from "@hawkeyexl/inference";
 import type { CoverageEntry } from "./artifacts/types.js";
 import type { ArtifactType } from "./artifacts/types.js";
 import type { Finding } from "./graders/types.js";

@@ -20,10 +20,9 @@ jobs:
         with:
           node-version: 24
 
-      # npm install, not ci — see the lockfile note in CLAUDE.md.
+      # Install only what this job needs rather than the full dependency tree —
+      # linting commit messages does not require the project to be installable.
       # HUSKY=0 skips hook installation; this job only lints messages.
-      # The file:../docevals dependency is absent here, so install without it:
-      # commitlint needs only its own packages.
       - run: npm install --no-fund --no-audit --no-save @commitlint/cli @commitlint/config-conventional
         env:
           HUSKY: "0"

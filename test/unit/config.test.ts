@@ -57,4 +57,77 @@ describe("parseConfig", () => {
     );
     expect(() => parseConfig({ unknownKey: true })).toThrow(AgentevalsError);
   });
+
+  describe("provider section", () => {
+    it("defaults to claude-cli so a fresh checkout needs no API key", () => {
+      const config = parseConfig({});
+      expect(config.provider.default).toBe("claude-cli");
+      expect(config.provider["claude-cli"]).toEqual({
+        model: "claude-sonnet-4-5",
+        command: "claude",
+      });
+    });
+
+    it("fills per-provider defaults for sections that were not configured", () => {
+      const config = parseConfig({ provider: { default: "anthropic" } });
+      expect(config.provider.anthropic).toEqual({
+        model: "claude-sonnet-4-5",
+        apiKeyEnv: "ANTHROPIC_API_KEY",
+      });
+      expect(config.provider.openai.baseUrl).toBe("https://api.openai.com/v1");
+    });
+
+    it("keeps explicit provider values, including a pricing override", () => {
+      const config = parseConfig({
+        provider: {
+          default: "openai",
+          openai: {
+            baseUrl: "http://localhost:11434/v1",
+            model: "qwen2.5",
+            pricing: { inputPerMTok: 0, outputPerMTok: 0 },
+          },
+        },
+      });
+      expect(config.provider.openai.baseUrl).toBe("http://localhost:11434/v1");
+      expect(config.provider.openai.model).toBe("qwen2.5");
+      expect(config.provider.openai.pricing).toEqual({
+        inputPerMTok: 0,
+        outputPerMTok: 0,
+      });
+      // Untouched sections still get their defaults.
+      expect(config.provider.anthropic.model).toBe("claude-sonnet-4-5");
+    });
+
+    it("rejects a typo'd provider name instead of silently defaulting", () => {
+      // This section used to be an untyped passthrough, so `default: antropic`
+      // or a misspelled section name sailed through validation and the run
+      // quietly used a different provider than the author intended.
+      expect(() => parseConfig({ provider: { default: "antropic" } })).toThrow(
+        AgentevalsError,
+      );
+      expect(() =>
+        parseConfig({ provider: { anthropc: { model: "x" } } }),
+      ).toThrow(AgentevalsError);
+    });
+
+    it("rejects a typo'd key inside a provider section", () => {
+      expect(() =>
+        parseConfig({ provider: { anthropic: { modl: "x" } } }),
+      ).toThrow(AgentevalsError);
+    });
+
+    it("rejects an empty apiKeyEnv", () => {
+      expect(() =>
+        parseConfig({ provider: { anthropic: { apiKeyEnv: "" } } }),
+      ).toThrow(AgentevalsError);
+    });
+
+    it("rejects a half-specified pricing override", () => {
+      expect(() =>
+        parseConfig({
+          provider: { anthropic: { pricing: { inputPerMTok: 3 } } },
+        }),
+      ).toThrow(AgentevalsError);
+    });
+  });
 });

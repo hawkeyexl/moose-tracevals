@@ -14,9 +14,31 @@ const configSchema = configSchemaJson as Record<string, unknown>;
 
 export const DEFAULT_CONFIG_FILENAME = "agentevals.config.yaml";
 
+/** USD per million tokens; overrides the inference library's built-in table. */
+export interface Pricing {
+  inputPerMTok: number;
+  outputPerMTok: number;
+}
+
+/**
+ * Per-provider settings. Configure as many as you like and select one with
+ * `provider.default` or `--provider`; only the selected section is mapped onto
+ * the inference library's `ProviderSpec` (see judge/provider.ts).
+ */
+export interface ProviderConfig {
+  default: "anthropic" | "openai" | "claude-cli" | "mock";
+  anthropic: { model: string; apiKeyEnv: string; pricing?: Pricing };
+  openai: {
+    baseUrl: string;
+    model: string;
+    apiKeyEnv: string;
+    pricing?: Pricing;
+  };
+  "claude-cli": { model: string; command: string };
+}
+
 export interface AgentevalsConfig {
-  /** Passed through to docevals' provider factory. */
-  provider: Record<string, unknown>;
+  provider: ProviderConfig;
   judge: {
     ensembleRuns: number;
     temperature: number;
@@ -54,7 +76,30 @@ export function parseConfig(raw: unknown): AgentevalsConfig {
   }
   const r = raw as Record<string, any>;
   const config: AgentevalsConfig = {
-    provider: (r.provider as Record<string, unknown>) ?? {},
+    provider: {
+      // claude-cli by default: it uses the local Claude CLI's own auth, so a
+      // fresh checkout judges without anyone provisioning an API key.
+      default: r.provider?.default ?? "claude-cli",
+      anthropic: {
+        model: r.provider?.anthropic?.model ?? "claude-sonnet-4-5",
+        apiKeyEnv: r.provider?.anthropic?.apiKeyEnv ?? "ANTHROPIC_API_KEY",
+        ...(r.provider?.anthropic?.pricing
+          ? { pricing: r.provider.anthropic.pricing }
+          : {}),
+      },
+      openai: {
+        baseUrl: r.provider?.openai?.baseUrl ?? "https://api.openai.com/v1",
+        model: r.provider?.openai?.model ?? "gpt-4o-mini",
+        apiKeyEnv: r.provider?.openai?.apiKeyEnv ?? "OPENAI_API_KEY",
+        ...(r.provider?.openai?.pricing
+          ? { pricing: r.provider.openai.pricing }
+          : {}),
+      },
+      "claude-cli": {
+        model: r.provider?.["claude-cli"]?.model ?? "claude-sonnet-4-5",
+        command: r.provider?.["claude-cli"]?.command ?? "claude",
+      },
+    },
     judge: {
       ensembleRuns: r.judge?.ensembleRuns ?? 3,
       temperature: r.judge?.temperature ?? 0,

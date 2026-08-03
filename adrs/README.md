@@ -19,3 +19,4 @@ Every **behavior change** in agentevals ships with an ADR here. The ADR records 
 | [01003](01003-claude-code-traces-first-with-an-adapter-seam.md) | Claude Code traces first, with an adapter seam and graceful degradation | accepted |
 | [01004](01004-validate-grader-options-up-front.md) | Validate grader options up front, not only while grading | accepted |
 | [01005](01005-fill-proposes-criteria-at-authoring-time.md) | `fill` proposes criteria at authoring time, with deterministic graders and a confidence gate | accepted |
+| [01006](01006-take-inference-from-the-shared-library-not-docevals.md) | Take the inference layer from `@hawkeyexl/inference`, not from docevals | accepted |

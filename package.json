@@ -1,5 +1,5 @@
 {
-  "name": "agentevals",
+  "name": "@hawkeyexl/agentevals",
   "version": "0.0.0-development",
   "description": "Deterministic and LLM-as-judge adherence evals for AI agent session traces. Did the session follow the skills and instructions it used?",
   "type": "module",
@@ -58,11 +58,11 @@
   ],
   "license": "MIT",
   "dependencies": {
+    "@hawkeyexl/inference": "^0.0.1",
     "@inquirer/prompts": "^7.0.0",
     "ajv": "^8.17.1",
     "ajv-formats": "^3.0.1",
     "commander": "^15.0.0",
-    "docevals": "file:../docevals",
     "docmeta": "^1.3.0",
     "picocolors": "^1.1.1",
     "yaml": "^2.6.1"

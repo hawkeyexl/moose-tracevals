@@ -7,7 +7,53 @@
   "properties": {
     "provider": {
       "type": "object",
-      "description": "Judge provider configuration, passed through to docevals' provider factory (default, anthropic, openai, claude-cli sections)."
+      "additionalProperties": false,
+      "description": "Inference provider settings. Configure any number of sections and select one with `default` or --provider; only the selected section is mapped onto the inference library's ProviderSpec.",
+      "properties": {
+        "default": {
+          "enum": ["anthropic", "openai", "claude-cli", "mock"],
+          "description": "Which provider to use when --provider is not passed."
+        },
+        "anthropic": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "model": { "type": "string", "minLength": 1 },
+            "apiKeyEnv": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Name of the environment variable holding the API key — never the key itself."
+            },
+            "pricing": { "$ref": "#/$defs/pricing" }
+          }
+        },
+        "openai": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "baseUrl": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Any /chat/completions-compatible server (OpenAI, Azure, Ollama, Groq, Together)."
+            },
+            "model": { "type": "string", "minLength": 1 },
+            "apiKeyEnv": { "type": "string", "minLength": 1 },
+            "pricing": { "$ref": "#/$defs/pricing" }
+          }
+        },
+        "claude-cli": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "model": { "type": "string", "minLength": 1 },
+            "command": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Executable to run. Uses the Claude CLI's own local auth, so no API key is needed."
+            }
+          }
+        }
+      }
     },
     "judge": {
       "type": "object",
@@ -54,5 +100,17 @@
       }
     },
     "failOnNeedsReview": { "type": "boolean" }
+  },
+  "$defs": {
+    "pricing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["inputPerMTok", "outputPerMTok"],
+      "description": "USD per million tokens. Overrides the inference library's built-in table for this model.",
+      "properties": {
+        "inputPerMTok": { "type": "number", "minimum": 0 },
+        "outputPerMTok": { "type": "number", "minimum": 0 }
+      }
+    }
   }
 }

@@ -17,47 +17,22 @@ jobs:
         os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     env:
-      # docevals is consumed as a file: dependency, so its `prepare` (husky)
-      # runs during the agentevals install below. HUSKY=0 makes husky a clean
-      # no-op in CI; the build step also puts husky on PATH so the script
-      # resolves at all. Without this the install fails with `husky: not found`.
+      # Git hooks are a local-dev concern; `prepare` should be a clean no-op here.
       HUSKY: "0"
     steps:
       - uses: actions/checkout@v7
-        with:
-          path: agentevals
-
-      # The docevals dependency is a file:../docevals link until docevals
-      # publishes to npm, so CI provides the sibling checkout the spec expects.
-      - uses: actions/checkout@v7
-        with:
-          repository: hawkeyexl/docevals
-          path: docevals
 
       - uses: actions/setup-node@v6
         with:
           node-version: 24
 
-      # Build the sibling so agentevals can import its dist/, and so its own
-      # devDeps (husky) exist on PATH when npm runs the file-dep lifecycle
-      # during the agentevals install.
-      - name: Build the docevals sibling
-        working-directory: docevals
-        run: |
-          npm install --no-fund --no-audit
-          npm run build
-
       # npm install, not ci — the lockfile is authored on Windows, where npm
       # prunes optional-dependency subtrees; `npm ci`'s sync check then fails on
       # every runner. See CLAUDE.md.
       - run: npm install --no-fund --no-audit
-        working-directory: agentevals
       - run: npm run typecheck
-        working-directory: agentevals
       - run: npm run build
-        working-directory: agentevals
       - run: npm test
-        working-directory: agentevals
 
       # The suite mocks the judge provider and injects prompts, so it never
       # reaches the network. Prove the built CLI works end to end against the
@@ -67,7 +42,6 @@ jobs:
       # one deterministic criterion the fixture trace deliberately violates.
       - name: Dogfood run (deterministic graders)
         shell: bash
-        working-directory: agentevals
         env:
           # Resolve user-level artifacts (the fixture plugin skill) from the
           # fixture home on every machine, not the runner's real home.
@@ -106,7 +80,6 @@ jobs:
 
       - name: Dogfood run (mock judge)
         shell: bash
-        working-directory: agentevals
         env:
           AGENTEVALS_HOME: test/fixtures/home
         run: |
@@ -132,7 +105,6 @@ jobs:
       # docs), and that a default run leaves the corpus byte-identical.
       - name: Dogfood fill (dry run, corpus must not change)
         shell: bash
-        working-directory: agentevals
         env:
           AGENTEVALS_HOME: test/fixtures/home
         run: |
@@ -200,7 +172,6 @@ jobs:
       # is the round trip that matters, checked on both OS legs.
       - name: Dogfood fill (write path, on a scratch copy)
         shell: bash
-        working-directory: agentevals
         run: |
           rm -rf .tmp/fill-ci && mkdir -p .tmp/fill-ci
           cp -r test/fixtures/project .tmp/fill-ci/project
@@ -242,7 +213,6 @@ jobs:
 
       - name: Dogfood list (fixture session store)
         shell: bash
-        working-directory: agentevals
         env:
           AGENTEVALS_HOME: test/fixtures/home
         run: |

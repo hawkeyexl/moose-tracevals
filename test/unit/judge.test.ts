@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { MockProvider, mockVerdict } from "docevals";
+import { MockProvider, mockVerdict } from "@hawkeyexl/inference";
 import { makeTraceJudge } from "../../src/judge/trace-judge.js";
 import { cacheKey } from "../../src/judge/cache.js";
 import { makePlan } from "../helpers.js";

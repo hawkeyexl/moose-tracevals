@@ -2,7 +2,7 @@
 
 Adherence evals for AI agent session traces. Point agentevals at a [Claude Code](https://docs.anthropic.com/en/docs/claude-code) session, and it deterministically looks up every skill, agent definition, and project-rules file the session used, then evaluates whether the session **adhered to the instructions in those artifacts** — with deterministic graders where possible and an ensemble LLM judge everywhere else.
 
-Built on two sibling tools: [docevals](https://github.com/hawkeyexl/docevals) (judge providers, ensemble consensus, confidence zones) and [docmeta](https://github.com/hawkeyexl/docmeta) (frontmatter extraction, JSON-Schema validation).
+Built on two sibling libraries: [@hawkeyexl/inference](https://github.com/hawkeyexl/inference) (providers, ensemble consensus, confidence zones, response caching) and [docmeta](https://github.com/hawkeyexl/docmeta) (frontmatter extraction, JSON-Schema validation).
 
 ## How it works
 
@@ -28,7 +28,7 @@ report (human / json / markdown) + artifact coverage + history
 
 ## Quick start
 
-Requires Node.js 24+ and (until docevals ships to npm) a sibling checkout of [docevals](https://github.com/hawkeyexl/docevals) next to this repo.
+Requires Node.js 24+. A clean clone is all you need — no sibling checkouts.
 
 ```bash
 npm install
@@ -146,8 +146,18 @@ acts would be teaching to the test. Copy the ones you want by hand. See
 `agentevals.config.yaml` (all keys optional; CLI flags override, never bypass):
 
 ```yaml
-provider:                 # passed through to docevals' provider factory
-  default: claude-cli     # or anthropic / openai
+provider:                 # validated, then mapped onto @hawkeyexl/inference
+  default: claude-cli     # or anthropic / openai / mock
+  anthropic:
+    model: claude-sonnet-4-5
+    apiKeyEnv: ANTHROPIC_API_KEY   # the variable NAME, never the key itself
+  openai:
+    baseUrl: https://api.openai.com/v1   # or any /chat/completions server
+    model: gpt-4o-mini
+    apiKeyEnv: OPENAI_API_KEY
+  claude-cli:
+    model: claude-sonnet-4-5
+    command: claude         # uses the CLI's own auth, so no API key
 judge:
   ensembleRuns: 3
   temperature: 0
