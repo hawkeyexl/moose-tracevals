@@ -20,7 +20,11 @@ import {
   resolveProviderIdentity,
   type ProviderName,
 } from "@hawkeyexl/inference";
-import { makeJudgeProvider, providerSpecFor } from "../judge/provider.js";
+import {
+  makeJudgeProvider,
+  pricingOverrideFor,
+  providerSpecFor,
+} from "../judge/provider.js";
 import { FillCache, fillCacheKey } from "../fill/cache.js";
 import { artifactFacts } from "../fill/facts.js";
 import {
@@ -169,7 +173,12 @@ export async function runFill(options: FillOptions = {}): Promise<FillRun> {
         );
         return { name: resolved.provider, model: resolved.model };
       })();
-  const pricing = pricingFor(identity.model);
+  const pricing = pricingFor(
+    identity.model,
+    pricingOverrideFor(config, {
+      ...(options.provider !== undefined ? { provider: options.provider } : {}),
+    }),
+  );
 
   let costUsd = 0;
   const results: FillArtifactResult[] = [];

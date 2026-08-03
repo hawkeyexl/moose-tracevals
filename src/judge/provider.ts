@@ -13,6 +13,7 @@ import {
   type InferenceProvider,
   type MockResponse,
   type ProviderName,
+  type Pricing,
   type ProviderSpec,
 } from "@hawkeyexl/inference";
 import { mockVerdict } from "@hawkeyexl/inference";
@@ -45,6 +46,25 @@ export function makeJudgeProvider(
       `could not construct judge provider "${name}": ${(err as Error).message}`,
     );
   }
+}
+
+/**
+ * The configured price override for the selected provider, if any.
+ *
+ * Cost accounting has to go through this rather than bare `pricingFor(model)`:
+ * a model the library's built-in table does not know prices at 0, which
+ * silently disables every `maxCostUsd` budget. The override is the only way a
+ * user can make budgets work for such a model, so dropping it on the floor
+ * makes the config key a lie.
+ */
+export function pricingOverrideFor(
+  config: AgentevalsConfig,
+  options: { provider?: string } = {},
+): Pricing | undefined {
+  const name = (options.provider ??
+    config.provider.default ??
+    "claude-cli") as ProviderName;
+  return providerSpecFor(config, name).pricing;
 }
 
 /**

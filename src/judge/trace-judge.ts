@@ -18,6 +18,7 @@ import {
   type ConsensusResult,
   type InferenceProvider,
   type JudgeRun,
+  type Pricing,
 } from "@hawkeyexl/inference";
 import verdictSchemaJson from "./verdict-schema.json" with { type: "json" };
 import type { EvalPlan } from "../core/plan.js";
@@ -42,6 +43,12 @@ export interface TraceJudgeOptions {
   cacheDir?: string;
   noCache?: boolean;
   maxCostUsd?: number;
+  /**
+   * Price override for this model, from the selected provider's config
+   * section. Without it a model the library's table does not know costs 0,
+   * which silently disables `maxCostUsd`.
+   */
+  pricing?: Pricing;
 }
 
 export interface JudgedEval {
@@ -72,7 +79,7 @@ export function makeTraceJudge(options: TraceJudgeOptions): TraceJudge {
     options.noCache !== true && options.cacheDir !== undefined,
     "agentevals",
   );
-  const pricing = pricingFor(provider.modelName());
+  const pricing = pricingFor(provider.modelName(), options.pricing);
 
   return async (plans, renderedTrace) => {
     let spentUsd = 0;

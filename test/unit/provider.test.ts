@@ -4,9 +4,13 @@
  * actually receives.
  */
 import { afterEach, describe, expect, it } from "vitest";
-import { resolveProviderIdentity } from "@hawkeyexl/inference";
+import { pricingFor, resolveProviderIdentity } from "@hawkeyexl/inference";
 import { parseConfig } from "../../src/core/config.js";
-import { makeJudgeProvider, providerSpecFor } from "../../src/judge/provider.js";
+import {
+  makeJudgeProvider,
+  pricingOverrideFor,
+  providerSpecFor,
+} from "../../src/judge/provider.js";
 import { AgentevalsError } from "../../src/types.js";
 
 const ORIGINAL_ENV = { ...process.env };
@@ -87,6 +91,62 @@ describe("providerSpecFor", () => {
       expect(model).not.toBe("");
       expect(model.length).toBeGreaterThan(0);
     }
+  });
+});
+
+describe("pricingOverrideFor", () => {
+  it("returns the override for the selected provider", () => {
+    const config = parseConfig({
+      provider: {
+        default: "anthropic",
+        anthropic: { pricing: { inputPerMTok: 7, outputPerMTok: 9 } },
+      },
+    });
+    expect(pricingOverrideFor(config)).toEqual({
+      inputPerMTok: 7,
+      outputPerMTok: 9,
+    });
+  });
+
+  it("follows an explicit --provider rather than the configured default", () => {
+    const config = parseConfig({
+      provider: {
+        default: "anthropic",
+        anthropic: { pricing: { inputPerMTok: 7, outputPerMTok: 9 } },
+        openai: { pricing: { inputPerMTok: 1, outputPerMTok: 2 } },
+      },
+    });
+    expect(pricingOverrideFor(config, { provider: "openai" })).toEqual({
+      inputPerMTok: 1,
+      outputPerMTok: 2,
+    });
+  });
+
+  it("is undefined when nothing is configured, so the built-in table wins", () => {
+    expect(pricingOverrideFor(parseConfig({}))).toBeUndefined();
+  });
+
+  it("makes a budget enforceable for a model the built-in table does not know", () => {
+    // This is the whole point of the key. Without the override an unknown
+    // model prices at 0, every run costs nothing, and judge.maxCostUsd never
+    // trips — so the budget is silently disabled on exactly the models a user
+    // would need it for.
+    const config = parseConfig({
+      provider: {
+        default: "openai",
+        openai: {
+          baseUrl: "http://localhost:11434/v1",
+          model: "some-unlisted-model",
+          pricing: { inputPerMTok: 10, outputPerMTok: 30 },
+        },
+      },
+    });
+    const override = pricingOverrideFor(config);
+    expect(pricingFor("some-unlisted-model")).toBeUndefined();
+    expect(pricingFor("some-unlisted-model", override)).toEqual({
+      inputPerMTok: 10,
+      outputPerMTok: 30,
+    });
   });
 });
 
