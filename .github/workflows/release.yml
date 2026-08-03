@@ -7,19 +7,20 @@
 #   next      -> @next prerelease
 #   feat/**   -> per-branch prerelease channel
 #
-# OPT-IN, and currently BLOCKED: agentevals depends on docevals via a
-# `file:../docevals` link, which npm cannot publish. Keep RELEASE_ENABLED unset
-# until docevals is on npm; switch the dependency to a semver range in the same
-# commit that enables releases:
+# OPT-IN. The old blocker is gone: the unpublishable `file:../docevals` link was
+# replaced by `@hawkeyexl/inference` from the registry, and the package was
+# renamed to `@hawkeyexl/agentevals` because the unscoped name `agentevals`
+# belongs to another project on npm. Nothing about the package itself now
+# prevents a release.
+#
+# What remains is one-time setup. Configure npm trusted publishing first, so the
+# publish step authenticates without an NPM_TOKEN: on npmjs.com, add a trusted
+# publisher for `@hawkeyexl/agentevals` naming this repository and this workflow
+# file (release.yml). npm then exchanges the workflow's OIDC token for a
+# short-lived, scoped publish credential — which is what `id-token: write` below
+# authorizes — and mints provenance automatically. Then:
 #
 #   gh variable set RELEASE_ENABLED --body true --repo hawkeyexl/agentevals
-#
-# Before enabling, configure npm trusted publishing for the package so the
-# publish step can authenticate without an NPM_TOKEN. On npmjs.com, add a
-# trusted publisher for `agentevals` naming this repository and this workflow
-# file (release.yml). npm then exchanges the workflow's OIDC token for a
-# short-lived, scoped publish credential — which is what `id-token: write`
-# below authorizes — and mints provenance automatically.
 
 name: Release
 
@@ -55,39 +56,18 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-          path: agentevals
-
-      # Sibling checkout for the file:../docevals dependency; remove when the
-      # dependency moves to a semver range.
-      - uses: actions/checkout@v7
-        with:
-          repository: hawkeyexl/docevals
-          path: docevals
 
       - uses: actions/setup-node@v6
         with:
           node-version: 24
 
-      # Build the sibling so agentevals can import its dist/, and so husky is on
-      # PATH when npm runs the file-dep lifecycle during the agentevals install.
-      - name: Build the docevals sibling
-        working-directory: docevals
-        run: |
-          npm install --no-fund --no-audit
-          npm run build
-
       # npm install, not ci — see the lockfile note in CLAUDE.md.
       - run: npm install --no-fund --no-audit
-        working-directory: agentevals
       - run: npm run typecheck
-        working-directory: agentevals
       - run: npm run build
-        working-directory: agentevals
       - run: npm test
-        working-directory: agentevals
 
       - name: Release
-        working-directory: agentevals
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npx semantic-release

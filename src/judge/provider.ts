@@ -1,22 +1,26 @@
 /**
- * Judge-provider construction: hand agentevals' provider config section to
- * docevals' parseConfig/makeProvider (anthropic / openai / claude-cli), with a
- * fourth name `mock` that short-circuits to docevals' MockProvider for
- * zero-network pipeline runs.
+ * Judge-provider construction: map agentevals' provider config section onto
+ * the shared inference library's `ProviderSpec`.
+ *
+ * This used to serialize the config section back to YAML and re-parse it
+ * through docevals' `parseConfig` purely to obtain the config object docevals'
+ * factory demanded. `ProviderSpec` is a flat, library-owned shape, so the
+ * mapping is now direct — and `mock` is a real provider rather than a
+ * special case handled before the factory (ADR 01006).
  */
-import { stringify as stringifyYaml } from "yaml";
 import {
   makeProvider,
-  MockProvider,
-  mockVerdict,
-  parseConfig as parseDocevalsConfig,
-  type JudgeProvider,
-} from "docevals";
+  type InferenceProvider,
+  type MockResponse,
+  type ProviderName,
+  type Pricing,
+  type ProviderSpec,
+} from "@hawkeyexl/inference";
+import { mockVerdict } from "@hawkeyexl/inference";
 import { AgentevalsError } from "../types.js";
 import type { AgentevalsConfig } from "../core/config.js";
 
-/** docevals declares this shape but does not export the type. */
-export type MockResponse = ConstructorParameters<typeof MockProvider>[0][number];
+export type { MockResponse };
 
 export function makeJudgeProvider(
   config: AgentevalsConfig,
@@ -30,29 +34,88 @@ export function makeJudgeProvider(
      */
     mockResponses?: MockResponse[];
   } = {},
-): JudgeProvider {
-  const name =
-    options.provider ??
-    (config.provider.default as string | undefined) ??
-    "claude-cli";
-  if (name === "mock") {
-    return new MockProvider(
-      options.mockResponses ?? [mockVerdict("pass", 0.95)],
-    );
-  }
+): InferenceProvider {
+  const name = (options.provider ??
+    config.provider.default ??
+    "claude-cli") as ProviderName;
+
   try {
-    // docevals' parseConfig takes YAML text; serialize the provider section.
-    const docevalsConfig = parseDocevalsConfig(
-      stringifyYaml({ provider: { ...config.provider, default: name } }),
-      "agentevals.config.yaml#provider",
-    );
-    return makeProvider(docevalsConfig, {
-      provider: name as never,
-      ...(options.model !== undefined ? { model: options.model } : {}),
-    });
+    return makeProvider(providerSpecFor(config, name, options));
   } catch (err) {
     throw new AgentevalsError(
-      `could not construct judge provider "${name}": ${(err as Error).message}`,
+      `could not construct judge provider "${name}": ${err instanceof Error ? err.message : String(err)}`,
     );
+  }
+}
+
+/**
+ * The configured price override for the selected provider, if any.
+ *
+ * Cost accounting has to go through this rather than bare `pricingFor(model)`:
+ * a model the library's built-in table does not know prices at 0, which
+ * silently disables every `maxCostUsd` budget. The override is the only way a
+ * user can make budgets work for such a model, so dropping it on the floor
+ * makes the config key a lie.
+ */
+export function pricingOverrideFor(
+  config: AgentevalsConfig,
+  options: { provider?: string } = {},
+): Pricing | undefined {
+  const name = (options.provider ??
+    config.provider.default ??
+    "claude-cli") as ProviderName;
+  return providerSpecFor(config, name).pricing;
+}
+
+/**
+ * Narrow the config's per-provider sections down to the selected one.
+ *
+ * Exported so callers can resolve the provider *identity* — via the library's
+ * `resolveProviderIdentity` — without constructing anything. A fully-cached
+ * run must not require an API key, and the model that lands in a cache key
+ * must be the one `makeProvider` would actually use, defaults included.
+ */
+export function providerSpecFor(
+  config: AgentevalsConfig,
+  name: ProviderName,
+  options: { model?: string; mockResponses?: MockResponse[] } = {},
+): ProviderSpec {
+  const { provider } = config;
+  switch (name) {
+    case "anthropic":
+      return {
+        provider: "anthropic",
+        model: options.model ?? provider.anthropic.model,
+        apiKeyEnv: provider.anthropic.apiKeyEnv,
+        ...(provider.anthropic.pricing
+          ? { pricing: provider.anthropic.pricing }
+          : {}),
+      };
+    case "openai":
+      return {
+        provider: "openai",
+        model: options.model ?? provider.openai.model,
+        apiKeyEnv: provider.openai.apiKeyEnv,
+        baseUrl: provider.openai.baseUrl,
+        ...(provider.openai.pricing ? { pricing: provider.openai.pricing } : {}),
+      };
+    case "claude-cli":
+      return {
+        provider: "claude-cli",
+        model: options.model ?? provider["claude-cli"].model,
+        command: provider["claude-cli"].command,
+      };
+    case "mock":
+      return {
+        provider: "mock",
+        ...(options.model !== undefined ? { model: options.model } : {}),
+        mockResponses: options.mockResponses ?? [mockVerdict("pass", 0.95)],
+      };
+    default:
+      // Unreachable via config (the schema constrains the enum), but a CLI
+      // --provider flag is free text and lands here.
+      throw new AgentevalsError(
+        `unknown provider "${String(name)}". Available: anthropic, openai, claude-cli, mock.`,
+      );
   }
 }

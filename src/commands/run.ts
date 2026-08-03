@@ -9,7 +9,10 @@ import {
   loadHistory,
   type HistoryComparison,
 } from "../history.js";
-import { makeJudgeProvider } from "../judge/provider.js";
+import {
+  makeJudgeProvider,
+  pricingOverrideFor,
+} from "../judge/provider.js";
 import { makeTraceJudge, type TraceJudge } from "../judge/trace-judge.js";
 import { render, type ReportFormat } from "../reporters/index.js";
 import type { RunReport } from "../types.js";
@@ -53,6 +56,11 @@ export async function runRun(
       ...(options.model !== undefined ? { model: options.model } : {}),
     });
     const maxCostUsd = options.maxCostUsd ?? config.judge.maxCostUsd;
+    // Without the configured override, a model the library's built-in price
+    // table does not know costs 0, and maxCostUsd would never trip.
+    const pricing = pricingOverrideFor(config, {
+      ...(options.provider !== undefined ? { provider: options.provider } : {}),
+    });
     judge = makeTraceJudge({
       provider,
       runs: options.runs ?? config.judge.ensembleRuns,
@@ -61,6 +69,7 @@ export async function runRun(
       cacheDir: resolve(configDir, config.judge.cacheDir),
       ...(options.noCache !== undefined ? { noCache: options.noCache } : {}),
       ...(maxCostUsd !== undefined ? { maxCostUsd } : {}),
+      ...(pricing !== undefined ? { pricing } : {}),
     });
   }
 

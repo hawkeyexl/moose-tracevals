@@ -1,8 +1,9 @@
 /**
  * A canned, schema-valid proposal for `--provider mock`.
  *
- * docevals' `mockVerdict` is judge-shaped, so it cannot drive `fill` — the
- * response would fail the proposal schema. This gives the offline path
+ * The inference library's `mockVerdict` is judge-shaped, so it cannot drive
+ * `fill` — the response would fail the proposal schema. This gives the offline
+ * path
  * (CI's dogfood gate, CLI smoke tests) something the gate can actually chew
  * on: one criterion that should be accepted and one that should be rejected
  * for low confidence, so a run that rubber-stamps everything is visible.

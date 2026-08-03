@@ -21,7 +21,9 @@ npm install
 
 Use `npm install`, **not `npm ci`** — the lockfile is authored on Windows, where npm prunes optional-dependency subtrees that `npm ci`'s sync check then reports as missing on every runner. CI uses `npm install` for the same reason.
 
-**The docevals dependency is a `file:../docevals` link.** agentevals expects a sibling checkout of [docevals](https://github.com/hawkeyexl/docevals) next to this repo (CI checks one out; local worktrees under `.claude/worktrees/` need a `docevals` junction/symlink next to the worktree, e.g. `New-Item -ItemType Junction -Path <worktrees>\docevals -Target <Workspaces>\docevals`). This is temporary until docevals publishes to npm.
+**No sibling checkout is needed.** agentevals used to consume docevals through a `file:../docevals` link, which demanded a sibling clone, a junction for every worktree, an extra CI checkout, and blocked publishing outright. The inference layer now comes from [`@hawkeyexl/inference`](https://github.com/hawkeyexl/inference) on the registry (ADR 01006), so a clean clone plus `npm install` is the entire setup.
+
+**Never reintroduce a `file:` or `link:` dependency spec.** npm publishes them verbatim, so a package carrying one is broken for everyone who installs it.
 
 ## Persistent knowledge: repo instructions, not Claude memory (required)
 
@@ -44,7 +46,7 @@ Always use **red → green** test-driven development. For every behavior change:
 2. **Green** — write the minimum code to make it pass, and run it to confirm.
 3. **Refactor** — clean up while keeping the test green.
 
-The suite must stay **offline and hermetic**: judge providers are mocked (docevals' `MockProvider`), interactive prompts are injected functions, and trace/artifact fixtures live in `test/fixtures/`. A test that reaches the network or spawns a real agent CLI is a defect — the one exception is `test/integration/live.test.ts`, gated behind `AGENTEVALS_LIVE=1` and skipped by default.
+The suite must stay **offline and hermetic**: judge providers are mocked (the inference library's `MockProvider`), interactive prompts are injected functions, and trace/artifact fixtures live in `test/fixtures/`. A test that reaches the network or spawns a real agent CLI is a defect — the one exception is `test/integration/live.test.ts`, gated behind `AGENTEVALS_LIVE=1` and skipped by default.
 
 ## Architecture Decision Records (required)
 
@@ -92,7 +94,9 @@ Only the **first line** is parsed as the header.
 | `next` | `next` |
 | `feat/**` | per-branch prerelease channel (branch suffix slugified) |
 
-**Publishing is blocked until docevals is on npm.** A `file:` dependency is not publishable — npm would ship a broken spec. Keep the `RELEASE_ENABLED` repository variable unset; when docevals publishes, switch `"docevals"` to a semver range **in the same commit** that enables releases.
+**The package is `@hawkeyexl/agentevals`, not `agentevals`.** The unscoped name on npm belongs to an unrelated project (LangChain's), so it was never available to us. The `bin` is still plain `agentevals` — bin names are independent of package names, so `npx agentevals` is unaffected.
+
+**Publishing is no longer blocked by a dependency**, only by one-time setup: configure npm trusted publishing for `@hawkeyexl/agentevals` (OIDC, naming `release.yml`), then set the `RELEASE_ENABLED` repository variable.
 
 ## Don't
 
@@ -103,7 +107,8 @@ Only the **first line** is parsed as the header.
 - Don't add commitizen, standard-version, release-please, or changesets — they conflict with semantic-release.
 - Don't use `npm ci` (see "Environment setup").
 - Don't register `schemas/artifact-evals-*.json` as a built-in inside docmeta — schemas are published by the tool that owns them (decision inherited from docevals; a docmeta built-in was tried there and reversed).
-- Don't add `@anthropic-ai/sdk` as a direct dependency — it arrives transitively via docevals' provider layer.
+- Don't add `@anthropic-ai/sdk` as a direct dependency — it arrives transitively via `@hawkeyexl/inference`'s provider layer.
+- Don't reimplement provider construction, ensemble/consensus math, response caching, or token pricing here — that all lives in `@hawkeyexl/inference`. Three copies of it drifted apart once already; a fix belongs upstream.
 
 ## Testing behavior
 
@@ -134,7 +139,7 @@ Pipeline: **select trace → parse (adapter) → resolve artifacts → extract c
 - `src/criteria/` — reads the `metadata.evals` frontmatter block from artifacts via docmeta `extractFrontmatter`, validated against `schemas/artifact-evals-0.2.json` (a **published artifact** — ships in the package, pinned by `test/unit/schema.test.ts`; 0.1 still ships for pinned consumers). Artifacts without declared criteria get one implicit whole-artifact adherence eval (ADR 01002).
 - `src/graders/` — deterministic `TraceGrader` registry: `tool-usage`, `skill-invoked`, `file-access`, `turn-count`, `cost`, `regex`, `json-output`. Each implements `validateOptions()` so options are ground-checked without a trace (ADR 01004).
 - `src/fill/` + `src/commands/fill.ts` — authoring: propose criteria for artifacts found by `src/artifacts/discover.ts` (the static inverse of `resolve.ts`), gate them on grader allowlist → option validation → target grounding → confidence, then append via `src/criteria/write.ts`. Project rules are proposed but never written (ADR 01005).
-- `src/judge/` — trace-adherence LLM judge built on docevals' provider layer (`makeProvider`, `JudgeProvider`, `MockProvider`) and ensemble math (`computeConsensus`, `zoneFor`). docevals' `makeJudge` is page-coupled and deliberately **not** reused (ADR 01001). N-run ensemble at temperature 0, content-addressed cache under `.agentevals/cache`.
+- `src/judge/` — trace-adherence LLM judge built on `@hawkeyexl/inference` (`makeProvider`, `runEnsemble`, `computeConsensus`, `zoneFor`, `JsonCache`). What stays local is what is agentevals-specific: the prompts, the trace-worded verdict schema, the cache-key composition, the per-plan cost budget, and the `JudgedEval` shape. N-run ensemble at temperature 0, content-addressed cache under `.agentevals/cache`. `provider.ts` maps the config's provider section onto the library's `ProviderSpec` (ADR 01006).
 - `src/core/engine.ts` — orchestration; the judge and graders are injected so the engine tests offline.
 - `src/reporters/` — human / json / markdown, each with an artifact-coverage section.
 
@@ -177,4 +182,4 @@ The husky hook installs via the `prepare` script on `npm install`. If commits st
 ### Still requiring one-time setup
 
 - **Claude review** workflows skip with a notice until `gh secret set CLAUDE_CODE_OAUTH_TOKEN --repo hawkeyexl/agentevals`. Note `claude-code-action` refuses to run when the workflow file differs from the default branch's copy (anti-tampering) — a green check is not proof a review ran; check the duration.
-- **Releases** are opt-in via `gh variable set RELEASE_ENABLED --body true` — but see "Release channels": do not enable until the docevals `file:` dependency is replaced with a semver range. Configure npm trusted publishing (OIDC, naming `release.yml`) before enabling.
+- **Releases** are opt-in via `gh variable set RELEASE_ENABLED --body true`. Configure npm trusted publishing for `@hawkeyexl/agentevals` (OIDC, naming `release.yml`) before enabling.

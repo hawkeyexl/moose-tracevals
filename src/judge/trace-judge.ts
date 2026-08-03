@@ -1,82 +1,40 @@
 /**
  * The trace-adherence ensemble judge: N independent runs per eval plan, each a
- * fresh request with no shared context, aggregated by docevals' consensus and
- * confidence zones. Mirrors docevals' singleRun semantics — one retry on an
- * invalid verdict, then the run records as an error that counts against
- * consensus (ADR 01001).
+ * fresh request with no shared context, aggregated by consensus and routed
+ * through confidence zones.
+ *
+ * The ensemble mechanics (retry-once, errored runs counting against consensus,
+ * cache replay) now live in the inference library; what stays here is what is
+ * agentevals-specific — the per-plan budget gate, the trace-worded verdict
+ * schema, and the `JudgedEval` shape the reporters consume.
  */
-import { Ajv2020 } from "ajv/dist/2020.js";
-import verdictSchemaJson from "./verdict-schema.json" with { type: "json" };
 import {
+  JsonCache,
   computeConsensus,
+  costOfRuns,
+  pricingFor,
+  runEnsemble,
   zoneFor,
   type ConsensusResult,
-  type JudgeProvider,
+  type InferenceProvider,
   type JudgeRun,
-  type JudgeVerdict,
-} from "docevals";
+  type Pricing,
+} from "@hawkeyexl/inference";
+import verdictSchemaJson from "./verdict-schema.json" with { type: "json" };
 import type { EvalPlan } from "../core/plan.js";
-import { cacheKey, JudgeCache } from "./cache.js";
-import { costOfUsage, pricingFor } from "./cost.js";
+import { cacheKey } from "./cache.js";
 import { buildUserContent, JUDGE_SYSTEM_PROMPT } from "./prompt.js";
 
+/**
+ * agentevals' own verdict wording. Structurally identical to the library's
+ * canonical schema, but the field descriptions talk about sessions and tool
+ * calls rather than pages — and those descriptions are prompt surface that
+ * steers the model, so they are worth keeping (inference ADR 01001).
+ */
 const verdictSchema = verdictSchemaJson as Record<string, unknown>;
 
-const ajv = new Ajv2020({ allErrors: true });
-const validateVerdict = ajv.compile(verdictSchema);
-
-/** USD per million tokens; unknown models cost 0 (unknown), never a guess. */
-function costOfRuns(runs: JudgeRun[], model: string): number {
-  const pricing = pricingFor(model);
-  let usd = 0;
-  for (const run of runs) {
-    if (run.cached) continue;
-    usd += costOfUsage(run.usage, pricing);
-  }
-  return usd;
-}
-
-async function singleRun(
-  provider: JudgeProvider,
-  system: string,
-  user: string,
-  temperature: number,
-): Promise<JudgeRun> {
-  const start = Date.now();
-  const base = {
-    provider: provider.provider(),
-    model: provider.modelName(),
-    cached: false,
-  };
-  let lastError = "unknown error";
-  for (let attempt = 0; attempt < 2; attempt++) {
-    try {
-      const response = await provider.completeJSON({
-        system,
-        user,
-        schema: verdictSchema,
-        temperature,
-      });
-      if (validateVerdict(response.json)) {
-        return {
-          ...base,
-          verdict: response.json as unknown as JudgeVerdict,
-          usage: response.usage,
-          durationMs: Date.now() - start,
-        };
-      }
-      lastError = `Verdict failed schema validation: ${(validateVerdict.errors ?? [])
-        .map((e) => `${e.instancePath} ${e.message}`)
-        .join("; ")}`;
-    } catch (e) {
-      lastError = e instanceof Error ? e.message : String(e);
-    }
-  }
-  return { ...base, error: lastError, durationMs: Date.now() - start };
-}
-
 export interface TraceJudgeOptions {
-  provider: JudgeProvider;
+  provider: InferenceProvider;
   /** Ensemble size; default 3. */
   runs?: number;
   /** Default 0; nonzero adds verdict noise. */
@@ -85,6 +43,12 @@ export interface TraceJudgeOptions {
   cacheDir?: string;
   noCache?: boolean;
   maxCostUsd?: number;
+  /**
+   * Price override for this model, from the selected provider's config
+   * section. Without it a model the library's table does not know costs 0,
+   * which silently disables `maxCostUsd`.
+   */
+  pricing?: Pricing;
 }
 
 export interface JudgedEval {
@@ -110,15 +74,12 @@ export function makeTraceJudge(options: TraceJudgeOptions): TraceJudge {
   const runsPerEval = options.runs ?? 3;
   const temperature = options.temperature ?? 0;
   const zones = options.zones ?? { autoPass: 0.8, autoFail: 0.8 };
-  const cache = new JudgeCache(
+  const cache = new JsonCache<JudgeRun[]>(
     options.cacheDir ?? ".agentevals/cache",
     options.noCache !== true && options.cacheDir !== undefined,
+    "agentevals",
   );
-  if (temperature > 0) {
-    console.warn(
-      `agentevals: judge temperature is ${temperature} — nonzero temperature adds noise to verdicts; 0 is strongly recommended.`,
-    );
-  }
+  const pricing = pricingFor(provider.modelName(), options.pricing);
 
   return async (plans, renderedTrace) => {
     let spentUsd = 0;
@@ -145,30 +106,29 @@ export function makeTraceJudge(options: TraceJudgeOptions): TraceJudge {
         continue;
       }
 
-      const key = cacheKey(
-        provider.provider(),
-        provider.modelName(),
-        runsPerEval,
+      const runs = await runEnsemble({
+        provider,
+        system: JUDGE_SYSTEM_PROMPT,
+        user: buildUserContent(plan, renderedTrace),
+        runs: runsPerEval,
         temperature,
-        renderedTrace,
-        plan,
-      );
-      let runs = cache.get(key);
-      if (!runs) {
-        const user = buildUserContent(plan, renderedTrace);
-        runs = [];
-        for (let i = 0; i < runsPerEval; i++) {
-          runs.push(
-            await singleRun(provider, JUDGE_SYSTEM_PROMPT, user, temperature),
-          );
-        }
-        cache.set(key, runs);
-      }
+        schema: verdictSchema,
+        cache,
+        cacheKey: cacheKey(
+          provider.provider(),
+          provider.modelName(),
+          runsPerEval,
+          temperature,
+          renderedTrace,
+          plan,
+        ),
+        label: "agentevals",
+      });
 
       const consensusBase = computeConsensus(runs);
       const zone = zoneFor(consensusBase, zones);
       const consensus: ConsensusResult = { ...consensusBase, zone };
-      const costUsd = costOfRuns(runs, provider.modelName());
+      const costUsd = costOfRuns(runs, pricing);
       spentUsd += costUsd;
 
       results.push({
