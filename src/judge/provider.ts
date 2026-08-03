@@ -43,7 +43,7 @@ export function makeJudgeProvider(
     return makeProvider(providerSpecFor(config, name, options));
   } catch (err) {
     throw new AgentevalsError(
-      `could not construct judge provider "${name}": ${(err as Error).message}`,
+      `could not construct judge provider "${name}": ${err instanceof Error ? err.message : String(err)}`,
     );
   }
 }
