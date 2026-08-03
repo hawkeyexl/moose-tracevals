@@ -6,7 +6,7 @@
  * through docevals' `parseConfig` purely to obtain the config object docevals'
  * factory demanded. `ProviderSpec` is a flat, library-owned shape, so the
  * mapping is now direct — and `mock` is a real provider rather than a
- * special case handled before the factory (ADR 01002).
+ * special case handled before the factory (ADR 01006).
  */
 import {
   makeProvider,
