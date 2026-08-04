@@ -1,0 +1,105 @@
+name: Docs
+
+# Build the Starlight docs site and publish it to GitHub Pages on every push to
+# main. The deploy is gated on agentevals validating its own docs frontmatter
+# with its own `docmeta` dependency (dogfooding): if a page is missing a
+# required field, the site does not ship.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    paths:
+      - "docs/**"
+      # The strategy checker and the docs:* scripts are part of this gate, so a
+      # change to either has to re-run it — otherwise the gate can be edited
+      # into uselessness without anything noticing.
+      - "scripts/check-content-strategy.mjs"
+      - "package.json"
+      - ".github/workflows/docs.yml"
+  workflow_dispatch:
+
+# Read-only by default. The Pages and OIDC scopes are granted to the deploy job
+# alone, so validate and build — which run on pull requests — never hold a token
+# that can publish.
+permissions:
+  contents: read
+
+# Only one Pages deploy at a time, and let an in-flight one finish rather than
+# cancelling it (avoids leaving Pages half-deployed). Pull requests never
+# deploy, so they get a per-ref group instead: sharing `pages` would queue PR
+# validation behind a production deploy, and vice versa.
+# Kept on one line on purpose: in a folded (`>-`) scalar YAML preserves the
+# newlines of more-indented continuation lines, so wrapping this expression
+# would put literal newlines inside the group name.
+concurrency:
+  group: ${{ github.event_name == 'pull_request' && format('docs-pr-{0}', github.ref) || 'pages' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  # Dogfood: agentevals already depends on docmeta for frontmatter extraction,
+  # so the same library that reads `metadata.evals` from a SKILL.md validates
+  # this site's own pages. -s overrides docmeta's default schema with a
+  # docs-specific one requiring title + description.
+  validate-docs:
+    runs-on: ubuntu-latest
+    env:
+      # Git hooks are a local-dev concern; `prepare` should be a clean no-op.
+      HUSKY: "0"
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      # npm install, not ci — see CLAUDE.md.
+      - run: npm install --no-fund --no-audit
+      - name: Validate docs frontmatter (dogfood)
+        run: npm run docs:validate -- --format github
+
+      # The ID-anchor model in docs/content_strategy/ is only worth having if
+      # the anchors resolve. Also catches a journey step claiming a page that
+      # does not exist, and a site link pointing nowhere.
+      - name: Check the content strategy's own invariants
+        run: npm run docs:check-strategy
+
+  # Build the Astro/Starlight static site and upload it as a Pages artifact.
+  build:
+    needs: validate-docs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: docs/package-lock.json
+      - name: Install docs dependencies
+        run: npm install --no-fund --no-audit
+        working-directory: docs
+      - name: Build docs site
+        run: npm run build
+        working-directory: docs
+      # Only the deploy path consumes this. A pull request just needs to know
+      # the site builds, so it skips the upload rather than producing an
+      # artifact nothing will read.
+      - uses: actions/upload-pages-artifact@v5
+        if: github.event_name != 'pull_request'
+        with:
+          path: docs/dist
+
+  # Deploy the uploaded artifact to GitHub Pages. Pushes to main only — a pull
+  # request validates and builds, but never publishes.
+  deploy:
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    # The only job that needs to write Pages or mint an OIDC token.
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5

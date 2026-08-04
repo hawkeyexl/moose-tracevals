@@ -1,0 +1,52 @@
+---
+id: cuj-cover-every-artifact
+type: cuj
+title: Get coverage over every artifact a session used
+personas: [persona-artifact-author]
+trigger: "A report shows fewer evals than expected, or an artifact the reader knows was used does not appear at all."
+entry_point: /agentevals/declare/coverage/
+success_criteria: "The reader can account for every artifact the session touched — evaluated, unresolved, or deliberately skipped — and knows how to close the gap for each."
+steps:
+  - { stage: "Read the artifact coverage table", doc: /agentevals/declare/coverage/, exists: false, note: "[GAP] the table is rendered by every reporter and explained nowhere" }
+  - { stage: "Understand how artifacts are resolved from a trace", doc: /agentevals/reference/traces/, exists: false, note: "[GAP] skill invocations, agent spawns, project rules lookup order" }
+  - { stage: "Fix an unresolved reference", doc: "/agentevals/declare/coverage/#unresolved-references", exists: false, note: "[GAP] which locations were tried, and why a built-in agent never resolves" }
+  - { stage: "Know what the implicit eval covers", doc: "/agentevals/declare/#the-implicit-eval", exists: true }
+  - { stage: "Skip an artifact deliberately", doc: /agentevals/reference/criteria-schema/, exists: true, note: "the skip flag" }
+  - { stage: "Confirm coverage in the report", doc: /agentevals/reference/report-and-exit-codes/, exists: true }
+---
+
+# CUJ: Get coverage over every artifact a session used
+
+**Scope:** accounting for the *denominator*: every skill, agent definition, and project-rules file
+a session touched, including the ones that could not be found. Declaring what to check on a
+resolved artifact is [`cuj-declare-criteria`](cuj-declare-criteria.md).
+
+**Trigger.** A report shows three evals where the reader expected five, or a skill they know the
+session invoked does not appear anywhere in the output.
+
+**Narrative.** This journey exists because of a design choice that stays invisible until it confuses
+someone: **an artifact that cannot be resolved degrades to a warning and a coverage-table row, never
+a crash and never a failing eval.** That is right, since a missing plugin skill is no kind of
+adherence violation, but it leaves the coverage table as load-bearing output that no current
+documentation explains.
+
+The reader needs to be able to close a small, closed set of loops:
+
+- **Resolved and evaluated.** The normal case.
+- **Resolved, no declared criteria.** Still evaluated, via the implicit whole-artifact eval. Nothing
+  to fix, but knowing it stops an author reading silence as absence.
+- **Unresolved.** The reference was found in the trace but no file was. The coverage entry records
+  every location that was tried, which is usually enough to diagnose it — a project-relative path,
+  a user-level directory, or a plugin store.
+- **Never resolvable by design.** Built-in agents have no definition file. It looks like a defect
+  and it is not, so say it once, plainly.
+- **Deliberately skipped.** An artifact can opt out via the `skip` flag and is then reported as
+  skipped rather than silently absent.
+
+The framing that makes this journey coherent: **coverage is the honest answer to "what did you not
+check?"** Surfacing it is a feature.
+
+**Current friction / gap.** Almost entirely unwritten. Every reporter renders a coverage section
+and no page explains what it means. Resolution order — which directories are searched for a skill,
+an agent, or a project-rules file, and in what sequence — exists only in source. This is the
+highest-value gap for the lead persona after launch.

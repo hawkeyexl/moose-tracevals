@@ -1,0 +1,225 @@
+---
+title: Reports & exit codes
+description: The human, JSON, and markdown report formats field by field, the exit-code contract, and the append-only history file.
+sidebar:
+  order: 6
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+**Scope:** everything `run` emits. The policy discussion, meaning what to do about `needs-review`
+in a pipeline, is in [Exit codes & reports](/agentevals/ci/exit-codes-and-reports/). Source of truth:
+`src/types.ts`, `src/reporters/`, `src/history.ts`.
+
+## Exit codes
+
+| Code | Meaning |
+|---|---|
+| `0` | every eval passed or was skipped |
+| `1` | any `fail` or `error`, and `needs-review` unless `failOnNeedsReview: false` |
+| `2` | operational error — bad usage, unreadable trace, unknown format, nonexistent path |
+
+`2` is written to stderr as `agentevals: <message>`; `0` and `1` write the report to stdout.
+
+## Outcomes
+
+| Outcome | Meaning | Fails the run? |
+|---|---|---|
+| `pass` | the criterion held | no |
+| `fail` | the criterion was violated by an `error`-severity finding | yes |
+| `error` | the check itself broke — invalid options, an invalid criteria block, an unknown grader kind | yes |
+| `needs-review` | the judge did not reach confident agreement | yes, by default |
+| `skipped` | the check did not run; the reason is always given | no |
+
+## `--format json`
+
+The complete `RunReport`:
+
+```jsonc
+{
+  "trace": {
+    "file": "/path/to/session.jsonl",
+    "source": "claude-code",
+    "sessionId": "11111111-1111-1111-1111-111111111111",
+    "cwd": "/work/demo-project",
+    "model": "claude-opus-4-8",
+    "turnCount": 2
+  },
+  "warnings": ["1 unparseable JSONL line(s) were skipped"],
+  "coverage": [ /* CoverageEntry[] */ ],
+  "evalResults": [ /* EvalResult[] */ ],
+  "summary": {
+    "total": 7, "pass": 1, "fail": 1,
+    "error": 0, "needsReview": 0, "skipped": 5
+  },
+  "exitCode": 1,
+  "costUsd": 0,
+  "durationMs": 118
+}
+```
+
+### `trace`
+
+| Field | Type | Notes |
+|---|---|---|
+| `file` | string | Absolute path to the trace. |
+| `source` | string | Trace source. `claude-code` today. |
+| `sessionId` | string? | Present when the trace records one. |
+| `cwd` | string | The session's recorded working directory. |
+| `model` | string? | The model the session ran on. |
+| `turnCount` | number | Non-sidechain user prompts. |
+
+### `EvalResult`
+
+| Field | Type | Notes |
+|---|---|---|
+| `evalName` | string | The criterion's name, or `adheres-to-artifact` / `evals-block-valid`. |
+| `artifact` | string | Absolute path to the artifact file. |
+| `artifactName` | string | Its display name — `fix-bug`, `CLAUDE.md`. |
+| `artifactType` | string | `skill`, `agent`, or `project-rules`. |
+| `grader` | string | The grader kind, `llm` for judged. |
+| `implicit` | boolean | `true` for the whole-artifact eval. |
+| `outcome` | string | One of the five outcomes above. |
+| `findings` | array? | Deterministic findings: `{ evalName, artifact, message, severity }`. |
+| `consensus` | object? | Judged evals only — see below. |
+| `error` | string? | Why the check broke, when `outcome` is `error`. |
+| `skipReason` | string? | Why it was skipped. |
+| `costUsd` | number? | Judged evals only. |
+| `durationMs` | number | Time for this eval. |
+
+### `consensus`
+
+Present on every judged eval.
+
+| Field | Type | Notes |
+|---|---|---|
+| `runs` | array | Each run: `{ verdict?, error?, provider, model, cached, usage?, durationMs }`. `verdict` is absent when the run errored. |
+| `votes` | object | `{ pass, fail, partial, error }` counts. |
+| `verdict` | string | `pass`, `fail`, or `partial`. `partial` counts as fail for the binary outcome. |
+| `agreement` | number | Fraction of **non-errored** runs agreeing with the majority. Reported, but not what routes the outcome. |
+| `meanConfidence` | number | Mean confidence across non-errored runs. |
+| `zone` | string | `auto-pass`, `auto-fail`, or `human-review`. This is what maps to the outcome. |
+
+Each `verdict` carries `claim`, `observed`, `match`, `confidence`, and `reasoning`. See
+[How the judge decides](/agentevals/judge/).
+
+### `CoverageEntry`
+
+One entry per artifact reference found in the trace, resolved or not.
+
+| Field | Type | Notes |
+|---|---|---|
+| `ref` | string | The reference as it appeared, e.g. `fix-bug`, `plugin:skill`. |
+| `kind` | string | `skill`, `agent`, or `project-rules`. |
+| `resolved` | boolean | Whether a file was found. |
+| `path` | string? | The resolved file. Absent for an aggregated `project-rules` entry covering several files. |
+| `tried` | string[] | Every location searched, in order. Usually enough to diagnose a miss. |
+| `note` | string? | Why it will never resolve, e.g. `built-in agent (no definition file)`. |
+
+An unresolved reference is **not** a failing eval. It is a coverage note plus a warning, so a missing
+plugin never crashes a run or turns a build red on its own.
+
+#### The location shown for an entry
+
+Both the human and markdown reporters derive the location cell the same way, in this order:
+
+1. `path`, when the entry resolved to a single file.
+2. `note`, when there is no single path.
+3. Empty, otherwise.
+
+The third case is real rather than theoretical: project rules resolve as **one aggregated entry**
+covering several files (`CLAUDE.md` *and* `AGENTS.md`), so the entry is `resolved: true` with no
+`path`. Its locations are all in `tried`. An unresolved entry falls back to
+`not found (<n> location(s) tried)`.
+
+## `--format human`
+
+The default. Structure:
+
+```
+agentevals — /path/to/session.jsonl
+claude-code · claude-opus-4-8 · 2 turn(s) · /work/demo-project
+
+  PASS   fix-bug › used-read
+  FAIL   fix-bug › forbidden-tool
+         [error] tool Bash was used 1 time(s) but must not be
+  SKIP   CLAUDE.md › adheres-to-artifact (implicit)
+         llm evals skipped (deterministic-only run)
+
+Artifact coverage
+  ✓ skill: fix-bug   /work/demo-project/.claude/skills/fix-bug/SKILL.md
+  ○ agent: Explore   built-in agent (no definition file)
+
+Warnings
+  ! 1 unparseable JSONL line(s) were skipped
+
+7 eval(s): 1 pass, 1 fail, 0 error, 0 needs-review, 5 skipped
+```
+
+Outcome labels are `PASS`, `FAIL`, `ERROR`, `REVIEW`, `SKIP`. For a **non-passing judged** eval, two
+extra lines appear: the vote split and the first `observed`.
+
+```
+  REVIEW fix-bug › criterion-3
+         votes pass:1 fail:2 partial:0 error:0 · confidence 0.87
+         The session edited src/app.ts at turn 2 without a preceding test run.
+```
+
+Coverage marks: `✓` resolved, `○` not. The location follows the rule
+[above](#the-location-shown-for-an-entry).
+
+## `--format markdown`
+
+The same run as tables: `# agentevals report`, bullet metadata, then `## Evals`
+(`| Outcome | Artifact | Eval | Grader | Detail |`), `## Artifact coverage`
+(`| Resolved | Kind | Ref | Where |`), `## Warnings`, and a bold summary sentence. Pipe characters
+in messages are escaped. Suited to a build summary or a PR comment.
+
+## `--output`
+
+Writes the rendered report to a file **in addition to** stdout, in whichever format `--format`
+selected.
+
+```bash
+npx agentevals run <trace> --format markdown --output agentevals-report.md
+```
+
+## History
+
+`--history` appends one line to `history.file` (default `.agentevals/history.jsonl`) and compares
+this run against the most recent previous entry for the same session.
+
+Each line is a `HistoryEntry`:
+
+| Field | Type | Notes |
+|---|---|---|
+| `timestamp` | string | ISO 8601. |
+| `traceFile` | string | Path to the trace. |
+| `sessionId` | string? | When known. |
+| `project` | string | The trace's recorded `cwd`. |
+| `summary` | object | The same summary counts as the report. |
+| `exitCode` | number | `0` or `1`. |
+| `costUsd` | number | Judge spend for that run. |
+| `evals` | array | `{ artifact, evalName, outcome }` per eval — outcomes only, not findings. |
+
+The comparison matches on `sessionId` when present, falling back to `traceFile`, and is appended to
+non-JSON output:
+
+```
+History vs 2026-07-01T09:14:22.104Z:
+  regression: fix-bug › used-read
+  added: fix-bug › reproduces-before-fixing
+```
+
+| Line | Meaning |
+|---|---|
+| `regression` | previously `pass`, now `fail` or `error` |
+| `improvement` | previously `fail` or `error`, now `pass` |
+| `added` | an eval that did not exist in the previous run |
+| `removed` | an eval that existed then and does not now |
+| `no changes` | the outcome set is identical |
+
+<Aside title="History never aborts a run">
+A history write failure warns and continues. The evaluation result is the product; the log is a
+convenience.
+</Aside>

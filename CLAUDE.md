@@ -94,7 +94,7 @@ Only the **first line** is parsed as the header.
 | `next` | `next` |
 | `feat/**` | per-branch prerelease channel (branch suffix slugified) |
 
-**The package is `@hawkeyexl/agentevals`, not `agentevals`.** The unscoped name on npm belongs to an unrelated project (LangChain's), so it was never available to us. The `bin` is still plain `agentevals` — bin names are independent of package names, so `npx agentevals` is unaffected.
+**The package is `@hawkeyexl/agentevals`, not `agentevals`.** The unscoped name on npm belongs to an unrelated project (LangChain's), so it was never available to us. The `bin` is still plain `agentevals`, and bin names are independent of package names — but **`npx agentevals` is not safe as a cold command**: `npx` resolves by *package* name, so with nothing installed it fetches LangChain's package, not ours. It reaches our CLI only once `@hawkeyexl/agentevals` is a local dependency, because npm prefers `node_modules/.bin`. Docs must therefore show `npm install --save-dev @hawkeyexl/agentevals` before any `npx agentevals`, or use `npx @hawkeyexl/agentevals` for a zero-install path. [doc-detective.yml](.github/workflows/doc-detective.yml) asserts the linked binary's version matches this package before running anything, so a broken `npm link` fails loudly instead of silently testing somebody else's CLI. See [ADR 01007](adrs/01007-ship-a-cuj-first-documentation-site.md).
 
 **Publishing is no longer blocked by a dependency**, only by one-time setup: configure npm trusted publishing for `@hawkeyexl/agentevals` (OIDC, naming `release.yml`), then set the `RELEASE_ENABLED` repository variable.
 
@@ -129,6 +129,29 @@ mkdir -p .tmp && npm test > .tmp/output.txt 2>&1
 - `npm run typecheck` / `npm run build`
 - `node dist/cli.js run test/fixtures/traces/claude-session.jsonl --project test/fixtures/project --deterministic-only` — dogfood run against the fixture corpus
 - `node dist/cli.js fill test/fixtures/project --provider mock --dry-run` — dogfood the authoring path. **Always `--dry-run` against the fixtures**; CI asserts `git diff --quiet` on the corpus.
+- `npm run docs:validate` — dogfood `docmeta` against the docs' own frontmatter (gates the Pages deploy)
+- `npm run docs:check-strategy` — anchor integrity, orphans, CUJ route resolution, and link resolution across `docs/content_strategy/` and the pages
+- `npm run docs:build` / `npm run docs:dev` — build or serve the Starlight site (`docs/` is a nested npm project; run `npm install` inside it once)
+- `npx doc-detective` — run the inline tests embedded in the docs pages. Needs a built `dist/` and the `agentevals` bin on PATH.
+
+## Docs & content strategy
+
+The audience, persona, journey (CUJ), and IA definitions for the documentation site live in `docs/content_strategy/` (internal; never built into the site). **Read the relevant file on demand — do not inline it here.**
+
+- `docs/content_strategy/README.md` — index, the ID-linking model, and the evidence limitation (start here)
+- `docs/content_strategy/audiences/` — target segments (`aud-*`)
+- `docs/content_strategy/personas/` — one minimal persona per audience (`persona-*`)
+- `docs/content_strategy/journeys/` — critical user journeys (`cuj-*`), steps mapped to real routes
+- `docs/content_strategy/information_architecture/` — the CUJ-driven IA and the gap analysis
+
+Before drafting or editing any page under `docs/src/content/docs/**`:
+
+1. Identify the **persona** — Priya (artifact author), Devin (platform/CI), Sam (eval standard owner), Theo (session triager), or Rin (toolsmith).
+2. Find the matching **CUJ** and structure the content around reaching that outcome — **not** by document type. Do not impose a Diátaxis split as the organizing principle.
+3. Link into the **Reference shelf** for exhaustive detail. Journey pages explain the path; they do not duplicate reference tables.
+4. Record any new page in `information_architecture/proposed-ia.md` and drop its row from `ia-gap-analysis.md`.
+5. Every page needs `title` and `description` frontmatter — CI blocks the deploy otherwise.
+6. **Capture sample output; never compose it.** Build once and run the CLI against `test/fixtures/`. Every documented command must run offline (`--deterministic-only` or `--provider mock`) and should carry a Doc Detective inline test.
 
 ## Architecture
 
@@ -175,6 +198,9 @@ Adding a knob: schema first (+ positive and negative config tests) → default i
 | Commit messages | husky [`commit-msg`](.husky/commit-msg) hook locally, [commitlint.yml](.github/workflows/commitlint.yml) on PRs |
 | Version selection / release channels | [.releaserc.json](.releaserc.json) + [release.yml](.github/workflows/release.yml) |
 | ADRs | [adrs/](adrs) — convention and template; not machine-enforced |
+| Docs frontmatter (`title` + `description`) | [docs.yml](.github/workflows/docs.yml) — dogfoods `docmeta`; gates the Pages deploy |
+| Docs ↔ CLI agreement | [doc-detective.yml](.github/workflows/doc-detective.yml) — runs every documented command against the local build over `test/fixtures/` |
+| Content-strategy anchors, orphans, routes, links | [docs.yml](.github/workflows/docs.yml) via `npm run docs:check-strategy` ([scripts/check-content-strategy.mjs](scripts/check-content-strategy.mjs)) |
 | Automated review | [claude-pr-review.yml](.github/workflows/claude-pr-review.yml), [claude.yml](.github/workflows/claude.yml) |
 
 The husky hook installs via the `prepare` script on `npm install`. If commits stop being linted, check `git config core.hooksPath` — it should be `.husky/_`. Run `npx husky` to reinstall.
@@ -183,3 +209,4 @@ The husky hook installs via the `prepare` script on `npm install`. If commits st
 
 - **Claude review** workflows skip with a notice until `gh secret set CLAUDE_CODE_OAUTH_TOKEN --repo hawkeyexl/agentevals`. Note `claude-code-action` refuses to run when the workflow file differs from the default branch's copy (anti-tampering) — a green check is not proof a review ran; check the duration.
 - **Releases** are opt-in via `gh variable set RELEASE_ENABLED --body true`. Configure npm trusted publishing for `@hawkeyexl/agentevals` (OIDC, naming `release.yml`) before enabling.
+- **The docs site** needs GitHub Pages set to "GitHub Actions" as its source (Settings → Pages) before [docs.yml](.github/workflows/docs.yml)'s deploy job can publish. Until then the validate and build jobs still run and still gate — only the deploy step fails.

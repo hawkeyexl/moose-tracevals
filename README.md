@@ -4,6 +4,42 @@ Adherence evals for AI agent session traces. Point agentevals at a [Claude Code]
 
 Built on two sibling libraries: [@hawkeyexl/inference](https://github.com/hawkeyexl/inference) (providers, ensemble consensus, confidence zones, response caching) and [docmeta](https://github.com/hawkeyexl/docmeta) (frontmatter extraction, JSON-Schema validation).
 
+## Install
+
+Requires Node.js 24+.
+
+```bash
+npm install --save-dev @hawkeyexl/agentevals
+```
+
+> **The package is `@hawkeyexl/agentevals`; the binary is `agentevals`.** `npx` resolves by *package*
+> name, and the unscoped `agentevals` on npm belongs to an unrelated project — so `npx agentevals`
+> only reaches this tool once it is installed locally. With nothing installed, use
+> `npx @hawkeyexl/agentevals`.
+
+## Quick start
+
+Evaluate a session that already happened. No instrumentation, no re-running work, no API key:
+
+```bash
+npx agentevals list --all-projects --limit 5
+npx agentevals run <trace-file> --deterministic-only
+```
+
+```
+  PASS   fix-bug › used-read
+  FAIL   fix-bug › forbidden-tool
+         [error] tool Bash was used 1 time(s) but must not be
+  SKIP   CLAUDE.md › adheres-to-artifact (implicit)
+         llm evals skipped (deterministic-only run)
+
+7 eval(s): 1 pass, 1 fail, 0 error, 0 needs-review, 5 skipped
+```
+
+The skill said *"this skill is edit-only"*. The session ran a shell command.
+
+Exit codes: `0` all passed or skipped · `1` a check failed, errored, or needs review · `2` agentevals itself could not run.
+
 ## How it works
 
 ```
@@ -21,180 +57,40 @@ deterministic graders ──> ensemble LLM judge (N runs, consensus, zones)
 report (human / json / markdown) + artifact coverage + history
 ```
 
-- **Deterministic lookup.** Skill invocations (`Skill` tool calls and `/command` injections), agent spawns (`subagent_type`), and project rules (`CLAUDE.md`/`AGENTS.md` from the session's cwd up to the project root) are resolved from the trace plus the filesystem — no LLM guessing. Unresolved references degrade to warnings and a coverage table, never a crash.
-- **Declared criteria.** Artifacts can declare criteria in a `metadata.evals` frontmatter block (validated against the published [artifact-evals schema](schemas/artifact-evals-0.2.json)). A criterion is either a string (LLM-judged assertion) or an object selecting a deterministic grader.
-- **Implicit eval.** Artifacts with no declared criteria still get one judged eval: *"the session adhered to the instructions in this artifact"* — so every used artifact is evaluated with zero configuration.
+- **Deterministic lookup.** Which skills, agents, and rules a session used is read from the trace plus the filesystem — no LLM guessing. Unresolved references degrade to warnings and a coverage table, never a crash.
+- **Declared criteria.** Artifacts can declare checks in a `metadata.evals` frontmatter block, validated against the published [artifact-evals schema](schemas/artifact-evals-0.2.json). A criterion is either a string (LLM-judged) or an object selecting a deterministic grader.
+- **Implicit eval.** Artifacts with no declared criteria still get one judged eval — *"the session adhered to the instructions in this artifact"* — so every used artifact is evaluated with zero configuration.
 - **Trustworthy judging.** N independent runs at temperature 0, consensus where errored runs can never produce a silent pass, and confidence zones that route anything non-unanimous to `needs-review`.
+- **Read-only.** `run` never modifies a trace or the artifacts it evaluates. `fill` is the one write path, and it never writes project rules.
 
-## Quick start
+## Documentation
 
-Requires Node.js 24+. A clean clone is all you need — no sibling checkouts.
+Full guides, recipes, and reference live on the documentation site:
 
-```bash
-npm install
-npm run build
-```
+**https://hawkeyexl.github.io/agentevals/**
 
-Evaluate a past session interactively (TTY picker):
-
-```bash
-node dist/cli.js
-```
-
-Or name a trace and a project:
-
-```bash
-node dist/cli.js run ~/.claude/projects/<project-slug>/<session>.jsonl
-```
-
-List what's evaluable:
-
-```bash
-node dist/cli.js list --all-projects --limit 10
-```
-
-Deterministic-only (no LLM calls, CI-friendly):
-
-```bash
-node dist/cli.js run <trace> --deterministic-only --format json
-```
-
-Full pipeline with zero network (mock judge):
-
-```bash
-node dist/cli.js run <trace> --provider mock
-```
-
-## Declaring criteria
-
-Add a `metadata.evals` block to a skill, agent, or rules file:
-
-```yaml
----
-name: fix-bug
-description: Fix a reported bug, reproducing it with a failing test first.
-metadata:
-  evals:
-    criteria:
-      # String shorthand: judged by the LLM ensemble.
-      - Reproduce the bug with a failing test before applying the fix.
-      # Object form: deterministic grader.
-      - name: forbidden-tool
-        assertion: The session never ran shell commands; this skill is edit-only.
-        grader: tool-usage
-        options: { tool: Bash, expect: not-used }
----
-```
-
-### Deterministic grader kinds
-
-| Kind | Asserts |
-|---|---|
-| `tool-usage` | a tool was used / not used / within count bounds (`tool`, `expect`, `min`, `max`, `includeSidechains`) |
-| `skill-invoked` | a skill was / wasn't invoked (`skill`, `expect`) |
-| `file-access` | a file was / wasn't read, written, or edited (`path` suffix, `op`, `expect`) |
-| `turn-count` | conversation stayed within turn bounds (`min`, `max`) |
-| `cost` | session stayed within budget (`maxUsd`, `maxTokens`); skips with a reason when the trace has no usage data |
-| `regex` | a pattern does / doesn't appear in session text (`pattern`, `flags`, `on`, `expect`) |
-| `json-output` | the final assistant message validates against a JSON Schema (`schema`) |
-
-Options are validated before grading, so a typo'd enum (`expect: usd`) or a
-criterion with no bound at all (`turn-count` with neither `min` nor `max`) is
-reported as an `error` rather than passing silently.
-
-Severities: `error` findings fail the eval; `warning` and `info` report but pass.
-
-## Filling in criteria
-
-Writing criteria by hand is the slow part, so `fill` proposes them. It scans a
-project for skills, agent definitions, and project rules — no trace needed —
-asks a model to extract the criteria each artifact's own instructions already
-imply, and appends the ones that survive the gate:
-
-```bash
-agentevals fill --dry-run
-```
-
-Drop `--dry-run` to write. Everything lands in a reviewable diff; existing
-criteria are never modified, and a name collision is an error, not an
-overwrite.
-
-Confidence is the *last* gate, not the only one. Every proposal is first
-checked mechanically, and no confidence score overrides those checks:
-
-| Rejection reason | Meaning |
-|---|---|
-| `grader-not-allowed` | the grader's scope doesn't fit the artifact type |
-| `invalid-options` | the grader itself refused the options |
-| `ungrounded-target` | names a tool, skill, or path that doesn't exist here |
-| `duplicate-name` | a criterion by that name already exists |
-| `low-confidence` | below `--confidence` (default `0.7`) |
-
-Instructions too vague to test are reported under **needs sharpening** rather
-than turned into soft assertions — an instruction no session could fail is a
-defect in the artifact, and naming it beats papering over it.
-
-Two deliberate limits. Whole-session graders (`cost`, `turn-count`,
-`json-output`) are never proposed, because a budget declared inside one
-artifact silently constrains the entire session. And **project rules are
-proposed but never written**: criteria inside a file the agent reads before it
-acts would be teaching to the test. Copy the ones you want by hand. See
-[ADR 01005](adrs/01005-fill-proposes-criteria-at-authoring-time.md).
-
-## Configuration
-
-`agentevals.config.yaml` (all keys optional; CLI flags override, never bypass):
-
-```yaml
-provider:                 # validated, then mapped onto @hawkeyexl/inference
-  default: claude-cli     # or anthropic / openai / mock
-  anthropic:
-    model: claude-sonnet-4-5
-    apiKeyEnv: ANTHROPIC_API_KEY   # the variable NAME, never the key itself
-  openai:
-    baseUrl: https://api.openai.com/v1   # or any /chat/completions server
-    model: gpt-4o-mini
-    apiKeyEnv: OPENAI_API_KEY
-  claude-cli:
-    model: claude-sonnet-4-5
-    command: claude         # uses the CLI's own auth, so no API key
-judge:
-  ensembleRuns: 3
-  temperature: 0
-  zones: { autoPass: 0.8, autoFail: 0.8 }
-  cacheDir: .agentevals/cache
-  maxCostUsd: 2.5
-render:
-  maxBlockChars: 2000
-  maxTotalChars: 150000
-history:
-  file: .agentevals/history.jsonl
-fill:
-  confidenceThreshold: 0.7   # minimum self-reported confidence to write
-  maxCriteriaPerArtifact: 8
-  temperature: 0
-  cacheDir: .agentevals/cache/fill
-  maxCostUsd: 2.5
-failOnNeedsReview: true
-```
-
-## Exit codes
-
-| Code | Meaning |
-|---|---|
-| `0` | every eval passed (or was skipped) |
-| `1` | any fail or error (and `needs-review` unless `failOnNeedsReview: false`) |
-| `2` | operational error (bad usage, unreadable trace, unknown format) |
+| Track | What it covers |
+|-------|----------------|
+| [Get started](https://hawkeyexl.github.io/agentevals/get-started/) | Install, find a session, and read your first result. |
+| [Declare what to check](https://hawkeyexl.github.io/agentevals/declare/) | Turn an instruction into a criterion; propose criteria across a project with `fill`. |
+| [Run it in CI](https://hawkeyexl.github.io/agentevals/ci/) | An offline GitHub Actions recipe, the exit-code contract, and report formats. |
+| [Trust the judge](https://hawkeyexl.github.io/agentevals/judge/) | Ensembles, consensus, and confidence zones — with the arithmetic. |
+| [Read a failing eval](https://hawkeyexl.github.io/agentevals/triage/) | One page: what failed, whether the verdict holds, and what to do. |
+| [Reference](https://hawkeyexl.github.io/agentevals/reference/) | Every CLI flag, config key, grader option, criteria field, and report field. |
 
 ## Development
 
-See [CLAUDE.md](CLAUDE.md) for the working agreements (TDD, hermetic offline tests, ADRs, Conventional Commits) and [adrs/](adrs/) for the decisions behind the architecture.
+See [CLAUDE.md](CLAUDE.md) for the working agreements (TDD, hermetic offline tests, ADRs, Conventional Commits) and [adrs/](adrs/) for the decisions behind the architecture. The documentation's audience, persona, journey, and IA definitions live in [docs/content_strategy/](docs/content_strategy/).
 
 ```bash
 npm test              # offline suite (mocked judge, fixture traces)
 npm run typecheck
 npm run build
 AGENTEVALS_LIVE=1 npm test   # adds the live judge smoke test
+
+npm run docs:validate # dogfood docmeta against the docs' own frontmatter
+npm run docs:build    # build the Starlight site
+npm run docs:dev      # serve it locally
 ```
 
 ## License

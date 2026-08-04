@@ -1,0 +1,87 @@
+name: Doc Detective
+
+# Runs the Doc Detective inline tests embedded in the docs (.mdx) under
+# docs/src/content/docs/, which execute the exact commands the docs present
+# (`agentevals ...`) against the freshly built local CLI via `npm link` — not
+# the published package. The build + link steps are required: dist/ is
+# gitignored, so the tests would have nothing to run without them.
+#
+# Every tested command is offline by construction (--deterministic-only or
+# --provider mock), which keeps the docs gate as hermetic as the unit suite.
+on:
+  pull_request:
+    paths:
+      - "docs/**"
+      - "src/**"
+      - "test/fixtures/**"
+      - ".doc-detective.json"
+      - ".github/workflows/doc-detective.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  doc-detective:
+    runs-on: ubuntu-latest
+    # The inline tests run shell commands, so never run them for pull requests
+    # from forks — that would execute untrusted code on the runner. Same-repo
+    # branches and manual dispatch only.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.pull_request.head.repo.full_name == github.repository
+    env:
+      HUSKY: "0"
+      # Resolve traces and user-level artifacts from the fixture home on every
+      # machine, not the runner's real home — the same override ci.yml uses.
+      AGENTEVALS_HOME: test/fixtures/home
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      # npm install, not ci — see CLAUDE.md.
+      - run: npm install --no-fund --no-audit
+      - run: npm run build
+
+      # Build dist/, then expose it as the `agentevals` command the docs invoke.
+      # `npm link` puts `agentevals` on PATH; `npm link @hawkeyexl/agentevals`
+      # adds node_modules/.bin/agentevals so `npx agentevals` resolves the local
+      # build.
+      - run: npm link
+      - run: npm link @hawkeyexl/agentevals
+
+      # Load-bearing guard. The unscoped name `agentevals` on npm belongs to an
+      # unrelated project, so a broken link would not fail loudly — `npx
+      # agentevals` would silently fetch and run somebody else's package. Prove
+      # the local build is what resolves before running anything against it.
+      - name: Verify `agentevals` resolves to the local build
+        run: |
+          set -e
+          expected="$(node -p "require('./package.json').version")"
+          actual="$(npx agentevals --version)"
+          if [ "$expected" != "$actual" ]; then
+            echo "npx agentevals resolved to version '$actual', expected '$expected'."
+            echo "The npm link did not take — refusing to run docs tests against an unknown package."
+            exit 1
+          fi
+
+      # Third-party action pinned to a full commit SHA (supply-chain hardening).
+      - uses: doc-detective/github-action@a2a4f5ceb1abfa55d567e4f6766223082ece2c18 # v1
+        with:
+          config: .doc-detective.json
+          exit_on_fail: true
+
+      # The docs tests run `fill --dry-run` against the real fixture corpus. If
+      # dry-run ever stops being honoured, fail here rather than silently
+      # rewriting the fixtures.
+      - name: The fixture corpus must be unchanged
+        if: always()
+        run: |
+          dirty=$(git status --porcelain -- test/fixtures/project)
+          if [ -n "$dirty" ]; then
+            echo "the docs tests modified the fixture corpus:"
+            echo "$dirty"
+            git --no-pager diff -- test/fixtures/project
+            exit 1
+          fi
