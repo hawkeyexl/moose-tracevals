@@ -14,7 +14,7 @@ steps:
   - { stage: "Decode the several reasons for skipped", doc: "/agentevals/triage/#why-something-was-skipped", exists: true }
   - { stage: "Tell an error from a failure", doc: "/agentevals/triage/#error-means-the-check-broke", exists: true, note: "including a malformed criteria block, which carries a line number" }
   - { stage: "Decide: fix the session, fix the criterion, or escalate", doc: "/agentevals/triage/#what-to-do-next", exists: true }
-  - { stage: "Answer a follow-up question", doc: /agentevals/triage/faq/, exists: false, note: "[GAP] the short-answer shelf for the questions that survive the main page" }
+  - { stage: "Answer a follow-up question", doc: /agentevals/triage/faq/, exists: true }
 ---
 
 # CUJ: Read a failing eval and decide what to do
@@ -55,6 +55,6 @@ could satisfy is a defect in the artifact, and this reader is often the first pe
 Naming that option explicitly, alongside "fix the behavior" and "escalate to the artifact's owner",
 is what turns a diagnosis into a decision.
 
-**Current friction / gap.** Nothing serves this reader today. The one `[GAP]` is the follow-up
-shelf: short answers to the questions that survive the main page, which must stay a *second* page so
-the first one keeps its length discipline.
+**Coverage.** No gaps. `triage/` stays the single self-contained page this reader needs, and
+`triage/faq/` is the follow-up shelf — deliberately a *second* page so the first keeps its length
+discipline.

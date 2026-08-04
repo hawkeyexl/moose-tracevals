@@ -1,0 +1,161 @@
+---
+title: Calibrate the judge
+description: Tune ensemble runs, confidence zones, and temperature against a corpus you already know the answers to, cap spend, and avoid the two failure modes that are silent.
+sidebar:
+  order: 2
+---
+
+import { Steps, Aside, LinkCard, CardGrid } from '@astrojs/starlight/components';
+
+**Scope:** the knobs, what each one trades, and the two ways calibration goes wrong without telling
+you. It assumes [How the judge decides](/agentevals/judge/) — you cannot tune a zone threshold
+before you know what consensus is.
+
+## Tune against known answers
+
+Calibration means checking whether the tool agrees with **you**, so it needs a corpus where you
+already know the verdict.
+
+<Steps>
+
+1. **Collect a handful of sessions you have judged by hand.** A dozen is plenty. Include some you
+   consider clear passes, some clear failures, and at least two you found genuinely ambiguous —
+   those are the ones that tell you whether the review band is set sensibly.
+
+2. **Run them and compare.** Cache the verdicts so re-tuning is free:
+
+   ```bash
+   npx agentevals run <trace> --format json --output baseline.json
+   ```
+
+3. **Count three things**, not one:
+   - **False passes** — anything `pass` you would have failed. The expensive error.
+   - **False fails** — anything `fail` you would have passed. Erodes trust fastest.
+   - **Review volume** — how many landed in `needs-review`. Too many and nobody reads them; too few
+     and the band is not doing its job.
+
+4. **Move one knob, re-run, recount.** Re-running against cached verdicts costs nothing as long as
+   you change only the zones (see [what invalidates the cache](#what-invalidates-a-cached-verdict)).
+
+</Steps>
+
+## The knobs
+
+All live under `judge` in `agentevals.config.yaml`; see the
+[configuration reference](/agentevals/reference/configuration/) for types and defaults.
+
+| Knob | Default | Moving it up | Moving it down |
+|---|---|---|---|
+| `ensembleRuns` | `3` | Costs proportionally more. Makes auto-resolution *harder* — every run must agree. More reviews, fewer confident mistakes. | Cheaper and more decisive, with a higher chance a single unlucky sample decides an eval. |
+| `zones.autoPass` | `0.8` | Fewer auto-passes, more reviews. | Converts reviews into passes. Buys throughput with accuracy. |
+| `zones.autoFail` | `0.8` | Fewer auto-fails, more reviews. | Converts reviews into fails. |
+| `temperature` | `0` | Adds noise. Warns once per process. | Already at the floor. |
+
+Two things are worth internalising before you turn anything:
+
+**More runs make the gate stricter, not looser.** Auto-resolution requires unanimity, so a fourth
+run is a fourth chance for one dissent to send the eval to review. If reviews are drowning you,
+raising `ensembleRuns` will make it worse.
+
+**Zones are a floor on mean confidence, not a vote threshold.** Unanimity is required regardless.
+Lowering `autoPass` to `0.6` does not let a 2–1 split pass; it only lets a *unanimous but hesitant*
+ensemble through.
+
+<Aside type="caution" title="Leave temperature at 0">
+Nonzero temperature adds noise to verdicts, which is the opposite of what an ensemble is for — you
+want independent samples of the same judgement, not varied ones. agentevals warns once per process
+if you set it above zero.
+</Aside>
+
+### Reading the numbers behind a verdict
+
+`--format json` carries the full consensus object for every judged eval, which is what you actually
+tune against:
+
+```bash
+jq -r '.evalResults[] | select(.consensus)
+       | "\(.evalName)\t\(.outcome)\tvotes=\(.consensus.votes)\tconf=\(.consensus.meanConfidence)"' \
+  baseline.json
+```
+
+If most of your reviews show unanimous votes with mean confidence just under the threshold, the
+threshold is too high for your model. If they show split votes, the *assertions* are ambiguous and
+no threshold will fix them — go sharpen the criteria instead.
+
+## Cap what it can spend
+
+```yaml title="agentevals.config.yaml"
+judge:
+  maxCostUsd: 2.50
+```
+
+Checked **before each judged eval**. Once the budget is spent, the remaining evals are reported as
+`skipped` with the reason naming the budget, rather than being dropped silently:
+
+```
+SKIP   CLAUDE.md › adheres-to-artifact (implicit)
+       judge cost budget exhausted ($2.5)
+```
+
+Because it is checked per eval and evaluated in order, a budget stops the run *somewhere in the
+middle* — the evals that got skipped are an artifact of ordering, not importance. Treat a
+budget-exhausted run as incomplete rather than as a result.
+
+<Aside type="caution" title="A budget is only as good as the price table">
+Cost is computed from a built-in per-model price table. **A model the table does not recognise is
+costed at zero**, which silently disables `maxCostUsd` entirely — the budget never trips because
+spend never accumulates. If you run a model that is not in the table, set its price explicitly:
+
+```yaml
+provider:
+  openai:
+    model: my-self-hosted-model
+    pricing:
+      inputPerMTok: 0.15
+      outputPerMTok: 0.60
+```
+</Aside>
+
+## What invalidates a cached verdict
+
+Verdicts are cached under `judge.cacheDir` (default `.agentevals/cache`), keyed on seven things:
+
+1. provider
+2. model
+3. **prompt version**
+4. ensemble run count
+5. temperature
+6. a hash of the rendered trace
+7. a hash of the eval plan — the assertion, evidence, examples, and the artifact's full content
+
+Change any one and you get a fresh judgement. Change none and you get an instant replay, which is
+what makes re-tuning zones free: **zone thresholds are not part of the key**, because they are
+applied after consensus rather than sent to the model.
+
+<Aside type="caution" title="The silent one: a stale cache after a prompt change">
+Prompt version is in the key precisely so a prompt revision cannot replay verdicts produced by the
+old prompt. That protection only works if the version is bumped. If you fork this project and edit
+the judge prompts, bump `PROMPT_VERSION` in `src/judge/prompt.ts` in the same change — otherwise
+every cached eval silently keeps answering with a prompt that no longer exists.
+
+To rule the cache out while debugging, run with `--no-cache`.
+</Aside>
+
+Note that the artifact's **content** is in the key, so editing a `SKILL.md` re-judges every eval on
+it. That is intended: the instruction changed, so the previous verdict is about a different
+question.
+
+## Where to go next
+
+<CardGrid>
+  <LinkCard
+    title="Evolve the criteria standard"
+    description="Pin a schema version, separate probes from regression guards, and roll out a convention in stages."
+    href="/agentevals/judge/schema-versioning/"
+  />
+  <LinkCard
+    title="Every judge key"
+    description="ensembleRuns, zones, temperature, cacheDir, maxCostUsd, and the provider pricing override."
+    href="/agentevals/reference/configuration/"
+  />
+</CardGrid>

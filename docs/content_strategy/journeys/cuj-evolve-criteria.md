@@ -8,9 +8,9 @@ entry_point: /agentevals/judge/schema-versioning/
 success_criteria: "The reader can pin a schema version, adopt a new field incrementally, and distinguish an expected-to-fail probe from a regression guard in reports."
 steps:
   - { stage: "See the criteria block as a versioned contract", doc: /agentevals/reference/criteria-schema/, exists: true }
-  - { stage: "Pin a schema version", doc: /agentevals/judge/schema-versioning/, exists: false, note: "[GAP] 0.1 and 0.2 both ship; nothing explains which to pin or why" }
-  - { stage: "Adopt capability vs regression", doc: "/agentevals/judge/schema-versioning/#capability-and-regression", exists: false, note: "[GAP] the 0.2 addition; reported, never enforced" }
-  - { stage: "Roll out a new convention incrementally", doc: "/agentevals/judge/schema-versioning/#staged-rollout", exists: false, note: "[GAP] start at warning severity, promote to error once the corpus is ready" }
+  - { stage: "Pin a schema version", doc: /agentevals/judge/schema-versioning/, exists: true }
+  - { stage: "Adopt capability vs regression", doc: "/agentevals/judge/schema-versioning/#separate-probes-from-guards", exists: true }
+  - { stage: "Roll out a new convention incrementally", doc: "/agentevals/judge/schema-versioning/#roll-out-a-convention-in-stages", exists: true }
   - { stage: "Handle a malformed criteria block", doc: /agentevals/triage/, exists: true, note: "an invalid block is an error with a line number, never silently ignored" }
   - { stage: "Keep the vocabulary consistent across artifacts", doc: /agentevals/reference/graders/, exists: true }
 ---
@@ -50,7 +50,6 @@ an error with a source line number, never silently ignored. For someone rolling 
 many repositories, "you will be told exactly where it broke" is the property that makes the rollout
 survivable.
 
-**Current friction / gap.** Entirely unwritten. Two schema versions ship and nothing says why, which
-to pin, or what changed. The `type` field — the whole point of 0.2 — is documented nowhere outside
-the schema file, making it unusable in practice. This is the highest-value gap for the eval-owner
-persona.
+**Coverage.** No gaps. `judge/schema-versioning/` carries the block as a published contract, both
+versions and which to pin, `capability` vs `regression` with the reason enforcement deliberately
+does not change, and the staged ratchet for rolling a convention across a corpus.

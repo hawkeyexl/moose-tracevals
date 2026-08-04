@@ -47,8 +47,6 @@ Three things carry the journey:
 Environment control is the quiet requirement: trace discovery reads a session store under a home
 directory, and on a shared runner that has to be pinned explicitly rather than inherited.
 
-**Current friction / gap.** No CI recipe exists anywhere today. `AGENTEVALS_HOME` — required to make
-a run reproducible on a runner — appears only in contributor notes and source comments, despite the
-repository's own CI depending on it. This journey has **no `[GAP]`s at launch**: because the contract
-is just a command and an exit code, covering a second and third platform costs a few lines rather
-than a page, so breadth ships with the anchor rather than after it.
+**Coverage.** No gaps. `ci/` carries where a trace comes from in CI, the offline modes,
+`AGENTEVALS_HOME`, and recipes for three platforms; `ci/exit-codes-and-reports/` carries the
+exit-code contract and the `needs-review` policy decision.

@@ -50,7 +50,5 @@ valuable thing the command produces. An instruction too vague to test is a defec
 and naming it beats silently converting it into an assertion that can never fail. Content should
 treat those notes as a to-do list for the artifact author, not as a diagnostic footnote.
 
-**Current friction / gap.** The README covers `fill` reasonably well but shows it as a single
-command rather than a workflow, and gives no worked example of a real proposal report — which is
-where the gate order actually becomes legible. No gap pages here; this journey is fully served at
-launch.
+**Coverage.** No gaps. `declare/fill/` carries the workflow, a captured proposal report, the gate in
+order, and the reason project rules are proposed but never written.

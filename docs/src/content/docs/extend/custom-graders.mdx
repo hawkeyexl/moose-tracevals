@@ -1,0 +1,170 @@
+---
+title: Write a custom grader
+description: Register a deterministic grader the built-ins do not cover, and implement both halves of the contract so fill can propose it.
+sidebar:
+  order: 2
+---
+
+import { Aside, LinkCard, CardGrid } from '@astrojs/starlight/components';
+
+**Scope:** adding a deterministic grader kind. The seven built-ins and their options are in the
+[grader reference](/agentevals/reference/graders/) — read one of those first, since they are the
+reference implementations.
+
+## The contract has two halves
+
+```ts
+interface TraceGrader {
+  kind: string;
+  validateOptions?(options: Record<string, unknown>): string | undefined;
+  grade(ctx: { trace: Trace; plan: EvalPlan }): GradeResult | Promise<GradeResult>;
+}
+```
+
+`grade()` is the obvious half. `validateOptions()` is the one people skip, and skipping it has a
+consequence that is invisible in the type signature.
+
+<Aside type="caution" title="A grader without `validateOptions` can never be proposed by `fill`">
+`validateOptions` is optional so that consumer-registered graders stay source-compatible — but
+`fill` refuses to propose a criterion it cannot ground-check. A grader missing it works fine when a
+human writes the criterion by hand and is silently invisible to the authoring path.
+
+If you want `fill` to be able to suggest your grader, implement both.
+</Aside>
+
+It is called twice: by `grade()` before grading, and by `fill` before proposing. Return `undefined`
+when the options are usable, or a message describing what is wrong.
+
+## A worked example
+
+A grader asserting the session touched no file outside an allowed directory:
+
+```ts
+import {
+  registerGrader,
+  type TraceGrader,
+  type GradeResult,
+} from "@hawkeyexl/agentevals";
+
+const stayedInScope: TraceGrader = {
+  kind: "stayed-in-scope",
+
+  validateOptions(options) {
+    const root = options.root;
+    if (typeof root !== "string" || root.length === 0) {
+      return "options.root is required and must be a non-empty string";
+    }
+    if (root.startsWith("/") || /^[A-Za-z]:/.test(root)) {
+      return `options.root must be a repository-relative path, not "${root}"`;
+    }
+    return undefined;
+  },
+
+  grade({ trace, plan }): GradeResult {
+    const root = String(plan.options?.root ?? "");
+    const normalise = (p: string) => p.replace(/\\/g, "/").toLowerCase();
+    const strays = trace.fileAccesses
+      .filter((a) => a.op !== "read")
+      .filter((a) => !normalise(a.path).includes(normalise(root)));
+
+    if (strays.length === 0) return { findings: [] };
+
+    return {
+      findings: strays.map((a) => ({
+        evalName: plan.evalName,
+        artifact: plan.artifact.path,
+        message: `wrote outside ${root}: ${a.path}`,
+        severity: plan.severity,
+      })),
+    };
+  },
+};
+
+registerGrader(stayedInScope);
+```
+
+Then declare it like any built-in:
+
+```yaml
+- name: stayed-in-scope
+  assertion: The session only modified files under packages/api.
+  grader: stayed-in-scope
+  options:
+    root: packages/api
+```
+
+<Aside title="Register before you run">
+`registerGrader` mutates a module-level registry, so call it during startup — before `runEvals`.
+Registering a `kind` that already exists replaces it, which is how you would override a built-in.
+</Aside>
+
+## What to return
+
+`GradeResult` has three mutually meaningful shapes:
+
+| Return | Outcome | Use it when |
+|---|---|---|
+| `{ findings: [] }` | `pass` | The criterion held. |
+| `{ findings: [ … ] }` | `fail`, if any finding is `error` severity | The criterion was violated. |
+| `{ findings: [], skipped: "reason" }` | `skipped` | The trace lacks the data you need. |
+| `{ findings: [], error: "reason" }` | `error` | The options are unusable. |
+
+Four conventions worth copying from the built-ins:
+
+**Use `plan.severity` on findings, not a hard-coded one.** Severity is the criterion author's
+decision. Hard-coding `error` takes it away from them.
+
+**Skip rather than pass when you cannot tell.** A check that silently passes because the data was
+missing is worse than no check. The `cost` grader is the model here: it names exactly which budget
+it could not evaluate.
+
+**Write failure messages that name what happened**, not what should have. `wrote outside
+packages/api: src/other.ts` is actionable; `scope violation` is not.
+
+**Normalise paths.** Specs are written on one machine and run on another, so compare with separators
+normalised and case folded, the way `file-access` does.
+
+## Throwing is contained
+
+A grader that throws fails **only its own eval**, which is reported as `error` with the message. It
+does not abort the run or affect other evals. You still want to return `{ error }` for bad options
+rather than throwing, because that path produces a cleaner message and runs during `fill` too.
+
+## Testing it
+
+`registerGrader` plus `runEvals` with `deterministicOnly` gives you a hermetic test with no provider
+at all:
+
+```ts
+import { loadConfig, registerGrader, runEvals } from "@hawkeyexl/agentevals";
+
+registerGrader(stayedInScope);
+
+const report = await runEvals({
+  tracePath: "test/fixtures/traces/claude-session.jsonl",
+  projectDir: "test/fixtures/project",
+  config: await loadConfig(),
+  deterministicOnly: true,
+  env: { AGENTEVALS_HOME: "test/fixtures/home" },
+});
+
+const result = report.evalResults.find((r) => r.evalName === "stayed-in-scope");
+```
+
+Test `validateOptions` directly too — it is a pure function, and it is the half that decides whether
+`fill` can ever suggest your grader.
+
+## Where to go next
+
+<CardGrid>
+  <LinkCard
+    title="Study the built-ins"
+    description="Seven working implementations of this contract, with their options, validation rules, and exact failure messages."
+    href="/agentevals/reference/graders/"
+  />
+  <LinkCard
+    title="How fill gates a proposal"
+    description="The order the checks run in, and why a grader that cannot validate its options is refused."
+    href="/agentevals/declare/fill/"
+  />
+</CardGrid>

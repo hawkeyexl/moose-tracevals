@@ -78,60 +78,52 @@ sequence carries meaning.
 
 ## Proposed structure
 
-★ = written at launch. `[NEW]` marks a section the CUJs require that does not exist yet — which,
-because this docset is new, is every page; the marker is kept on post-launch pages only, where it
-stays meaningful.
+Every page in the content set is written. A `[NEW]` marker here would mean a section the CUJs
+require that does not exist yet; there are none, and one reappearing is the signal that a journey
+has outgrown its pages.
 
 ```
-/                                        ★ router + 30-second proof
+/                                    router + 30-second proof
 get-started/
-  index                                  ★ install → find a session → first run → read the report
+  index                              install → find a session → first run → read the report
 declare/
-  index                                  ★ instruction → criterion; judged or deterministic; severity
-  fill                                   ★ propose across a project, the gate, review the diff
-  coverage                         [NEW]   the coverage table, unresolved refs, skip
+  index                              instruction → criterion; judged or deterministic; severity
+  fill                               propose across a project, the gate, review the diff
+  coverage                           the coverage table, resolution order, unresolved refs, skip
 ci/
-  index                                  ★ GitHub Actions recipe, offline mode, AGENTEVALS_HOME
-  exit-codes-and-reports                 ★ the 0/1/2 contract, needs-review policy, output formats
-  consume-results                  [NEW]   JSON report, history, regression detection
+  index                              where a trace comes from, offline modes, three CI recipes
+  exit-codes-and-reports             the 0/1/2 contract, needs-review policy, output formats
+  consume-results                    JSON report, --output, history, regression detection
 judge/
-  index                                  ★ ensemble → consensus → zones → outcome
-  calibrate                        [NEW]   tuning runs/zones/temperature, cost budget, cache keys
-  schema-versioning                [NEW]   0.1 vs 0.2, capability vs regression, staged rollout
+  index                              ensemble → consensus → zones → outcome
+  calibrate                          tuning runs/zones/temperature, cost budget, cache keys
+  schema-versioning                  0.1 vs 0.2, capability vs regression, staged rollout
 triage/
-  index                                  ★ one page: read a result, weigh it, decide
-  faq                              [NEW]   short answers to what survives the main page
+  index                              one page: read a result, weigh it, decide
+  faq                                short answers to what survives the main page
 extend/
-  index                            [NEW]   the export map and the injection seams
-  custom-graders                   [NEW]   registerGrader and the two-part grader contract
+  index                              the export map, injection seams, the trace-adapter seam
+  custom-graders                     registerGrader and the two-part grader contract
 reference/
-  index                                  ★ shelf hub
-  cli                                    ★ run / fill / list, every flag and default
-  configuration                          ★ every config key, including the ones with no CLI flag
-  graders                                ★ seven kinds: options, validation rules, failure messages
-  criteria-schema                        ★ the metadata.evals block, both published versions
-  report-and-exit-codes                  ★ human / json / markdown shapes, exit codes, history
-  traces                           [NEW]   formats, discovery, project slug, AGENTEVALS_HOME
-  api                              [NEW]   the export surface, mapped
-  glossary                         [NEW]   trace, artifact, criterion, plan, consensus, zone…
+  index                              shelf hub
+  cli                                run / fill / list, every flag and default
+  configuration                      every config key, including the ones with no CLI flag
+  graders                            seven kinds: options, validation rules, failure messages
+  criteria-schema                    the metadata.evals block, both published versions
+  report-and-exit-codes              human / json / markdown shapes, exit codes, history
+  traces                             formats, discovery, project slug, AGENTEVALS_HOME
+  api                                the export surface, mapped
+  glossary                           trace, artifact, criterion, plan, consensus, zone…
 ```
 
-**24 pages: 14 at launch, 10 following.** The launch set is chosen so that:
+**24 pages, all written.** Every one of the ten journeys now reaches its stated `success_criteria`
+without a missing step: no CUJ carries an `exists: false`, which the
+[strategy gate](../../../scripts/check-content-strategy.mjs) enforces on every push.
 
-- Two journeys are **gap-free** — [`cuj-fill-criteria`](../journeys/cuj-fill-criteria.md) and
-  [`cuj-gate-ci`](../journeys/cuj-gate-ci.md).
-- Three more reach their stated outcome with only an optional step outstanding:
-  [`cuj-first-eval`](../journeys/cuj-first-eval.md) (missing the coverage explainer),
-  [`cuj-declare-criteria`](../journeys/cuj-declare-criteria.md) (missing schema versioning), and the
-  highest-traffic [`cuj-triage-failure`](../journeys/cuj-triage-failure.md), whose one required page
-  ships and whose FAQ follows.
-- The two least-served journeys — [`cuj-extend`](../journeys/cuj-extend.md) and
-  [`cuj-consume-results`](../journeys/cuj-consume-results.md) — are the most self-contained, so
-  deferring them strands nobody mid-track.
-
-The remaining two, [`cuj-cover-every-artifact`](../journeys/cuj-cover-every-artifact.md) and
-[`cuj-evolve-criteria`](../journeys/cuj-evolve-criteria.md), are deliberately unserved at launch:
-both are things a reader reaches for *after* adopting the tool, not while evaluating it.
+The launch set was the 14 pages that made four journeys usable end to end; the remaining 10 closed
+the rest. Sequencing notes are kept in
+[`ia-gap-analysis.md`](ia-gap-analysis.md) rather than here, so this file describes the structure
+and that one describes its history.
 
 ## CUJ → section coverage
 

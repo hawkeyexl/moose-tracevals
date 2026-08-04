@@ -37,29 +37,28 @@ install line for the published package, and a link table into the site.
 
 ## 2. `[NEW]`: content the CUJs require that does not exist
 
-Everything below is unwritten. P0 ships at launch; P1 and P2 follow.
+**None.** All 24 pages in the content set are written, and no CUJ step carries an `exists: false`.
 
-| Gap | Serves | Why it matters | Priority |
-|---|---|---|---|
-| Landing router + offline proof | all | No entry point exists; the first thing a reader needs is "what is this and does it work". | P0 |
-| Install and first run against a real session | `cuj-first-eval` | There is no install path at all for the published package, and `agentevals list` — the only practical way to find a trace — appears only in `--help`. | P0 |
-| Criterion authoring as a decision, not a syntax | `cuj-declare-criteria` | The block shape is shown; choosing judged vs deterministic, and choosing a severity, is where readers stall. | P0 |
-| `fill` as a workflow with a worked proposal report | `cuj-fill-criteria` | The gate order — mechanical checks first, confidence last — is only legible against real output. | P0 |
-| GitHub Actions recipe, plus GitLab and pre-commit | `cuj-gate-ci` | No CI recipe exists anywhere, and CI is the platform persona's entire journey. The contract is identical across platforms, so breadth is cheap and ships at launch. | P0 |
-| Exit-code contract and `needs-review` policy | `cuj-gate-ci` | `needs-review` counts as failure by default; meeting that for the first time as a red build is avoidable. | P0 |
-| Ensemble → consensus → zones, with the arithmetic | `cuj-calibrate-judge` | The invariant that errored runs can never produce a silent pass is stated only in contributor notes. It is the claim the eval owner needs demonstrated. | P0 |
-| One-page triage of a result | `cuj-triage-failure` | Highest-traffic journey; nothing serves it. Five outcomes, and `SKIP` alone has four unrelated causes. | P0 |
-| Reference shelf: CLI, configuration, graders, criteria schema, reports & exit codes | all | Every journey deep-links into these; without them journey pages inflate with tables. | P0 |
-| Artifact coverage explained | `cuj-cover-every-artifact` | Every reporter renders a coverage section and nothing explains it. Resolution order lives only in source. | P1 |
-| `--format json` report structure in use, `--output`, `--history`, regressions | `cuj-consume-results` | Three shipped features documented nowhere; the history file format is undiscoverable. | P1 |
-| Judge calibration: runs, zones, temperature, cost ceiling, cache keys | `cuj-calibrate-judge` | Two silent failure modes live here — a stale cache replaying a superseded prompt, and a cost budget disabled by unknown model pricing. | P1 |
-| Criteria schema versioning; `capability` vs `regression` | `cuj-evolve-criteria` | Two schema versions ship with no explanation of which to pin. The `type` field is the whole point of 0.2 and is documented nowhere, making it unusable. | P1 |
-| Triage FAQ | `cuj-triage-failure` | Keeps the main triage page short enough to stay effective. | P2 |
-| Programmatic API map and injection seams | `cuj-extend` | A large public export surface with nothing marking the intended entry points. | P2 |
-| `registerGrader` and the two-part grader contract | `cuj-extend` | A grader without option validation can never be proposed by `fill` — a consequence invisible in the type signature. | P2 |
-| Trace formats, discovery, project slug, `AGENTEVALS_HOME` | `cuj-cover-every-artifact`, `cuj-extend` | `AGENTEVALS_HOME` is required for a reproducible CI run and is documented only in contributor notes. | P2 |
-| Export-surface reference | `cuj-extend` | A separate page from the `extend/` tour: the map of what is exported, so an import is not a bet on stability. | P2 |
-| Glossary | all | Vocabulary is assumed across every page; one authority prevents drift between them. | P2 |
+That is the state to defend, not a finish line: this section exists so a gap can be recorded the
+moment a journey outgrows its pages. Add a row here the same day you notice one.
+
+### What closed, and in what order
+
+Kept because the sequencing reasoning is the useful part, not the list.
+
+| Wave | Pages | Reasoning |
+|---|---|---|
+| **Launch (14)** | landing, get-started, declare + fill, ci + exit-codes, judge, triage, and the five-page reference shelf | Chosen to make four journeys usable end to end, and to serve the highest-traffic journey (`cuj-triage-failure`) with its one required page. Reference came in whole because every journey deep-links into it; without it the journey pages inflate with tables. |
+| **P1 (4)** | `declare/coverage`, `ci/consume-results`, `judge/calibrate`, `judge/schema-versioning` | Each closed a journey that dead-ended. Two journeys — `cuj-cover-every-artifact` and `cuj-evolve-criteria` — had no page at all until this wave. |
+| **P2 (6)** | `triage/faq`, `extend/` ×2, `reference/traces`, `reference/api`, `reference/glossary` | Four of the six are the toolsmith journey, which was 100% gaps and entirely self-contained — deferring it stranded nobody. |
+
+Two things learned in the P2 wave, worth remembering:
+
+- **A new nav group costs a config edit.** Starlight's `autogenerate` throws on an empty directory,
+  so `extend/` could only be added to `astro.config.mjs` in the same change as its first page.
+- **Anchors written before their page is written will be wrong.** Seven CUJ steps deep-linked to
+  `#fragment`s that the eventual headings did not match. The strategy gate's anchor check caught
+  every one. Prefer linking a page and adding the fragment once the heading exists.
 
 ## 3. Existing pages that map to no CUJ
 

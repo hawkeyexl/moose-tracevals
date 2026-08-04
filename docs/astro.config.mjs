@@ -8,9 +8,9 @@ import starlight from "@astrojs/starlight";
 // `sidebar.order` frontmatter, used only where sequence carries meaning.
 // See docs/content_strategy/information_architecture/proposed-ia.md.
 //
-// The proposed IA also defines a "Build on agentevals" group (`extend/`). It is
-// absent here on purpose: `autogenerate` throws on a directory with no pages, so
-// the group is added in the same change as its first page.
+// Every group must map to a directory that has at least one page: `autogenerate`
+// throws on an empty directory, so a new group lands in the same change as its
+// first page.
 export default defineConfig({
   site: "https://hawkeyexl.github.io",
   base: "/agentevals",
@@ -46,6 +46,10 @@ export default defineConfig({
         {
           label: "Read a failing eval",
           items: [{ autogenerate: { directory: "triage" } }],
+        },
+        {
+          label: "Build on agentevals",
+          items: [{ autogenerate: { directory: "extend" } }],
         },
         {
           label: "Reference",

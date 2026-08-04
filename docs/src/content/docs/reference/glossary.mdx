@@ -1,0 +1,182 @@
+---
+title: Glossary
+description: Definitions of the terms agentevals uses — trace, artifact, criterion, grader, plan, finding, outcome, consensus, zone, sidechain, and the rest.
+sidebar:
+  order: 9
+---
+
+**Scope:** one authority for the vocabulary every other page assumes. Terms are grouped by where
+they appear in the pipeline rather than alphabetically, because most of them only make sense in
+order.
+
+## The pipeline, in one line
+
+**trace** → **artifacts** → **criteria** → **plans** → **graders** / **judge** → **outcomes** →
+**report**
+
+---
+
+## Inputs
+
+**Trace**
+: A record of an agent session that already happened, stored as JSONL. agentevals reads traces; it
+never writes them. See [Traces reference](/agentevals/reference/traces/).
+
+**Session store**
+: Where an agent CLI keeps its traces — `~/.claude/projects/<project-slug>/*.jsonl` for Claude Code.
+Scanned by `agentevals list` and the interactive picker.
+
+**Project slug**
+: A project directory encoded as a store directory name, by replacing every non-alphanumeric
+character with a hyphen. `/work/demo` becomes `-work-demo`.
+
+**Sidechain**
+: A tool call made *inside a spawned subagent* rather than in the main conversation. Excluded from
+counts by default; `tool-usage` opts in with `includeSidechains: true`. `turnCount` counts only
+non-sidechain user prompts.
+
+**Turn**
+: One non-sidechain user prompt. What `turn-count` measures.
+
+---
+
+## What gets evaluated
+
+**Artifact**
+: An instruction file a session used: a **skill** (`SKILL.md`), an **agent definition**, or a
+**project-rules** file (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`). The unit that criteria attach to.
+
+**Artifact resolution**
+: Mapping each reference in a trace to a file on disk, deterministically — trace content plus
+filesystem lookup, never a model. See [Account for every artifact](/agentevals/declare/coverage/).
+
+**Coverage**
+: The record of every artifact a session referenced and whether it resolved. Reported as a table by
+every reporter. An unresolved reference is a coverage row plus a warning, never a failing eval.
+
+**Built-in agent**
+: An agent that ships with the CLI and has no definition file: `general-purpose`, `claude`,
+`Explore`, `Plan`, `statusline-setup`, `fork`. Always shows as unresolved, by design.
+
+---
+
+## What is asserted
+
+**Criterion**
+: One named check declared in an artifact's `metadata.evals` frontmatter. Either a string
+(shorthand for a judged assertion) or an object selecting a grader. See the
+[criteria schema](/agentevals/reference/criteria-schema/).
+
+**Assertion**
+: The sentence a criterion asserts held during the session. The thing a grader or the judge decides.
+
+**Implicit eval**
+: The single judged eval an artifact gets when it declares **no** criteria, named
+`adheres-to-artifact`. Why a first run says something with zero configuration.
+
+**Severity**
+: `error`, `warning`, or `info`. **Only `error` findings fail an eval**; the other two report and
+pass. Defaults to `error`.
+
+**Type**
+: `regression` (protects behavior that already works) or `capability` (probes a boundary and is
+*expected* to fail sometimes). Reported, never enforced. Added in artifact-evals `0.2`.
+
+**Eval plan**
+: The internal pairing of one criterion with one artifact, ready to be graded. Its fingerprint —
+assertion, evidence, examples, and artifact content — is part of the judge cache key.
+
+---
+
+## How it is decided
+
+**Grader**
+: The mechanism that decides a criterion. `llm` uses the ensemble judge; the other seven kinds are
+deterministic. See the [grader reference](/agentevals/reference/graders/).
+
+**Deterministic grader**
+: One that decides from the trace alone — no model call, no cost, same answer every time.
+`tool-usage`, `skill-invoked`, `file-access`, `turn-count`, `cost`, `regex`, `json-output`.
+
+**Whole-session grader**
+: `turn-count`, `cost`, and `json-output`, which measure the entire session rather than one
+artifact's slice of it. Never proposed by `fill`, because a limit declared inside one artifact
+silently constrains everything.
+
+**Finding**
+: One problem a deterministic grader reports: an eval name, an artifact, a message, and a severity.
+
+**Judge**
+: The LLM-as-judge path. N independent runs at temperature 0, combined by consensus and routed
+through confidence zones. See [How the judge decides](/agentevals/judge/).
+
+**Ensemble**
+: The N independent judge runs for one criterion. Three by default (`judge.ensembleRuns`).
+
+**Verdict**
+: One run's structured answer: `claim`, `observed`, `match` (`pass` / `fail` / `partial`),
+`confidence`, and `reasoning`.
+
+**Errored run**
+: A judge run that produced no valid verdict. It counts against consensus and can push an eval to
+review — **never** to a silent pass.
+
+**Consensus**
+: The tally across an ensemble: vote counts, a majority `verdict`, `agreement`, and
+`meanConfidence`. `partial` counts as a failure for the binary outcome.
+
+**Zone**
+: What turns consensus into an outcome: `auto-pass`, `auto-fail`, or `human-review`. Requires
+**unanimity plus** a mean-confidence floor (`judge.zones`, default `0.8`). Note that `agreement` is
+reported but does not route the outcome.
+
+---
+
+## What comes out
+
+**Outcome**
+: The result of one eval. One of five:
+
+| Outcome | Meaning | Fails the run? |
+|---|---|---|
+| `pass` | the criterion held | no |
+| `fail` | violated by an `error`-severity finding | yes |
+| `error` | the check itself broke | yes |
+| `needs-review` | the judge did not reach confident agreement | yes, by default |
+| `skipped` | the check did not run; a reason is always given | no |
+
+**Report**
+: The output of a run, in `human`, `json`, or `markdown`. The JSON form is the documented contract.
+See [Reports & exit codes](/agentevals/reference/report-and-exit-codes/).
+
+**History**
+: An append-only JSONL log of run summaries, written by `--history`, used to compare a run against
+the previous one for the same session.
+
+**Regression**
+: A defined event: an eval that was `pass` in the previous run and is now `fail` or `error`.
+
+---
+
+## Authoring and extending
+
+**`fill`**
+: The authoring command that proposes criteria for a project's artifacts and writes those that
+survive the gate. **The only command that writes.** Never writes project rules.
+
+**Gate**
+: The ordered checks a proposal must survive: duplicate name → grader allowed for the artifact type
+→ valid options → grounded target → confidence → per-artifact cap. **Confidence is last**, and never
+overrides the checks before it.
+
+**Needs sharpening**
+: A `fill` report entry naming an instruction too vague to test. A to-do for the artifact, not a
+diagnostic to dismiss.
+
+**Vocabulary**
+: The set of tool and skill names that exist in a project, used to reject proposals naming things
+that are not there.
+
+**Grader contract**
+: What a custom grader must implement: `grade()` **and** `validateOptions()`. A grader missing the
+second can never be proposed by `fill`. See [Custom graders](/agentevals/extend/custom-graders/).
