@@ -1,0 +1,5 @@
+# The docs site is a nested npm project with its own dependency tree, kept out of
+# the published package (package.json `files` is dist + schemas only).
+node_modules/
+dist/
+.astro/

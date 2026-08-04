@@ -89,4 +89,66 @@ describe("reporters", () => {
     expect(out).toContain("## Artifact coverage");
     expect(out).toContain("**2 eval(s)**");
   });
+
+  // Project rules resolve as one aggregated entry covering several files
+  // (CLAUDE.md *and* AGENTS.md), so it is resolved with no single `path`. Every
+  // reporter has to render that shape without inventing a location for it.
+  describe("a resolved coverage entry with no single path", () => {
+    const aggregated: RunReport = {
+      ...report,
+      coverage: [
+        {
+          ref: "project rules",
+          kind: "project-rules",
+          resolved: true,
+          tried: ["C:\\work\\demo\\CLAUDE.md", "C:\\work\\demo\\AGENTS.md"],
+        },
+      ],
+    };
+
+    it("markdown renders an empty location, never the string undefined", () => {
+      const out = render(aggregated, "markdown");
+      expect(out).not.toContain("undefined");
+      expect(out).toContain("| yes | project-rules | project rules |  |");
+    });
+
+    it("human renders an empty location, never the string undefined", () => {
+      const out = render(aggregated, "human");
+      expect(out).not.toContain("undefined");
+    });
+
+    // `ref` comes straight from the trace (a skill name or subagent_type), so a
+    // pipe in it must not be able to break the table it is rendered into —
+    // markdown reports get pasted into PR comments.
+    it("escapes pipes so a coverage row keeps its column count", () => {
+      const piped: RunReport = {
+        ...aggregated,
+        coverage: [
+          {
+            ref: "weird|name",
+            kind: "skill",
+            resolved: false,
+            tried: [],
+            note: "a | b",
+          },
+        ],
+      };
+      const out = render(piped, "markdown");
+      const header = out.split("\n").find((l) => l.startsWith("| Resolved"))!;
+      const row = out.split("\n").find((l) => l.includes("weird"))!;
+      const cells = (line: string) => line.split(/(?<!\\)\|/).length - 2;
+      expect(cells(row)).toBe(cells(header));
+    });
+
+    it("falls back to the note when one is present", () => {
+      const withNote: RunReport = {
+        ...aggregated,
+        coverage: [{ ...aggregated.coverage[0]!, note: "several files" }],
+      };
+      expect(render(withNote, "markdown")).toContain(
+        "| yes | project-rules | project rules | several files |",
+      );
+      expect(render(withNote, "human")).toContain("several files");
+    });
+  });
 });

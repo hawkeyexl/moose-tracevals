@@ -1,0 +1,274 @@
+---
+title: Grader reference
+description: All seven deterministic graders, with their options, defaults, validation rules, and the exact message each one emits when it fails.
+sidebar:
+  order: 4
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+**Scope:** the deterministic graders: every kind, its options, and what it emits. The judged
+grader (`llm`) is covered in [How the judge decides](/agentevals/judge/). Source of truth:
+`src/graders/`.
+
+A deterministic grader decides its question **from the trace alone**: no model call, no cost, and
+the same answer every time. Prefer one over the judge whenever it can answer the same question.
+
+## Shared behavior
+
+**Options are validated before grading.** Every grader validates its own options, so a malformed
+criterion produces an `error` outcome that names the offending option:
+
+```
+  ERROR  fix-bug › forbidden-tool
+         tool-usage: options.expect must be one of: used, not-used
+```
+
+Validation happens twice: at run time, and again when `fill` proposes a criterion. That second pass
+is why a grader that cannot validate its options can never be proposed.
+
+**Only `error` severity fails an eval.** A finding at `warning` or `info` is reported and the eval
+passes. Severity is set per criterion; see the
+[criteria schema](/agentevals/reference/criteria-schema/).
+
+### Shared validation messages
+
+| Message | Cause |
+|---|---|
+| `options.<key> is required` | a required option is absent |
+| `options.<key> must be one of: a, b` | an enum option has an unrecognized value |
+| `options.<key> must be a finite number` | a numeric option is not a number, or is `NaN`/infinite |
+| `options.<key> must be a whole number` | a numeric option needs an integer |
+| `options.<key> must be at least <n>` | a numeric option is below its floor |
+| `options.<key> must be a boolean` | a boolean option is not one |
+| `options.<max> must be greater than or equal to options.<min>` | inverted bounds |
+| `at least one of options.a or options.b is required` | a grader needs at least one bound and got none |
+
+---
+
+## `tool-usage`
+
+Whether a tool was used, avoided, or used within count bounds.
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `tool` | string | **required** | Tool name, matched exactly — `Bash`, `Read`, `Write`, `Edit`, `Agent`, `Skill`, an `mcp__*` name. |
+| `expect` | `used` \| `not-used` | `used` | Direction of the assertion. |
+| `min` | integer ≥ 0 | — | Minimum call count. |
+| `max` | integer ≥ 0 | — | Maximum call count. |
+| `includeSidechains` | boolean | `false` | Count tool calls made inside spawned subagents. |
+
+```yaml
+- name: forbidden-tool
+  assertion: The session never ran shell commands; this skill is edit-only.
+  grader: tool-usage
+  options: { tool: Bash, expect: not-used }
+```
+
+**Sidechains.** By default only the main session's tool calls are counted. A subagent's calls are
+sidechain calls, so a criterion on an *agent definition* usually wants `includeSidechains: true`.
+`fill` sets it automatically when proposing a `tool-usage` criterion on an agent.
+
+**Failure messages**
+
+| Message |
+|---|
+| `tool <tool> was used <n> time(s) but must not be` |
+| `tool <tool> was never used` |
+| `tool <tool> was used <n> time(s); at least <min> required` |
+| `tool <tool> was used <n> time(s); at most <max> allowed` |
+
+**Validation.** `tool` required; `expect` must be a valid enum value; `min`/`max` must be
+non-negative integers with `min ≤ max`. Two contradictions are caught up front, so you never get an
+unsatisfiable check:
+
+- `options.min is unsatisfiable with expect: not-used`
+- `options.max of 0 is unsatisfiable with expect: used`
+
+---
+
+## `skill-invoked`
+
+Whether a named skill was invoked. Detects both `Skill` tool calls and `/command` injections.
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `skill` | string | **required** | Skill name as it appears in the trace, including any `plugin:skill` prefix. |
+| `expect` | `used` \| `not-used` | `used` | Direction of the assertion. |
+
+**Failure messages**
+
+| Message |
+|---|
+| `skill <skill> was never invoked` |
+| `skill <skill> was invoked but must not be` |
+
+<Aside title="Not available on skills or agents">
+`fill` never proposes `skill-invoked` on a skill or an agent definition: a skill asserting it was
+itself invoked is permanently green. It is allowed on project rules, where "this workflow must go
+through the review skill" is a real assertion.
+</Aside>
+
+---
+
+## `file-access`
+
+Whether a file was read, written, or edited.
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `path` | string | **required** | A repository-relative **suffix**, not an absolute path. |
+| `op` | `read` \| `write` \| `edit` | any op | Restrict to one operation. |
+| `expect` | `accessed` \| `not-accessed` | `accessed` | Direction of the assertion. |
+
+**Matching is suffix-based, separator-normalized, and case-insensitive**, so a criterion written on
+one platform works on another. `src/app.ts` matches
+`C:\work\demo\src\app.ts` and `/home/you/demo/src/app.ts` alike.
+
+```yaml
+- name: touches-migrations
+  assertion: The session must not edit database migrations.
+  grader: file-access
+  options: { path: db/migrations, op: edit, expect: not-accessed }
+```
+
+**Failure messages**
+
+| Message |
+|---|
+| `file <path> was never accessed (op: <op>)` |
+| `file <path> was accessed (op: <op>) but must not be` |
+
+**Validation.** `path` required; `op` and `expect` must be valid enum values. `fill` additionally
+rejects an absolute path: `options.path must be a repository-relative suffix, not "<path>"`.
+
+---
+
+## `turn-count`
+
+Whether the conversation stayed within bounds. A turn is a non-sidechain user prompt.
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `min` | integer ≥ 0 | — | Minimum turns. |
+| `max` | integer ≥ 0 | — | Maximum turns. |
+
+At least one of `min` or `max` is required.
+
+**Failure messages**
+
+| Message |
+|---|
+| `<n> turn(s); at most <max> allowed` |
+| `<n> turn(s); at least <min> required` |
+
+<Aside title="A whole-session grader">
+`turn-count`, `cost`, and `json-output` measure the **entire session** rather than one artifact's
+slice of it. A limit declared inside one skill silently constrains everything the session did, which
+is why `fill` never proposes them. Declare them on purpose, and preferably in one place.
+</Aside>
+
+---
+
+## `cost`
+
+Whether the session stayed within a spending or token budget.
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `maxUsd` | number ≥ 0 | — | Maximum session cost in USD. |
+| `maxTokens` | number ≥ 0 | — | Maximum input + output tokens. |
+
+At least one is required. Each budget is evaluated **independently**, so an unavailable one does not
+suppress a checkable one.
+
+**Failure messages**
+
+| Message |
+|---|
+| `session cost $<x.xxxx>; at most $<maxUsd> allowed` |
+| `session used <n> tokens; at most <maxTokens> allowed` |
+
+**Skips when it cannot tell.** Claude Code session files do not carry cost data; only `claude -p`
+stream-json transcripts do. When no configured budget is checkable, the eval is skipped with the
+reason spelled out:
+
+```
+trace carries insufficient cost data: no cost data (maxUsd not checkable)
+```
+
+That is deliberate: a budget check that cannot see the numbers reports honestly instead of passing
+by default.
+
+---
+
+## `regex`
+
+Whether a pattern appears in the session's text.
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `pattern` | string | **required** | A JavaScript regular expression source. |
+| `flags` | string | — | Regular expression flags, e.g. `i`, `m`. |
+| `on` | `assistant` \| `user` \| `all` | `assistant` | Which text to search. |
+| `expect` | `match` \| `no-match` | `match` | Direction of the assertion. |
+
+**Failure messages**
+
+| Message |
+|---|
+| `pattern /<pattern>/ never matched <on> text` |
+| `pattern /<pattern>/ matched <on> text but must not` |
+
+**Validation.** `flags` is checked on its own first, then the pattern is compiled **with** those
+flags, so an invalid flag is reported as a flag problem instead of a confusing pattern error:
+
+- `options.flags must be a string`
+- `options.flags is invalid: <detail>`
+- `options.pattern is not a valid regular expression: <detail>`
+
+---
+
+## `json-output`
+
+Whether the session's final assistant message is JSON matching a schema.
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `schema` | object | **required** | A JSON Schema the output must validate against. |
+
+```yaml
+- name: emits-report
+  assertion: The session's final message is a report object.
+  grader: json-output
+  options:
+    schema:
+      type: object
+      required: [status, findings]
+      properties:
+        status: { enum: [ok, failed] }
+        findings: { type: array }
+```
+
+**Failure messages**
+
+| Message |
+|---|
+| `session produced no assistant text to validate` |
+| `final assistant output is not valid JSON` |
+| one finding per schema violation, from the validator |
+
+**Validation.** The option is shape-checked up front
+(`options.schema is required and must be a JSON Schema object`), and the schema is compiled at grade
+time. A schema that fails to compile becomes an options error instead of a crash.
+
+Also a whole-session grader: it looks at the last assistant message of the entire session, so a
+criterion declared on one of several artifacts still measures the same final output.
+
+---
+
+## Custom graders
+
+The registry accepts new kinds at run time via `registerGrader()`. A grader must implement both
+`grade()` and `validateOptions()`: one that cannot validate its own options can never be proposed by
+`fill`. The built-in graders above are the reference implementations.

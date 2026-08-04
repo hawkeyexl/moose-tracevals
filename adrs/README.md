@@ -20,3 +20,4 @@ Every **behavior change** in agentevals ships with an ADR here. The ADR records 
 | [01004](01004-validate-grader-options-up-front.md) | Validate grader options up front, not only while grading | accepted |
 | [01005](01005-fill-proposes-criteria-at-authoring-time.md) | `fill` proposes criteria at authoring time, with deterministic graders and a confidence gate | accepted |
 | [01006](01006-take-inference-from-the-shared-library-not-docevals.md) | Take the inference layer from `@hawkeyexl/inference`, not from docevals | accepted |
+| [01007](01007-ship-a-cuj-first-documentation-site.md) | Ship a CUJ-first documentation site, with a committed content strategy and mechanical drift gates | accepted |

@@ -1,0 +1,156 @@
+---
+title: Exit codes & reports
+description: The 0/1/2 exit-code contract, why needs-review counts as a failure by default, and the three report formats you can keep from a run.
+sidebar:
+  order: 2
+---
+
+import { Aside, LinkCard, CardGrid } from '@astrojs/starlight/components';
+
+**Scope:** the contract a pipeline depends on: what the process returns and what it can leave
+behind. Installing the gate is [Add agentevals to CI](/agentevals/ci/); the full field-by-field
+report structure is in the
+[reference](/agentevals/reference/report-and-exit-codes/).
+
+## The exit-code contract
+
+| Code | Meaning | What it tells you |
+|---|---|---|
+| `0` | every eval passed or was skipped | Nothing to do. |
+| `1` | some eval failed, errored, or needs review | **The agent session** did something worth looking at. |
+| `2` | agentevals could not run | **The tool** could not do its job — bad usage, an unreadable trace, an unknown format, a nonexistent path. |
+
+The `1` versus `2` distinction is the most useful thing on this page. `1` means the check worked and
+the answer was bad; `2` means you never got an answer. A pipeline that treats them identically will
+eventually report a broken trace path as an adherence violation.
+
+On `2`, the message is written to stderr and prefixed:
+
+```
+agentevals: no trace given; pass a trace file or run `agentevals list`
+```
+
+`fill` uses the same contract: `0` normally, `1` when any artifact result has status `error`, `2`
+for operational failures, including a numeric flag out of range.
+
+{/* test {"testId":"exit-code-contract","description":"The documented exit codes hold against the fixture corpus."} */}
+{/* step {"description":"A run with a failing eval exits 1.","runShell":{"command":"agentevals run test/fixtures/traces/claude-session.jsonl --project test/fixtures/project --deterministic-only","exitCodes":[1]}} */}
+{/* step {"description":"A dry-run fill with no errored artifact exits 0.","runShell":{"command":"agentevals fill test/fixtures/project --provider mock --dry-run --no-cache","exitCodes":[0]}} */}
+{/* step {"description":"An operational error exits 2 and names itself on stderr.","runShell":{"command":"agentevals fill ./does-not-exist --provider mock --dry-run","exitCodes":[2],"stdio":"agentevals:"}} */}
+{/* test end */}
+
+## The third outcome
+
+An eval has five possible outcomes, not two:
+
+| Outcome | Meaning | Counts as failure? |
+|---|---|---|
+| `pass` | the criterion held | no |
+| `fail` | the criterion was violated | yes |
+| `error` | the check itself broke | yes |
+| `needs-review` | the judge did not reach confident agreement | **yes, by default** |
+| `skipped` | the check did not run | no |
+
+`needs-review` is the one that surprises pipelines. It is a **designed** outcome: when an ensemble
+of judge runs does not land confidently in the pass or fail zone, agentevals declines to decide and
+routes the eval to a human. Errored judge runs count against consensus, which means they can push an
+eval into review. They can never push one into a silent pass.
+
+By default that counts as a failure, on the reasoning that an unreviewed ambiguous result should not
+merge quietly. If your pipeline has somewhere better to send those, change it:
+
+```yaml title="agentevals.config.yaml"
+failOnNeedsReview: false
+```
+
+Now `needs-review` no longer contributes to a non-zero exit. It still appears in the report and in
+the summary counts, so you can surface it without blocking on it.
+
+<Aside type="tip" title="Decide this before you meet it">
+Pick a policy when you install the gate. Meeting `needs-review` for the first time as a red build
+nobody can explain is the avoidable version of this.
+</Aside>
+
+`skipped` never fails a run, and it has several unrelated causes: a deterministic-only run, an
+exhausted cost budget, a trace with no usage data for a `cost` check, or an artifact that opted out. Each is
+listed with its reason in the report. See
+[Read a failing eval](/agentevals/triage/#why-something-was-skipped).
+
+## Keep the report
+
+`run` writes its report to stdout in one of three formats, and `--output` additionally writes it to
+a file.
+
+```bash
+npx agentevals run <trace> --format markdown --output agentevals-report.md
+```
+
+| Format | Use it for |
+|---|---|
+| `human` (default) | reading in a terminal — colored, with vote splits on non-passing judged evals |
+| `json` | anything programmatic; the full report structure |
+| `markdown` | a build summary or a PR comment |
+
+The markdown format renders as tables:
+
+```markdown
+# agentevals report
+
+- **Trace**: `/path/to/session.jsonl`
+- **Source**: claude-code (claude-opus-4-8)
+- **Project**: `/work/demo-project`
+- **Turns**: 2
+
+## Evals
+
+| Outcome | Artifact | Eval | Grader | Detail |
+|---|---|---|---|---|
+| pass | fix-bug | used-read | tool-usage |  |
+| fail | fix-bug | forbidden-tool | tool-usage | tool Bash was used 1 time(s) but must not be |
+| skipped | CLAUDE.md | adheres-to-artifact (implicit) | llm | llm evals skipped (deterministic-only run) |
+
+## Artifact coverage
+
+| Resolved | Kind | Ref | Where |
+|---|---|---|---|
+| yes | skill | fix-bug | `/work/demo-project/.claude/skills/fix-bug/SKILL.md` |
+| no | agent | Explore | built-in agent (no definition file) |
+| yes | project-rules | project rules |  |
+
+## Warnings
+
+- 1 unparseable JSONL line(s) were skipped
+
+**7 eval(s)** — 1 pass, 1 fail, 0 error, 0 needs-review, 5 skipped.
+```
+
+The last row has an empty location on purpose. Project rules resolve as one aggregated entry
+covering several files, so it is resolved with no single path; every location it checked is in the
+entry's `tried` list. See
+[Reports & exit codes](/agentevals/reference/report-and-exit-codes/#the-location-shown-for-an-entry).
+
+`--format json` emits the same run as a structured document: trace metadata, per-eval outcomes with
+findings and consensus, the coverage list including every location that was tried, warnings, summary
+counts, cost, and duration. Every field is documented in
+[Reports & exit codes](/agentevals/reference/report-and-exit-codes/).
+
+<Aside title="Capture output rather than composing it">
+Both examples above were produced by running the CLI against this repository's committed fixtures,
+and the commands that produce them are re-run on every push. A hand-written sample output is a
+sample that will eventually be wrong.
+</Aside>
+
+## Where to go next
+
+<CardGrid>
+  <LinkCard
+    title="The full report structure"
+    description="Every field in the JSON report, the history file format, and what each outcome carries."
+    href="/agentevals/reference/report-and-exit-codes/"
+  />
+  <LinkCard
+    title="Decide whether to trust the judge"
+    description="Why needs-review exists, how consensus is computed, and what an errored run does to a verdict."
+    href="/agentevals/judge/"
+  />
+</CardGrid>

@@ -1,0 +1,178 @@
+---
+title: Fill in criteria across a project
+description: Use fill to propose criteria for every skill, agent, and rules file in a project — understand the gate that gets applied, and review the diff before anything is written.
+sidebar:
+  order: 2
+---
+
+import { Steps, Aside, LinkCard, CardGrid } from '@astrojs/starlight/components';
+
+**Scope:** bulk authoring with `fill`, the one command in agentevals that writes. This page assumes
+the vocabulary from [Declare what to check](/agentevals/declare/) and is about volume and trust.
+
+## What `fill` does
+
+`fill` scans a project for instruction artifacts, asks a model to extract the criteria each
+artifact's own instructions already imply, and appends the ones that survive a gate. It needs no
+trace.
+
+This is the only command that touches your files, so here is exactly what it refuses to do:
+
+- **It never modifies an existing criterion.** A name collision fails the run.
+- **It only rewrites the frontmatter block.** Everything from the closing `---` onward is
+  byte-identical, including CRLF line endings and a byte-order mark if you had one.
+- **It never writes project rules.** See [below](#project-rules-are-never-written).
+- **It is never called by `run`.** Evaluation is read-only. This is a separate authoring step you
+  invoke on purpose.
+
+## Dry-run first
+
+Always. This is the fastest way to see what the tool thinks of your artifacts with no consequence:
+
+```bash
+npx agentevals fill --dry-run
+```
+
+```
+proposed  .claude/agents/doc-writer.md  +1 (reads-before-editing 0.90) — dry run, not written
+          below 0.7: explains-its-reasoning 0.30
+          needs sharpening: "Produce high-quality work." — "high-quality" has no measurable bar, so no session could fail it
+proposed  .claude/skills/fix-bug/SKILL.md  +1 (reads-before-editing 0.90) — dry run, not written
+          below 0.7: explains-its-reasoning 0.30
+          needs sharpening: "Produce high-quality work." — "high-quality" has no measurable bar, so no session could fail it
+proposed  AGENTS.md  +1 (reads-before-editing 0.90) — project rules are never written; copy what you want
+proposed  CLAUDE.md  +1 (reads-before-editing 0.90) — project rules are never written; copy what you want
+
+Threshold 0.7 · 4 criteria proposed, none written (dry run)
+```
+
+{/* Doc Detective inline tests: run the documented fill workflow against the
+    committed fixture project. --dry-run is load-bearing here: CI separately
+    asserts the fixture corpus is byte-identical afterwards. */}
+{/* test {"testId":"fill-dry-run","description":"A dry-run fill proposes criteria and writes nothing."} */}
+{/* step {"description":"The dry run succeeds and reports the confidence threshold.","runShell":{"command":"agentevals fill test/fixtures/project --provider mock --dry-run --no-cache","exitCodes":[0],"stdio":"none written (dry run)"}} */}
+{/* step {"description":"Project rules are proposed but never written.","runShell":{"command":"agentevals fill test/fixtures/project --provider mock --dry-run --no-cache","exitCodes":[0],"stdio":"project rules are never written"}} */}
+{/* step {"description":"A below-threshold proposal is reported rather than silently dropped.","runShell":{"command":"agentevals fill test/fixtures/project --provider mock --dry-run --no-cache","exitCodes":[0],"stdio":"below 0.7"}} */}
+{/* test end */}
+
+## Read the proposals
+
+Each line is one artifact. Reading left to right:
+
+- **`proposed` / `filled` / `skipped` / `no-op` / `error`**: what happened to this artifact.
+  `proposed` means nothing was written, either because you passed `--dry-run` or because it is a
+  project-rules file.
+- **`+1 (reads-before-editing 0.90)`**: how many criteria were accepted, with each name and the
+  model's self-reported confidence.
+- **`below 0.7: …`**: proposals rejected for confidence, named so you can see what you are missing.
+- **`needs sharpening: …`**: an instruction too vague to test. See
+  [below](#instructions-that-cannot-be-tested).
+
+## Why a proposal was rejected
+
+Here is where intuition misleads. Confidence *feels* like the filter, so lowering the threshold
+feels like it should let more criteria through. It does not. Confidence is the **last** of six
+gates, and **no confidence score overrides any of the five before it**.
+
+Proposals are checked in this order:
+
+<Steps>
+
+1. **`duplicate-name`**: a criterion by that name already exists on the artifact.
+
+2. **`grader-not-allowed`**: the grader's scope does not fit this artifact type. Each type has an
+   allowlist:
+
+   | Artifact type | Graders it may use |
+   |---|---|
+   | skill | `llm`, `tool-usage`, `file-access`, `regex` |
+   | agent | `llm`, `tool-usage`, `file-access` |
+   | project rules | `llm`, `skill-invoked`, `tool-usage` |
+
+   Two exclusions are deliberate. `cost`, `turn-count`, and `json-output` are **whole-session**
+   graders: a budget declared inside one skill would silently constrain the entire session, so they
+   are never proposed. And `skill-invoked` is excluded from skills and agents, because a skill
+   asserting that it was itself invoked is permanently green.
+
+3. **`invalid-options`**: the grader itself refused the options. Every grader validates its own
+   options, and a grader that cannot do so is rejected outright.
+
+4. **`ungrounded-target`**: the proposal names something that does not exist here. A tool that is
+   absent from the project's vocabulary, a skill the scan never found, or an absolute file path
+   where a repository-relative suffix belongs.
+
+5. **`low-confidence`**: and only now, below `--confidence` (default `0.7`).
+
+6. **Cap.** Survivors are sorted by confidence and truncated to `--max-criteria` (default `8`).
+   The cap counts **existing criteria too**, so an artifact already carrying eight gets none. The
+   rest are reported as `over per-artifact cap`, so nothing disappears quietly.
+
+</Steps>
+
+That ordering is the point: a high-confidence proposal naming a tool your project does not have is
+still rejected. Confidence can only lose you a criterion, never win you one.
+
+<Aside type="tip" title="Re-gating is free">
+The cache stores the raw, **pre-gating** proposal. Re-running with a different `--confidence` or
+`--max-criteria` re-gates the cached proposals without another model call.
+</Aside>
+
+## Instructions that cannot be tested
+
+The `needs sharpening` notes are the most valuable thing on this page and the easiest to skim past.
+
+When `fill` meets an instruction too vague to decide, such as *"Produce high-quality work."*, it
+says so instead of converting it into an assertion that can never fail. A soft criterion inflates
+your pass rate and hides the fact that nothing is being checked.
+
+**Treat these as a to-do list for the artifact.** The fix is upstream: rewrite the instruction so a
+session could observably fail it. `"high-quality" has no measurable bar` is telling you the
+instruction does no work.
+
+## Write and review
+
+Drop `--dry-run` to write:
+
+```bash
+npx agentevals fill
+```
+
+Everything lands in a reviewable diff. Read it before you commit it. The confidence score is the
+model's opinion of its own proposal; you are the last gate.
+
+Useful knobs:
+
+```bash
+npx agentevals fill --confidence 0.85 --max-criteria 4 --dry-run
+```
+
+Confidence and rationale are **report-only**: shown to you, never written into the artifact. Newly
+written criteria are always `type: regression`, the conservative default; see
+[capability vs regression](/agentevals/reference/criteria-schema/).
+
+## Project rules are never written
+
+`CLAUDE.md`, `AGENTS.md`, and `GEMINI.md` get proposals printed for you to copy by hand. They are
+never written automatically. That is a design decision, and here is the reasoning.
+
+Project rules are read by the agent **before it acts**. A criterion written into that file would
+tell the agent exactly what it is about to be measured on, which is teaching to the test. The
+measurement stops meaning anything the moment the subject can read it.
+
+So the proposals are printed, and you decide which ones to carry over by hand. The reasoning is
+recorded in [ADR 01005](https://github.com/hawkeyexl/agentevals/blob/main/adrs/01005-fill-proposes-criteria-at-authoring-time.md).
+
+## Where to go next
+
+<CardGrid>
+  <LinkCard
+    title="Check your new criteria fire"
+    description="Run against a session you know violated the rule, and confirm the failure names what actually happened."
+    href="/agentevals/get-started/"
+  />
+  <LinkCard
+    title="Every fill flag"
+    description="--confidence, --max-criteria, --max-cost-usd, --no-cache, --provider, and the JSON report shape."
+    href="/agentevals/reference/cli/"
+  />
+</CardGrid>

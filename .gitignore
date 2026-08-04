@@ -3,3 +3,6 @@ dist/
 .tmp/
 .agentevals/
 *.tsbuildinfo
+# Doc Detective run output. The docs site's own build artifacts are ignored by
+# docs/.gitignore, which keeps that nested project self-contained.
+.doc-detective/

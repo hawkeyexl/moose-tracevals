@@ -1,0 +1,159 @@
+---
+title: How the judge decides
+description: Ensembles, consensus, and confidence zones. The arithmetic behind a judged verdict, and why an errored run can never produce a silent pass.
+sidebar:
+  order: 1
+---
+
+import { Aside, LinkCard, CardGrid } from '@astrojs/starlight/components';
+
+**Scope:** how a judged eval becomes a `pass`, `fail`, or `needs-review`, with the arithmetic. What
+a criterion should assert is [Declare what to check](/agentevals/declare/); every configuration key
+mentioned here is in the [configuration reference](/agentevals/reference/configuration/).
+
+If you are deciding whether to let a judged eval block a merge, this page is the argument. It is
+made with numbers, because numbers are the only form of this argument worth anything.
+
+## One sample is not a measurement
+
+Ask a model once whether a session followed an instruction and you have a sample. agentevals runs
+the question **N independent times**, three by default, each a fresh request with no shared context,
+at **temperature 0**.
+
+Each run returns a structured verdict:
+
+| Field | Meaning |
+|---|---|
+| `claim` | the assertion under evaluation |
+| `observed` | what actually happened in the session, citing specific messages, tool calls, or instructions |
+| `match` | `pass`, `fail`, or `partial` |
+| `confidence` | the model's own 0–1 confidence |
+| `reasoning` | why |
+
+A run that fails to produce a valid verdict, whether from an API failure or malformed JSON after a
+retry, is recorded as an **errored run**. It does not disappear. That single fact is what the rest
+of this page is built on.
+
+## From votes to consensus
+
+The runs are tallied into four buckets: `pass`, `fail`, `partial`, and `error`.
+
+```
+failVotes = fail + partial            // partial counts as fail for the binary outcome,
+                                      // but stays visible in the vote counts
+verdict   = pass > failVotes ? "pass" : "fail"
+graded    = pass + fail + partial     // errored runs are not "graded"
+agreement = max(pass, failVotes) / graded
+meanConfidence = mean confidence across non-errored runs
+```
+
+Two choices here have consequences:
+
+- **`partial` counts as a failure** for the binary outcome. A session that partly followed an
+  instruction did not follow it. The partial votes stay visible in the report, so you can still see
+  the difference between a clean three-nil fail and a genuinely ambiguous one.
+- **A tie goes to `fail`.** `pass > failVotes` is a strict comparison, so an evenly split ensemble
+  does not resolve as a pass. In practice such a split routes to review anyway (see below).
+
+## Confidence zones
+
+Consensus produces numbers. The **zone** turns them into an outcome, and the bar is high:
+
+| Zone | Requires | Outcome |
+|---|---|---|
+| `auto-pass` | **every** run voted `pass` (no fails, no partials, **no errors**) and mean confidence ≥ `judge.zones.autoPass` (default `0.8`) | `pass` |
+| `auto-fail` | **no** run voted `pass`, **no errors**, at least one `fail` or `partial`, and mean confidence ≥ `judge.zones.autoFail` (default `0.8`) | `fail` |
+| `human-review` | anything else | `needs-review` |
+
+Read that table for what it excludes. **Only a unanimous, confident ensemble auto-resolves.** One
+dissenting vote, or one low-confidence run dragging the mean below the threshold, sends the eval to
+a human.
+
+<Aside type="caution" title="An errored run can never produce a silent pass">
+Both auto-resolving zones require zero errored runs. So if a judge run fails, whether the API timed
+out or the model returned unparseable JSON, the eval cannot land in `auto-pass`. The worst it can do
+is push the result to `needs-review`.
+
+This is the invariant to check if you are deciding whether to trust this system: a failure of the
+measuring instrument surfaces as *"a human should look"*, never as *"everything is fine"*.
+</Aside>
+
+One subtlety to absorb before you tune anything: `agreement` is reported, but it does **not** route
+the outcome. Zones are decided by strict unanimity plus `meanConfidence`. An ensemble two-thirds in
+agreement has an `agreement` of `0.67` and goes to review however confident those two runs were.
+
+### A worked example
+
+Three runs on the assertion *"the session reproduced the bug with a failing test before fixing it"*:
+
+| Run | `match` | `confidence` |
+|---|---|---|
+| 1 | `fail` | 0.90 |
+| 2 | `fail` | 0.85 |
+| 3 | `partial` | 0.80 |
+
+```
+votes          = { pass: 0, fail: 2, partial: 1, error: 0 }
+failVotes      = 3
+verdict        = "fail"          (0 > 3 is false)
+graded         = 3
+agreement      = 3 / 3 = 1.0
+meanConfidence = (0.90 + 0.85 + 0.80) / 3 = 0.85
+```
+
+No run voted `pass`, there are no errors, and `0.85 ≥ 0.8`. That is `auto-fail`, reported as
+**`FAIL`**.
+
+Change run 3 to `pass` at 0.95 and nothing auto-resolves. The ensemble is split, so it routes to
+`human-review` and is reported as **`REVIEW`**, even though mean confidence went *up*.
+
+## What the judge cites
+
+For any non-passing judged eval, the human report shows the vote split and the first `observed`
+field:
+
+```
+  REVIEW fix-bug › criterion-3
+         votes pass:1 fail:2 partial:0 error:0 · confidence 0.87
+         The session edited src/app.ts at turn 2 without a preceding test run.
+```
+
+That `observed` line is the evidence, and it is what makes a judged verdict something you can check.
+A verdict citing a specific turn and file can be audited; one that says "the session did not comply"
+cannot.
+
+The prompt asks for exactly that: cited messages, tool calls, and instructions followed or violated.
+It is also why an assertion written so a stranger could adjudicate it produces better verdicts than
+one written as a slogan.
+
+## What it costs
+
+- **Nothing, if you never invoke it.** `--deterministic-only` skips judged evals entirely, and
+  `--provider mock` exercises the pipeline offline.
+- **Nothing extra on a repeat.** Verdicts are cached, keyed on the provider, model, prompt version,
+  run count, temperature, the rendered trace, and the eval plan. Change any of those and you get a
+  fresh judgement instead of a stale replay.
+- **Bounded, if you set a ceiling.** `judge.maxCostUsd` is checked before each eval. Once spent,
+  remaining evals are reported as `skipped` with the budget named, so nothing is dropped silently.
+
+<Aside type="caution" title="A budget is only as good as the price table">
+Cost is computed from a built-in per-model price table. A model the table does not recognize is
+costed at **zero**, which silently disables `maxCostUsd`. If you run a model the table does not
+know, set `pricing` explicitly in your provider config. See
+[configuration](/agentevals/reference/configuration/).
+</Aside>
+
+## Where to go next
+
+<CardGrid>
+  <LinkCard
+    title="Configure runs, zones, and budgets"
+    description="Every judge key — ensembleRuns, temperature, zones, cacheDir, maxCostUsd — with its type and default."
+    href="/agentevals/reference/configuration/"
+  />
+  <LinkCard
+    title="Read a verdict you disagree with"
+    description="What to do when an eval comes back REVIEW or FAIL and you think it is wrong."
+    href="/agentevals/triage/"
+  />
+</CardGrid>

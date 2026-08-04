@@ -1,0 +1,194 @@
+---
+title: CLI reference
+description: Every agentevals command, argument, and flag across run, fill, and list, with defaults, exit codes, and the environment variables that affect them.
+sidebar:
+  order: 2
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+**Scope:** the complete command-line surface. Source of truth: `src/cli.ts`.
+
+```
+agentevals [options] [command]
+
+Commands:
+  run [options] [trace]      Evaluate a trace against the skills and instructions it used
+  fill [options] [paths...]  Propose eval criteria for skills, agent definitions, and
+                             project rules, and write those above the confidence threshold
+  list [options]             List discoverable traces (Claude Code session files)
+  help [command]             display help for command
+
+Options:
+  -V, --version              output the version number
+  -h, --help                 display help for command
+```
+
+`run` is the **default command**: `agentevals <trace>` and `agentevals run <trace>` are equivalent.
+
+{/* Doc Detective inline tests: assert the documented command surface against the
+    built CLI, so a flag rename fails CI instead of silently drifting. */}
+{/* test {"testId":"cli-surface","description":"Every documented command and flag is present in the built CLI."} */}
+{/* step {"description":"The top-level help lists all three commands.","runShell":{"command":"agentevals --help","exitCodes":[0],"stdio":"run [options] [trace]"}} */}
+{/* step {"description":"run exposes the documented flags.","runShell":{"command":"agentevals run --help","exitCodes":[0],"stdio":"--deterministic-only"}} */}
+{/* step {"description":"run's format flag defaults to human.","runShell":{"command":"agentevals run --help","exitCodes":[0],"stdio":"human | json | markdown (default: \"human\")"}} */}
+{/* step {"description":"fill exposes the documented flags.","runShell":{"command":"agentevals fill --help","exitCodes":[0],"stdio":"--confidence <n>"}} */}
+{/* step {"description":"list exposes the documented flags.","runShell":{"command":"agentevals list --help","exitCodes":[0],"stdio":"--all-projects"}} */}
+{/* test end */}
+
+<Aside type="caution" title="Invoking the binary">
+The `bin` this package installs is called `agentevals`, but the **package** is
+`@hawkeyexl/agentevals`, and the unscoped name on npm belongs to an unrelated project. `npx agentevals`
+resolves to this tool only once `@hawkeyexl/agentevals` is installed locally. Otherwise use
+`npx @hawkeyexl/agentevals`.
+</Aside>
+
+## `run`
+
+```
+agentevals run [options] [trace]
+```
+
+Evaluates a trace against the skills, agent definitions, and project-rules files the session used.
+**Read-only**: it never modifies the trace or the artifacts it evaluates.
+
+### Argument
+
+| Argument | Required | Description |
+|---|---|---|
+| `trace` | no | Path to a trace file. Omit it in an interactive terminal to get a picker. |
+
+Omitting `trace` **without** a TTY produces an error instead of a prompt:
+
+```
+agentevals: no trace given; pass a trace file or run `agentevals list`
+```
+
+### Options
+
+| Flag | Argument | Default | Description |
+|---|---|---|---|
+| `--project` | `<dir>` | the trace's recorded `cwd` | Artifact-lookup root. Use it when the session ran somewhere the artifacts no longer live. |
+| `--provider` | `<name>` | `provider.default` (`claude-cli`) | Judge provider: `claude-cli`, `anthropic`, `openai`, `mock`. |
+| `--model` | `<model>` | the selected provider's configured model | Judge model override. |
+| `--runs` | `<n>` | `judge.ensembleRuns` (`3`) | Ensemble runs per judged eval. |
+| `--deterministic-only` | — | off | Skip judged evals entirely. They are reported as `skipped`, not failed. No model call is made. |
+| `--no-cache` | — | cache on | Bypass the judge cache. |
+| `--max-cost-usd` | `<usd>` | `judge.maxCostUsd` (unset) | Judge cost budget for this run. |
+| `-f, --format` | `<format>` | `human` | `human`, `json`, or `markdown`. |
+| `-o, --output` | `<file>` | — | Also write the rendered report to a file. |
+| `--history` | — | off | Append this run to the history file and compare it with the previous run for the same session. |
+
+### Exit codes
+
+| Code | Meaning |
+|---|---|
+| `0` | every eval passed or was skipped |
+| `1` | any `fail` or `error` — and `needs-review`, unless `failOnNeedsReview: false` |
+| `2` | operational error: bad usage, unreadable trace, unknown format |
+
+## `fill`
+
+```
+agentevals fill [options] [paths...]
+```
+
+Proposes eval criteria for the instruction artifacts in a project and writes those that survive the
+gate. **The only command that writes.** `run` never calls it.
+
+### Arguments
+
+| Argument | Required | Description |
+|---|---|---|
+| `paths...` | no | Specific files or directories to fill. Omit to scan `--project`. An explicit file path is taken at its word; an unrecognized filename is treated as project rules. |
+
+A path that does not exist is an operational error:
+
+```
+agentevals: no such file or directory: ./nope
+```
+
+### Options
+
+| Flag | Argument | Default | Description |
+|---|---|---|---|
+| `--project` | `<dir>` | current directory | Project root to scan. |
+| `--dry-run` | — | off | Report proposals without writing them. **Recommended first invocation.** |
+| `--confidence` | `<n>` | `fill.confidenceThreshold` (`0.7`) | Minimum confidence to write, `0`–`1`. |
+| `--max-criteria` | `<n>` | `fill.maxCriteriaPerArtifact` (`8`) | Maximum criteria per artifact, **including existing ones**. |
+| `--max-cost-usd` | `<usd>` | `fill.maxCostUsd` (unset) | Proposal cost budget. |
+| `--no-cache` | — | cache on | Bypass the proposal cache. |
+| `--provider` | `<name>` | `provider.default` | `claude-cli`, `anthropic`, `openai`, `mock`. |
+| `--model` | `<model>` | the selected provider's configured model | Model override. |
+| `-f, --format` | `<format>` | `human` | `human` or `json`. Note: no `markdown` here. |
+
+Numeric flags are range-checked before anything runs. Out of range, or not a number:
+
+```
+agentevals: --confidence must be a number between 0 and 1, got 1.5
+```
+
+### Exit codes
+
+| Code | Meaning |
+|---|---|
+| `0` | every artifact was processed without error |
+| `1` | any artifact result has status `error` |
+| `2` | operational error, including an out-of-range numeric flag |
+
+<Aside title="What fill never does">
+Existing criteria are never modified; a name collision fails the run. Only the YAML frontmatter block
+is rewritten; the body is byte-identical. Project rules (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`) are
+proposed but **never written**. See [Fill in criteria](/agentevals/declare/fill/).
+</Aside>
+
+## `list`
+
+```
+agentevals list [options]
+```
+
+Lists discoverable traces from the Claude Code session store, newest first. Always exits `0` on
+success.
+
+### Options
+
+| Flag | Argument | Default | Description |
+|---|---|---|---|
+| `-p, --project` | `<dir>` | current directory | Scope to one project's sessions. |
+| `-a, --all-projects` | — | off | Scan every project in the session store. |
+| `-l, --limit` | `<n>` | unlimited | Maximum traces to list. |
+| `--json` | — | off | Emit `{ "traces": [...] }` instead of a table. |
+
+Each table entry is three lines: timestamp and first prompt, then project, session id, and size,
+then the file path:
+
+```
+  1. 2026-07-02 00:00  Write a README for this repo.
+     /work/other-project · 22222222-2222-2222-2222-222222222222 · 1KB
+     /home/you/.claude/projects/-work-other-project/22222222-....jsonl
+```
+
+When nothing matches:
+
+```
+No traces found. Pass --all-projects to scan every project, or --project <dir> to scope to one.
+```
+
+### JSON shape
+
+| Field | Type | Description |
+|---|---|---|
+| `file` | string | Absolute path — pass this to `run`. |
+| `mtimeMs` | number | Modification time; the sort key, newest first. |
+| `sizeBytes` | number | File size. |
+| `sessionId` | string? | The session's id, when present in the file. |
+| `project` | string? | The recorded working directory. |
+| `firstPrompt` | string? | First non-sidechain user message, first line, capped at 200 characters. |
+
+## Environment variables
+
+| Variable | Effect |
+|---|---|
+| `AGENTEVALS_HOME` | Overrides the home directory for **both** trace discovery and user-level artifact lookup. A relative value resolves against the current working directory. Use it to make a run reproducible on a shared runner. |
+| `AGENTEVALS_LIVE` | Contributor-only. Set to `1` to include the live judge smoke test in this repository's own suite. Has no effect on the CLI. |

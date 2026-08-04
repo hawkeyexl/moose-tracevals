@@ -1,0 +1,51 @@
+---
+title: Reference
+description: Complete lookup reference for the agentevals CLI, configuration file, deterministic graders, criteria schema, and report formats.
+sidebar:
+  order: 1
+---
+
+import { LinkCard, CardGrid } from '@astrojs/starlight/components';
+
+**Scope:** exhaustive lookup. These pages answer *what are the options?* They do not explain when
+to reach for one. For that, start from a journey: [Get started](/agentevals/get-started/),
+[Declare what to check](/agentevals/declare/), [Add agentevals to CI](/agentevals/ci/), or
+[How the judge decides](/agentevals/judge/).
+
+<CardGrid>
+  <LinkCard
+    title="CLI"
+    description="run, fill, and list: every argument, flag, and default."
+    href="/agentevals/reference/cli/"
+  />
+  <LinkCard
+    title="Configuration"
+    description="Every agentevals.config.yaml key, including the ones with no CLI flag."
+    href="/agentevals/reference/configuration/"
+  />
+  <LinkCard
+    title="Graders"
+    description="All seven deterministic kinds: options, validation rules, and exact failure messages."
+    href="/agentevals/reference/graders/"
+  />
+  <LinkCard
+    title="Criteria schema"
+    description="The metadata.evals frontmatter block, field by field, across both published versions."
+    href="/agentevals/reference/criteria-schema/"
+  />
+  <LinkCard
+    title="Reports & exit codes"
+    description="The human, JSON, and markdown report shapes, the exit-code contract, and the history file."
+    href="/agentevals/reference/report-and-exit-codes/"
+  />
+</CardGrid>
+
+## Reading these pages
+
+- **Defaults are the resolved values.** Every knob flows through the config file, which fills in
+  every default before anything reads it. A CLI flag **overrides** the resolved config instead of
+  bypassing it, so the default shown for a flag is the config default it would replace.
+- **Unknown configuration keys are errors.** The config schema rejects additional properties at
+  every level, so a typo fails loudly instead of being ignored.
+- **Deterministic grader options are validated before grading.** A malformed criterion produces an
+  `error` outcome naming the offending option, never a silent pass.
