@@ -1,6 +1,7 @@
 /** Human-readable terminal report. */
 import pc from "picocolors";
 import type { EvalResult, RunReport } from "../types.js";
+import { coverageLocation } from "./coverage.js";
 
 const OUTCOME_LABEL: Record<EvalResult["outcome"], string> = {
   pass: "PASS",
@@ -62,10 +63,9 @@ export function renderHuman(report: RunReport): string {
   lines.push(pc.bold("Artifact coverage"));
   for (const entry of report.coverage) {
     const mark = entry.resolved ? pc.green("✓") : pc.yellow("○");
-    const detail = entry.resolved
-      ? (entry.path ?? "")
-      : (entry.note ?? `not found (${entry.tried.length} location(s) tried)`);
-    lines.push(`  ${mark} ${entry.kind}: ${entry.ref} ${pc.dim(detail)}`);
+    lines.push(
+      `  ${mark} ${entry.kind}: ${entry.ref} ${pc.dim(coverageLocation(entry))}`,
+    );
   }
 
   if (report.warnings.length > 0) {
