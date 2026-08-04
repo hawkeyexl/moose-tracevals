@@ -1,0 +1,145 @@
+---
+title: Build on agentevals
+description: The intended entry points of the programmatic API, the injection seams that keep your own test suite offline, and where the trace-adapter seam sits.
+sidebar:
+  order: 1
+---
+
+import { Aside, LinkCard, CardGrid } from '@astrojs/starlight/components';
+
+**Scope:** consuming agentevals as a library rather than a CLI. It assumes the vocabulary from the
+journey pages — a custom grader cannot be explained before the
+[built-in graders](/agentevals/reference/graders/) are.
+
+```bash
+npm install @hawkeyexl/agentevals
+```
+
+ESM-only, Node.js 24+, types shipped.
+
+## The front door
+
+The package exports a lot. These are the entry points meant for consumers; everything else is
+reachable but is there to serve the CLI.
+
+| You want to… | Use |
+|---|---|
+| Run a full evaluation | `runEvals(options)` → `RunReport` |
+| Read a trace without evaluating | `parseTraceFile(path)` → `Trace` |
+| Find traces on disk | `discoverTraces(options)` → `TraceListing[]` |
+| Resolve which artifacts a trace used | `resolveArtifacts(trace, options)` |
+| Add a check the built-ins do not cover | `registerGrader(grader)` |
+| Render a report | `render(report, format)` |
+| Load configuration | `loadConfig()` / `parseConfig(raw)` |
+
+```ts
+import { loadConfig, runEvals, render } from "@hawkeyexl/agentevals";
+
+const config = await loadConfig();
+const report = await runEvals({
+  tracePath: "./traces/session.jsonl",
+  projectDir: "./my-repo",
+  config,
+  deterministicOnly: true,
+});
+
+console.log(render(report, "markdown"));
+console.log(report.summary, report.exitCode);
+```
+
+`RunReport` is the same structure `--format json` prints, documented field by field in
+[Reports & exit codes](/agentevals/reference/report-and-exit-codes/). The full export list is in the
+[API reference](/agentevals/reference/api/).
+
+<Aside type="caution" title="`runEvals` needs a judge, or `deterministicOnly`">
+`EngineOptions.judge` is optional in the type but **required unless `deterministicOnly: true`**.
+Omit both and judged evals have nothing to run them.
+</Aside>
+
+## Injection seams
+
+Every place agentevals reaches outside the process is injectable, so anything you build on top can
+keep its own suite hermetic — the same seams this project's tests use.
+
+| Seam | Where | Replaces |
+|---|---|---|
+| `EngineOptions.judge` | `runEvals` | The whole judged path. Pass your own `TraceJudge`, or set `deterministicOnly` and pass nothing. |
+| `EngineOptions.env` | `runEvals` | Environment lookup, including `AGENTEVALS_HOME`. Point artifact resolution at a fixture home. |
+| `ResolveOptions.env` | `resolveArtifacts` | The same, when resolving directly. |
+| `DiscoverOptions.env` | `discoverTraces` | The session store root. |
+| `promptFn` | `pickTrace(options, promptFn)` | The interactive prompt, so the picker is testable without a TTY. |
+| `--provider mock` / `makeJudgeProvider` | judge construction | A real provider that returns a canned verdict with no network call. |
+
+A `TraceJudge` is just a function, so a stub is one line:
+
+```ts
+import { runEvals, type TraceJudge } from "@hawkeyexl/agentevals";
+
+const alwaysPasses: TraceJudge = async (plans) =>
+  plans.map((plan) => ({
+    evalName: plan.evalName,
+    artifact: plan.artifact.path,
+    artifactName: plan.artifact.name,
+    grader: plan.grader,
+    implicit: plan.implicit,
+    outcome: "pass",
+    costUsd: 0,
+    durationMs: 0,
+  }));
+
+const report = await runEvals({ tracePath, config, judge: alwaysPasses });
+```
+
+<Aside title="Pin the home directory in your tests too">
+Artifact resolution reads `~/.claude/skills/`, `~/.claude/agents/`, and the plugin store. Pass
+`env: { AGENTEVALS_HOME: "test/fixtures/home" }` so results do not depend on whose machine the suite
+runs on.
+</Aside>
+
+## Reading traces without evaluating
+
+`parseTraceFile` gives you the normalised model on its own, which is enough for analysis that has
+nothing to do with adherence:
+
+```ts
+import { parseTraceFile } from "@hawkeyexl/agentevals";
+
+const trace = await parseTraceFile("./traces/session.jsonl");
+console.log(trace.turnCount, trace.skillInvocations.map((s) => s.name));
+```
+
+Every field is described in [Traces reference](/agentevals/reference/traces/). Note `usage` is
+absent for Claude Code session files — only stream-json transcripts carry cost.
+
+## The trace-adapter seam
+
+`TraceSource` is a union with one member today, `claude-code`. Support for other formats is
+**deferred rather than rejected**
+([ADR 01003](https://github.com/hawkeyexl/agentevals/blob/main/adrs/01003-claude-code-traces-first-with-an-adapter-seam.md)),
+and the shape a new adapter has to conform to is the normalised `Trace`:
+
+- **Required for anything to work:** `source`, `file`, `cwd`, `events`, `turnCount`, and the derived
+  collections (`toolCalls`, `skillInvocations`, `agentSpawns`, `fileAccesses`, `userMessages`,
+  `assistantTexts`).
+- **Degrades gracefully when absent:** `usage` (the `cost` grader skips with a reason), `model`,
+  `gitBranch`, `sessionId`, `startedAt` / `endedAt`.
+- **Instruction semantics are the adapter's job.** What counts as a "skill" differs between agent
+  tools; the adapter decides, and everything downstream consumes the normalised result.
+
+Adding one is a change to this repository rather than something you can register at runtime — the
+seam is a shape to conform to, not a plugin point.
+
+## Where to go next
+
+<CardGrid>
+  <LinkCard
+    title="Write a custom grader"
+    description="The two-part contract, why option validation is not optional, and how to register one."
+    href="/agentevals/extend/custom-graders/"
+  />
+  <LinkCard
+    title="The export surface, mapped"
+    description="Everything the package exports, grouped, with what each group is for."
+    href="/agentevals/reference/api/"
+  />
+</CardGrid>

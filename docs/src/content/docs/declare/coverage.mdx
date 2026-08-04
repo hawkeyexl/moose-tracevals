@@ -1,0 +1,183 @@
+---
+title: Account for every artifact
+description: Read the artifact coverage table, understand how skills, agents, and project rules are resolved from a trace, and close the gaps it reports.
+sidebar:
+  order: 3
+---
+
+import { Aside, LinkCard, CardGrid } from '@astrojs/starlight/components';
+
+**Scope:** the *denominator* — every instruction file a session referenced, including the ones that
+could not be found. Deciding what to check on a resolved artifact is
+[Declare what to check](/agentevals/declare/).
+
+Every report ends with a coverage section, and it answers a question the eval list cannot:
+**what did you not check?**
+
+```
+Artifact coverage
+  ✓ skill: fix-bug        /work/demo-project/.claude/skills/fix-bug/SKILL.md
+  ○ agent: Explore        built-in agent (no definition file)
+  ○ skill: my-plugin:foo  not found (3 location(s) tried)
+  ✓ project-rules: project rules
+```
+
+{/* Doc Detective inline tests: the coverage states below are produced by running
+    the CLI against this repository's committed fixtures, so a change to
+    resolution or to the coverage renderer fails CI rather than drifting. */}
+{/* test {"testId":"coverage-states","description":"The documented coverage states appear against the fixture corpus."} */}
+{/* step {"description":"A built-in agent is reported as unresolved with an explanatory note.","runShell":{"command":"agentevals run test/fixtures/traces/claude-session.jsonl --project test/fixtures/project --deterministic-only","exitCodes":[1],"stdio":"built-in agent (no definition file)"}} */}
+{/* step {"description":"A resolved skill is reported with the file it resolved to.","runShell":{"command":"agentevals run test/fixtures/traces/claude-session.jsonl --project test/fixtures/project --deterministic-only","exitCodes":[1],"stdio":"skill: fix-bug"}} */}
+{/* test end */}
+
+## The five states
+
+| What you see | Meaning | What to do |
+|---|---|---|
+| `✓` with a path | Resolved and evaluated. | Nothing. |
+| `✓` with no path | Resolved to **several** files. Only project rules do this. | Nothing — see [below](#project-rules-resolve-as-one-entry). |
+| `○ built-in agent (no definition file)` | A built-in agent, which has no file anywhere. | Nothing. Expected. |
+| `○ not found (<n> location(s) tried)` | The trace referenced it; no file matched. | [Close the gap](#fix-an-unresolved-reference). |
+| Absent from the list entirely | The session never referenced it. | Nothing. |
+
+An unresolved reference is **not** a failing eval. It becomes a coverage row plus a warning, so a
+missing plugin never crashes a run or turns a build red on its own. That is deliberate: a skill file
+you do not have is not an adherence violation. It does mean that artifact went unchecked, which is
+exactly what the table is telling you.
+
+## How an artifact is resolved
+
+Resolution is **deterministic** — trace content plus filesystem lookup, with no model involved. The
+trace records which skills were invoked and which agents were spawned; agentevals then looks for the
+matching files in a fixed order and records every location it tried.
+
+### Skills
+
+For a plain reference like `fix-bug`, in order:
+
+1. `<project>/skills/fix-bug/SKILL.md`
+2. `<project>/src/skills/fix-bug/SKILL.md`
+3. `<project>/.claude/skills/fix-bug/SKILL.md`
+4. `<home>/.claude/skills/fix-bug/SKILL.md`
+5. `<home>/.claude/plugins/**/skills/fix-bug/SKILL.md` — searched recursively, because plugin store
+   layouts nest differently
+
+A `plugin:skill` reference **skips steps 1–4** and goes straight to the plugin store, matching on
+the short name with the plugin name required somewhere in the path.
+
+### Agents
+
+1. `<project>/.claude/agents/<name>.md`
+2. `<project>/agents/<name>.md`
+3. `<home>/.claude/agents/<name>.md`
+
+A `plugin:agent` reference looks up the short name.
+
+**Built-in agents are never resolved**, because they have no definition file: `general-purpose`,
+`claude`, `Explore`, `Plan`, `statusline-setup`, and `fork`. They appear as `○` with a note, and
+that is the finished state rather than a problem to fix.
+
+### Project rules
+
+Every directory from the session's working directory **up to the project root** (the git root by
+default, capped at 32 levels), then `<project-root>/.claude/`. In each one it checks `CLAUDE.md`,
+`AGENTS.md`, and `GEMINI.md`.
+
+**All matches are collected**, not just the first. A repository with a root `CLAUDE.md` and a nested
+`AGENTS.md` gets both evaluated.
+
+<Aside title="`--project` when the workspace has moved">
+Resolution starts from the session's recorded `cwd`. If that directory no longer exists — the trace
+came from another machine, or the checkout was moved — point it somewhere else:
+
+```bash
+npx agentevals run <trace> --project ./my-repo
+```
+</Aside>
+
+## Fix an unresolved reference
+
+The coverage entry records **every location it tried**, which is usually the whole diagnosis. In
+JSON output that is the `tried` array:
+
+```bash
+npx agentevals run <trace> --deterministic-only --format json
+```
+
+```jsonc
+{
+  "ref": "my-plugin:foo",
+  "kind": "skill",
+  "resolved": false,
+  "tried": ["/home/you/.claude/plugins/**/skills/foo/SKILL.md"]
+}
+```
+
+Read the list and the cause is usually one of:
+
+- **The plugin is not installed** on the machine running agentevals. Install it, or run with
+  `AGENTEVALS_HOME` pointed at a directory that has it.
+- **The artifact moved** relative to the project — a skill relocated from `skills/` to
+  `.claude/skills/` resolves fine, but one moved outside those roots will not.
+- **The project root is wrong**, so the walk started somewhere unexpected. Set `--project`.
+- **It was renamed** after the session ran. The trace holds the old name; nothing on disk matches.
+
+Each unresolved reference also emits a warning next to the table:
+
+```
+Warnings
+  ! skill "my-plugin:foo" was invoked but no SKILL.md was found (1 location(s) tried)
+```
+
+## Project rules resolve as one entry
+
+Project rules appear as a single row named `project rules` with **no path**, because the entry
+covers however many files matched. Its `tried` array holds every location checked, and each matched
+file is evaluated as its own artifact — which is why `CLAUDE.md` and `AGENTS.md` show up separately
+in the eval list above.
+
+If none matched, the row reads `○ project-rules: project rules  no CLAUDE.md or AGENTS.md found`.
+
+## What the implicit eval covers
+
+A resolved artifact that declares **no** criteria is still evaluated, through one judged eval named
+`adheres-to-artifact`. So a `✓` row always means the artifact was checked, even when you have
+authored nothing for it.
+
+Silence in the eval list therefore means the artifact was never *referenced* by the session, not
+that it was skipped.
+
+## Skip an artifact deliberately
+
+To take an artifact out of evaluation without deleting its criteria:
+
+```yaml
+metadata:
+  evals:
+    skip: true
+```
+
+It is then reported as `skipped` with the reason `artifact skipped via metadata.evals.skip`, which
+keeps it visible rather than silently absent. Full field reference in the
+[criteria schema](/agentevals/reference/criteria-schema/).
+
+## Duplicate references collapse
+
+A skill invoked six times produces **one** coverage row and one set of evals. Deduplication is by
+reference name for coverage, and by resolved path for artifacts — so two references that resolve to
+the same file are evaluated once.
+
+## Where to go next
+
+<CardGrid>
+  <LinkCard
+    title="Trace formats and discovery"
+    description="Which trace formats are supported, how the session store is scanned, and what AGENTEVALS_HOME changes."
+    href="/agentevals/reference/traces/"
+  />
+  <LinkCard
+    title="The full report structure"
+    description="Every field of a CoverageEntry, including tried and note, in the JSON report."
+    href="/agentevals/reference/report-and-exit-codes/"
+  />
+</CardGrid>

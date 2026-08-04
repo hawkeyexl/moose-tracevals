@@ -7,9 +7,9 @@ trigger: "A report shows fewer evals than expected, or an artifact the reader kn
 entry_point: /agentevals/declare/coverage/
 success_criteria: "The reader can account for every artifact the session touched — evaluated, unresolved, or deliberately skipped — and knows how to close the gap for each."
 steps:
-  - { stage: "Read the artifact coverage table", doc: /agentevals/declare/coverage/, exists: false, note: "[GAP] the table is rendered by every reporter and explained nowhere" }
-  - { stage: "Understand how artifacts are resolved from a trace", doc: /agentevals/reference/traces/, exists: false, note: "[GAP] skill invocations, agent spawns, project rules lookup order" }
-  - { stage: "Fix an unresolved reference", doc: "/agentevals/declare/coverage/#unresolved-references", exists: false, note: "[GAP] which locations were tried, and why a built-in agent never resolves" }
+  - { stage: "Read the artifact coverage table", doc: /agentevals/declare/coverage/, exists: true }
+  - { stage: "Understand how artifacts are resolved from a trace", doc: /agentevals/reference/traces/, exists: true }
+  - { stage: "Fix an unresolved reference", doc: "/agentevals/declare/coverage/#fix-an-unresolved-reference", exists: true }
   - { stage: "Know what the implicit eval covers", doc: "/agentevals/declare/#the-implicit-eval", exists: true }
   - { stage: "Skip an artifact deliberately", doc: /agentevals/reference/criteria-schema/, exists: true, note: "the skip flag" }
   - { stage: "Confirm coverage in the report", doc: /agentevals/reference/report-and-exit-codes/, exists: true }
@@ -46,7 +46,6 @@ The reader needs to be able to close a small, closed set of loops:
 The framing that makes this journey coherent: **coverage is the honest answer to "what did you not
 check?"** Surfacing it is a feature.
 
-**Current friction / gap.** Almost entirely unwritten. Every reporter renders a coverage section
-and no page explains what it means. Resolution order — which directories are searched for a skill,
-an agent, or a project-rules file, and in what sequence — exists only in source. This is the
-highest-value gap for the lead persona after launch.
+**Coverage.** No gaps. `declare/coverage/` carries the five states a coverage row can be in, the
+full resolution order for skills, agents, and project rules, and how to diagnose an unresolved
+reference from the `tried` list. `reference/traces/` carries the discovery side.

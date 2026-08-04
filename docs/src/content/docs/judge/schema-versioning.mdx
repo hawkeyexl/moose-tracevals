@@ -1,0 +1,145 @@
+---
+title: Evolve the criteria standard
+description: Pin a published schema version, separate capability probes from regression guards, and roll out a new convention across many repositories without breaking the build.
+sidebar:
+  order: 3
+---
+
+import { Steps, Aside, LinkCard, CardGrid } from '@astrojs/starlight/components';
+
+**Scope:** the criteria block as a versioned contract, and changing it safely. The block's fields
+are in the [criteria schema reference](/agentevals/reference/criteria-schema/); tuning how a judged
+criterion is *decided* is [Calibrate the judge](/agentevals/judge/calibrate/).
+
+## The block is a published contract
+
+The shape of `metadata.evals` is not an implementation detail. It has a resolvable `$id`, it ships
+inside the package, and **two versions coexist** so a consumer can pin one:
+
+```js
+import schema from "@hawkeyexl/agentevals/schemas/artifact-evals-0.2.json" with { type: "json" };
+```
+
+| Version | Adds | Use it when |
+|---|---|---|
+| `0.2` | `type: capability \| regression` | Default. You want probes reported separately from guards. |
+| `0.1` | — | You have tooling pinned to it. Still shipped; identical apart from `type`. |
+
+`0.1` → `0.2` is **additive**: every valid `0.1` block is a valid `0.2` block, so upgrading is a
+no-op for existing artifacts. A released version is never edited in place — a change ships as the
+next version, which is what makes pinning meaningful.
+
+<Aside title="Which do I pin?">
+If you are only authoring criteria, you do not pin anything — agentevals validates against the
+current schema and both versions parse. Pinning matters when *your own tooling* reads or generates
+these blocks and you need the shape to hold still.
+</Aside>
+
+## Separate probes from guards
+
+`type` is the whole reason `0.2` exists, and it answers a question that otherwise makes a pass rate
+meaningless:
+
+| Value | Meaning | A failure means |
+|---|---|---|
+| `regression` | Protects behavior that already works. | Something broke. Act on it. |
+| `capability` | Probes the edge of what the agent can do. **Expected to fail sometimes.** | Information about where the boundary is. |
+
+```yaml
+- name: handles-nested-monorepo
+  assertion: The session located the correct package in a nested workspace without being told.
+  type: capability
+  grader: llm
+```
+
+**Neither changes enforcement.** A failing `capability` criterion still fails its eval and still
+contributes to a non-zero exit code. That restraint is deliberate: a criterion that could not fail
+the build would just be a comment. What the field buys you is the ability to read a report and a
+history log and know that a red probe is not a regression.
+
+New criteria default to `regression`, including everything `fill` writes — the conservative choice,
+since mislabelling a real guard as a probe is the more expensive mistake.
+
+<Aside type="caution" title="`capability` is reported, not excused">
+If you want probes to stop blocking a pipeline, that is a severity decision, not a `type` decision.
+Set `severity: warning` so the finding reports and the eval passes. Use `type` for what the
+criterion *is*, and `severity` for what should happen when it fails.
+</Aside>
+
+## Roll out a convention in stages
+
+The transferable technique, whether you are adding a field, a grader convention, or a tightened
+assertion: **never flip a whole corpus to `error` at once.**
+
+<Steps>
+
+1. **Introduce it at `warning`.** The criterion reports on every run and fails nothing:
+
+   ```yaml
+   - name: cites-a-test-run
+     assertion: The session ran the test suite before declaring the fix complete.
+     severity: warning
+   ```
+
+2. **Measure coverage.** Count how many artifacts carry it, and how often it actually fires:
+
+   ```bash
+   npx agentevals run <trace> --format json \
+     | jq '[.evalResults[] | select(.evalName == "cites-a-test-run")]
+           | group_by(.outcome) | map({(.[0].outcome): length}) | add'
+   ```
+
+3. **Fix the artifacts, not the criterion.** A rule failing everywhere usually means the
+   instructions never said it clearly. This is the step that does the work.
+
+4. **Promote to `error`** once the corpus is ready. Now it gates.
+
+</Steps>
+
+The same ratchet works in reverse for tightening an existing assertion: add the sharper criterion
+under a new name at `warning`, let both run, and remove the old one when the new one is clean.
+
+<Aside title="Why not just tighten in place?">
+Editing an assertion changes the eval plan, which changes the cache key, which re-judges every
+session against a rule that half your artifacts have never been written for. You get a wall of red
+that tells you nothing about whether behavior changed. Adding a second criterion keeps the old
+signal intact while the new one settles.
+</Aside>
+
+## A malformed block fails loudly
+
+Rolling a change across many repositories is survivable mostly because breakage is precise. An
+invalid block is never silently ignored: it produces an eval named `evals-block-valid` with a JSON
+Pointer to the offending field and a source line number.
+
+```
+ERROR  fix-bug › evals-block-valid
+       invalid metadata.evals block: /criteria/1/grader (line 12): must be equal to one of the allowed values
+```
+
+Additional properties are rejected at every level, so a misspelled field is an error rather than a
+key that quietly does nothing. When you roll out a convention and something breaks, you get the
+file, the pointer, and the line.
+
+## Keep names stable
+
+Criterion names are the join key for history: a regression is defined as *this artifact and this
+eval name went from pass to fail*. Renaming a criterion therefore reads as one eval `removed` and
+another `added`, and the trend line resets.
+
+Rename when the meaning genuinely changed. Otherwise leave the name alone and edit the assertion.
+
+## Where to go next
+
+<CardGrid>
+  <LinkCard
+    title="Every criteria field"
+    description="The full metadata.evals block, both published schema versions, and what each field does."
+    href="/agentevals/reference/criteria-schema/"
+  />
+  <LinkCard
+    title="Track it over time"
+    description="The history file, what counts as a regression, and how to compare two runs."
+    href="/agentevals/ci/consume-results/"
+  />
+</CardGrid>

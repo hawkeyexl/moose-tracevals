@@ -13,7 +13,7 @@ steps:
   - { stage: "Find an evaluable session", doc: "/agentevals/get-started/#find-a-session", exists: true, note: "agentevals list; where the session store lives" }
   - { stage: "Run the first evaluation offline", doc: "/agentevals/get-started/#run-your-first-evaluation", exists: true, note: "--deterministic-only, then --provider mock" }
   - { stage: "Read the report", doc: "/agentevals/get-started/#read-the-report", exists: true }
-  - { stage: "Understand artifact coverage", doc: /agentevals/declare/coverage/, exists: false, note: "[GAP] why an artifact appears in the coverage table instead of as an eval" }
+  - { stage: "Understand artifact coverage", doc: /agentevals/declare/coverage/, exists: true }
   - { stage: "Look up a flag", doc: /agentevals/reference/cli/, exists: true }
 ---
 
@@ -46,9 +46,6 @@ Three things must land in order, and each is a place the journey can be lost:
 Priya and Devin both walk this journey but leave it by different doors — she toward declaring
 criteria, he toward CI — so it must end with a fork, not a single next step.
 
-**Current friction / gap.** Today this journey does not exist in any form: the README shows
-`node dist/cli.js`, so there is no install path at all for someone consuming the published package,
-and `agentevals list` — the only practical way to find a trace — is undocumented outside of
-`--help`. The one `[GAP]` here is artifact coverage: an unresolved skill reference shows up in a
-coverage table rather than as a failing eval, and a first-time reader has no way to know that is
-working as designed.
+**Coverage.** No gaps. `get-started/` carries install, trace discovery, the first offline run, and a
+line-by-line read of the report. `declare/coverage/` closes the last step: why an unresolved
+reference lands in a coverage table rather than as a failing eval.

@@ -1,0 +1,105 @@
+---
+title: Triage FAQ
+description: Short answers to the questions that come up after reading a failing agentevals result — skipped checks, missing artifacts, judged verdicts you disagree with, and who owns the fix.
+sidebar:
+  order: 2
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+**Scope:** the follow-up questions that survive [Read a failing eval](/agentevals/triage/). If you
+have not read that page yet, start there — it decodes a result in one pass.
+
+## About the result
+
+**The eval says `SKIP`. Did anything actually run?**
+Not that one. The reason is always printed underneath, and there are four unrelated causes: a
+`--deterministic-only` run, no judge configured, an artifact that opted out, or an exhausted cost
+budget. A grader can also skip itself when the trace lacks the data it needs. None of them fail the
+build.
+
+**What is `adheres-to-artifact (implicit)`?**
+The eval an artifact gets when it declares no criteria of its own: *did the session follow this
+file's instructions?* It is judged against the artifact's full text. Nobody wrote it; you get it for
+free.
+
+**Why are there more evals than criteria I recognise?**
+Every artifact the session touched contributes, including project rules and any skill or subagent
+it used. Artifacts with no declared criteria each add one implicit eval.
+
+**An artifact I expected is missing from the results.**
+Check the coverage table below the evals. It lists every artifact the session *referenced* and
+whether the file was found. If it is not there at all, the session never referenced it.
+
+**What does a `○` in the coverage table mean?**
+The reference could not be resolved to a file. It does not fail the run, and it does mean that
+artifact went unchecked. `built-in agent (no definition file)` is the expected case and needs no
+action.
+
+## About judged verdicts
+
+**The judge is wrong. What now?**
+Check its `observed` line first — it cites what the judge claims it saw. If that citation does not
+match the session, the verdict is unsound and worth saying so to whoever owns the artifact. If the
+citation is accurate but the conclusion is not, the assertion is probably ambiguous, which is a
+criterion problem rather than a session problem.
+
+**Votes were split. Which one counts?**
+None of them auto-resolve. A verdict only lands as pass or fail when **every** run agreed and
+confidence cleared the threshold; anything else routes to `REVIEW` for a human. Split votes usually
+mean the assertion is ambiguous or the session genuinely is borderline.
+
+**`error:` is above zero in the votes. Is the result wrong?**
+It is unreliable rather than wrong. One or more runs failed to produce a verdict. Errored runs count
+against consensus and can only push a result toward review, never toward a silent pass.
+
+**Why did it pass when I would have failed it?**
+An auto-pass needs unanimity *and* mean confidence above the threshold, so a pass is not a weak
+signal. If you disagree, the assertion likely does not say what you meant — that is worth fixing at
+the criterion, because it will keep passing otherwise.
+
+## About re-running
+
+**Can I reproduce this locally?**
+Yes, and it is read-only: `run` never modifies a trace or the artifacts it evaluates.
+
+```bash
+npx agentevals run <trace-file> --deterministic-only
+```
+
+**I re-ran it and got the identical judged verdict. Is it cached?**
+Almost certainly. Verdicts are cached on provider, model, prompt version, run count, temperature,
+the trace, and the eval plan. Add `--no-cache` to force fresh judgements.
+
+**Can I re-run without spending anything?**
+`--deterministic-only` makes no model call at all. `--provider mock` exercises the whole pipeline
+offline but returns a canned verdict, so use it to check wiring rather than adherence.
+
+**The trace path in CI does not exist on my machine.**
+Point artifact lookup somewhere real:
+
+```bash
+npx agentevals run <trace-file> --project ./my-repo --deterministic-only
+```
+
+## About ownership
+
+**Who fixes this?**
+The coverage table printed the artifact's file path, and that file is in version control — `git log`
+on it names the owner. Bring them the artifact name, the criterion name, and for a judged verdict
+the vote split plus the cited observation.
+
+**I think the criterion is wrong, not the session.**
+That is a legitimate and common answer. A criterion no session could satisfy is a defect in the
+artifact, and you may be the first person to notice. Raise it as a criterion bug rather than
+changing your work to satisfy it.
+
+**The build is red and I cannot fix it right now.**
+`needs-review` counting as a failure is configurable (`failOnNeedsReview: false`), and severity is
+per criterion — but both are decisions for whoever owns the gate, not a workaround to apply under
+time pressure.
+
+<Aside title="Still stuck?">
+The two pages worth opening next are [How the judge decides](/agentevals/judge/) if the verdict is
+what puzzles you, and [Declare what to check](/agentevals/declare/) if the *criterion* is.
+</Aside>

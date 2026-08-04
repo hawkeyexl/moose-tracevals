@@ -7,12 +7,12 @@ trigger: "The gate is green and someone now wants trend data, a dashboard, or a 
 entry_point: /agentevals/ci/consume-results/
 success_criteria: "Run results are parsed from a documented structure rather than scraped from rendered output, and a regression between two runs of the same session can be detected automatically."
 steps:
-  - { stage: "Emit machine-readable output", doc: /agentevals/ci/consume-results/, exists: false, note: "[GAP] --format json, --output" }
+  - { stage: "Emit machine-readable output", doc: /agentevals/ci/consume-results/, exists: true }
   - { stage: "Parse the report structure", doc: /agentevals/reference/report-and-exit-codes/, exists: true }
-  - { stage: "Track runs over time", doc: "/agentevals/ci/consume-results/#history", exists: false, note: "[GAP] --history and the history JSONL format are undocumented" }
-  - { stage: "Detect a regression between runs", doc: "/agentevals/ci/consume-results/#regressions", exists: false, note: "[GAP] prior pass now failing, compared per session" }
+  - { stage: "Track runs over time", doc: "/agentevals/ci/consume-results/#track-runs-over-time", exists: true }
+  - { stage: "Detect a regression between runs", doc: "/agentevals/ci/consume-results/#detect-a-regression", exists: true }
   - { stage: "Publish a human-readable summary", doc: "/agentevals/ci/exit-codes-and-reports/#keep-the-report", exists: true, note: "the markdown reporter" }
-  - { stage: "Call the library instead of the CLI", doc: /agentevals/extend/, exists: false, note: "[GAP] programmatic API" }
+  - { stage: "Call the library instead of the CLI", doc: /agentevals/extend/, exists: true }
 ---
 
 # CUJ: Feed results into your own tooling
@@ -41,7 +41,7 @@ Two personas share this journey and want different endings. Devin wants a file h
 Rin wants to skip the CLI and call the library. The content should serve Devin's path in full and
 hand off to [`cuj-extend`](cuj-extend.md) rather than trying to serve both to the end.
 
-**Current friction / gap.** Nearly total. `--history`, the history file format, `--output`, and the
-markdown reporter are undocumented; the report structure is discoverable only by running the tool
-and reading what comes out. This is the highest-value gap for the platform persona after launch, and
-the one most likely to be hit by someone who has already adopted the tool successfully.
+**Coverage.** No gaps. `ci/consume-results/` carries the JSON report in use, `--output`, the history
+file, and the regression definition, with worked `jq` for each. One caveat is stated there rather
+than hidden: history is a local file, so an ephemeral CI runner starts empty every time and has
+nothing to compare against unless the file is persisted.

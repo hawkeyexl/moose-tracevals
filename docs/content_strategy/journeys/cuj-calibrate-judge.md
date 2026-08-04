@@ -11,9 +11,9 @@ steps:
   - { stage: "Follow the consensus rule", doc: "/agentevals/judge/#from-votes-to-consensus", exists: true, note: "errored runs count against consensus and can never produce a silent pass" }
   - { stage: "Locate the needs-review boundary", doc: "/agentevals/judge/#confidence-zones", exists: true }
   - { stage: "Read the evidence behind a verdict", doc: "/agentevals/judge/#what-the-judge-cites", exists: true }
-  - { stage: "Tune runs, zones, and temperature", doc: /agentevals/judge/calibrate/, exists: false, note: "[GAP] no guidance on which knob to move, or the cost of moving it" }
+  - { stage: "Tune runs, zones, and temperature", doc: /agentevals/judge/calibrate/, exists: true }
   - { stage: "Cap spend per run", doc: /agentevals/reference/configuration/, exists: true, note: "judge.maxCostUsd; and why a model with unknown pricing silently disables the budget" }
-  - { stage: "Avoid stale cached verdicts", doc: /agentevals/judge/calibrate/, exists: false, note: "[GAP] cache key composition and the prompt-version component" }
+  - { stage: "Avoid stale cached verdicts", doc: /agentevals/judge/calibrate/, exists: true }
   - { stage: "Choose a provider", doc: /agentevals/reference/configuration/, exists: true }
 ---
 
@@ -55,7 +55,7 @@ precisely to prevent this, and anyone changing prompts needs to know that. And a
 only as good as the price table**: a model whose pricing is unknown is charged at zero, which
 quietly disables the ceiling that was supposed to protect the run.
 
-**Current friction / gap.** The consensus and zone behavior is stated as an invariant in contributor
-notes and implemented in source, but never explained to a user. No calibration guidance exists at
-all — the two `[GAP]`s here (tuning, and cache-key composition) are the difference between a reader
-who trusts the judge and one who can operate it.
+**Coverage.** No gaps. `judge/` carries the arithmetic — ensemble, consensus, zones, and a worked
+example; `judge/calibrate/` carries the operating half: what each knob trades, how to tune against a
+corpus with known answers, the cost ceiling, and the two silent failure modes (a stale cache
+surviving a prompt revision, and a budget disabled by unknown model pricing).

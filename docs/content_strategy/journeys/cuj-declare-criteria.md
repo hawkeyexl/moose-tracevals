@@ -14,7 +14,7 @@ steps:
   - { stage: "Set severity deliberately", doc: "/agentevals/declare/#severity", exists: true, note: "only error fails the eval" }
   - { stage: "Look up the full block shape", doc: /agentevals/reference/criteria-schema/, exists: true }
   - { stage: "Verify it fires", doc: "/agentevals/declare/#confirm-it-fires", exists: true }
-  - { stage: "Mark probes apart from protections", doc: /agentevals/judge/schema-versioning/, exists: false, note: "[GAP] capability vs regression — added in artifact-evals 0.2, undocumented" }
+  - { stage: "Mark probes apart from protections", doc: /agentevals/judge/schema-versioning/, exists: true }
 ---
 
 # CUJ: Turn an instruction into a testable criterion
@@ -45,7 +45,6 @@ Severity is the quiet trap. Only `error` findings fail an eval; `warning` and `i
 pass. A reader who declares everything at the default severity and then wonders why nothing fails
 has misread a default nobody told them about.
 
-**Current friction / gap.** The README shows the block shape but nothing about choosing a grader,
-nothing about severity as a decision, and nothing about `type: capability | regression`, which was
-added in artifact-evals 0.2 and is documented nowhere — leaving the one field designed to separate
-"we expect this to fail sometimes" from "this is a regression guard" unusable in practice.
+**Coverage.** No gaps. `declare/` carries the judged-or-deterministic decision, the third answer
+(not testable at all), and severity as a deliberate choice. `judge/schema-versioning/` carries
+`type: capability | regression`, the field that separates a probe from a regression guard.

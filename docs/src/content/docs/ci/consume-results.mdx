@@ -1,0 +1,189 @@
+---
+title: Consume results programmatically
+description: Feed agentevals output into your own tooling with the JSON report, --output, and the history file, and detect a regression between two runs of the same session.
+sidebar:
+  order: 3
+---
+
+import { Aside, LinkCard, CardGrid } from '@astrojs/starlight/components';
+
+**Scope:** everything downstream of a passing gate — structured output, run history, and regression
+detection. Installing the gate is [Add agentevals to CI](/agentevals/ci/); the field-by-field
+structure is in the [reference](/agentevals/reference/report-and-exit-codes/).
+
+The gate answers *did it pass?* This page is about answering *is it getting worse?*
+
+## Emit machine-readable output
+
+```bash
+npx agentevals run <trace> --deterministic-only --format json
+```
+
+`--output` additionally writes the rendered report to a file, in whichever format `--format`
+selected. Both together give you one artifact to keep and one stream to pipe:
+
+```bash
+npx agentevals run <trace> --deterministic-only \
+  --format json --output agentevals-report.json
+```
+
+<Aside type="caution" title="JSON goes to stdout with everything else">
+`--format json` writes the report to stdout. If you are piping it, keep other output off that
+stream — use `--output` and read the file when a step also prints diagnostics.
+</Aside>
+
+{/* Doc Detective inline tests: prove the JSON report really carries the keys the
+    queries below depend on, against the committed fixture corpus. */}
+{/* test {"testId":"json-report-keys","description":"The JSON report exposes the fields this page queries."} */}
+{/* step {"description":"The report carries a summary object.","runShell":{"command":"agentevals run test/fixtures/traces/claude-session.jsonl --project test/fixtures/project --deterministic-only --format json","exitCodes":[1],"stdio":"\"summary\""}} */}
+{/* step {"description":"The report carries the coverage list.","runShell":{"command":"agentevals run test/fixtures/traces/claude-session.jsonl --project test/fixtures/project --deterministic-only --format json","exitCodes":[1],"stdio":"\"coverage\""}} */}
+{/* step {"description":"Every location tried is recorded, which is what diagnoses an unresolved reference.","runShell":{"command":"agentevals run test/fixtures/traces/claude-session.jsonl --project test/fixtures/project --deterministic-only --format json","exitCodes":[1],"stdio":"\"tried\""}} */}
+{/* test end */}
+
+## Query it
+
+The report is one object, so `jq` gets you most things in a line. Every field is documented in
+[Reports & exit codes](/agentevals/reference/report-and-exit-codes/).
+
+Which evals failed, and why:
+
+```bash
+jq -r '.evalResults[]
+       | select(.outcome == "fail")
+       | "\(.artifactName) › \(.evalName): \((.findings // [])[].message)"' \
+  agentevals-report.json
+```
+
+Anything a human needs to look at:
+
+```bash
+jq -r '.evalResults[] | select(.outcome == "needs-review") | .evalName' agentevals-report.json
+```
+
+Artifacts the session referenced but could not be found:
+
+```bash
+jq -r '.coverage[] | select(.resolved == false) | "\(.kind) \(.ref)"' agentevals-report.json
+```
+
+Summary counts for a dashboard:
+
+```bash
+jq '.summary' agentevals-report.json
+```
+
+```json
+{ "total": 7, "pass": 1, "fail": 1, "error": 0, "needsReview": 0, "skipped": 5 }
+```
+
+<Aside title="Prefer the JSON report over parsing the rendered one">
+The `human` format is colored, wrapped, and tuned for a terminal; the `markdown` format is tuned for
+a PR comment. Neither is a contract. `--format json` is.
+</Aside>
+
+## Track runs over time
+
+`--history` appends one line per run to a local JSONL log and compares this run against the previous
+one **for the same session**:
+
+```bash
+npx agentevals run <trace> --deterministic-only --history
+```
+
+The file defaults to `.agentevals/history.jsonl` and is configurable:
+
+```yaml title="agentevals.config.yaml"
+history:
+  file: .agentevals/history.jsonl
+```
+
+Each line is a `HistoryEntry` — timestamp, trace file, session id, project, the summary counts, exit
+code, judge cost, and one `{ artifact, evalName, outcome }` per eval. **Outcomes only**; findings
+and consensus are not stored, which keeps the log small enough to commit if you want to.
+
+<Aside type="caution" title="History is local, and matched per session">
+The comparison looks for the most recent earlier entry with the same `sessionId`, falling back to
+the trace path. On an ephemeral CI runner the file starts empty every time, so there is nothing to
+compare against. To get trend data out of CI you have to persist the file yourself — cache it,
+commit it, or ship each run's JSON somewhere central and diff there.
+</Aside>
+
+## Detect a regression
+
+A **regression** is a specific, defined event: an eval that was `pass` in the previous run and is
+now `fail` or `error`. That precision is what makes an alert worth wiring up.
+
+With `--history`, the comparison is appended to non-JSON output:
+
+```
+History vs 2026-07-01T09:14:22.104Z:
+  regression: fix-bug › used-read
+  added: fix-bug › reproduces-before-fixing
+```
+
+| Line | Meaning |
+|---|---|
+| `regression` | previously `pass`, now `fail` or `error` |
+| `improvement` | previously `fail` or `error`, now `pass` |
+| `added` | an eval that did not exist in the previous run |
+| `removed` | an eval that existed then and does not now |
+| `no changes` | the outcome set is identical |
+
+`added` and `removed` matter more than they look: they are how you notice that a criterion was
+quietly deleted, or that an artifact stopped being referenced at all.
+
+### Comparing two runs yourself
+
+If you keep the JSON rather than the history file, the same rule is a few lines:
+
+```bash
+jq -n --slurpfile before before.json --slurpfile after after.json '
+  ($before[0].evalResults | map({key: "\(.artifact)›\(.evalName)", value: .outcome}) | from_entries) as $b
+  | $after[0].evalResults
+  | map(select($b["\(.artifact)›\(.evalName)"] == "pass"
+               and (.outcome == "fail" or .outcome == "error")))
+  | map("\(.artifactName) › \(.evalName)")'
+```
+
+## Publish a summary
+
+For a human-readable artifact next to the machine-readable one, run the markdown reporter:
+
+```yaml
+      - name: Evaluate and keep both formats
+        run: |
+          npx agentevals run traces/session.jsonl --deterministic-only \
+            --format markdown --output agentevals-report.md
+          npx agentevals run traces/session.jsonl --deterministic-only \
+            --format json --output agentevals-report.json
+
+      - name: Publish
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: agentevals-report
+          path: agentevals-report.*
+```
+
+The second run is free: judged verdicts are cached, and under `--deterministic-only` there is no
+model call at all.
+
+## Or skip the CLI
+
+If you are building something that runs evaluations rather than reading their output, the library
+gives you the typed report directly, plus seams for keeping your own suite offline.
+
+## Where to go next
+
+<CardGrid>
+  <LinkCard
+    title="Every report field"
+    description="The full RunReport, EvalResult, consensus, and CoverageEntry shapes, and the history file format."
+    href="/agentevals/reference/report-and-exit-codes/"
+  />
+  <LinkCard
+    title="Build on the library"
+    description="The export map, the injection seams, and how to register a grader the built-ins do not cover."
+    href="/agentevals/extend/"
+  />
+</CardGrid>
