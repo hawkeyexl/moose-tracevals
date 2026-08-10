@@ -47,7 +47,11 @@ The rename is total, not cosmetic. It covers the package name and `bin`, the `TR
 
 ### Confirmation
 
-`grep -ri agentevals` over the tree (excluding `node_modules/`, `.git/`, and `dist/`) returns only deliberate historical references — this ADR and the paragraph in `CLAUDE.md` that explains why the name changed. Any other hit is a missed rename. The unit and integration suites assert the new environment variable and state-directory names, [ci.yml](../.github/workflows/ci.yml) dogfoods the renamed binary against `test/fixtures/`, and [doc-detective.yml](../.github/workflows/doc-detective.yml) still asserts that `npx tracevals --version` matches this package's version before running the documented commands.
+`grep -ri agentevals` over the tree (excluding `node_modules/`, `.git/`, and `dist/`) returns only deliberate references to the old name: this ADR, ADRs [01006](01006-take-inference-from-the-shared-library-not-docevals.md) and [01007](01007-ship-a-cuj-first-documentation-site.md) (which record the pre-rename state and carry superseded-by notes), the `CLAUDE.md` paragraph explaining the change, and the `release.yml` header comment. Any other hit is a missed rename.
+
+**A rename sweep must be checked multiline.** The mechanical pass turned sentences *about* the old name into false claims (`` `tracevals` … belongs to an unrelated project ``), and the first review of this change missed two of them because the grep was line-anchored while the sentences wrapped across a line break. Search for the *claims*, not just the token: `rg -U 'tracevals`?\s*\n?\s*(on npm )?belongs to'`. Watch article agreement too — every "an agentevals" becomes an incorrect "an tracevals".
+
+The unit and integration suites assert the new environment variable and state-directory names, [ci.yml](../.github/workflows/ci.yml) dogfoods the renamed binary against `test/fixtures/`, and [doc-detective.yml](../.github/workflows/doc-detective.yml) still asserts that `npx tracevals --version` matches this package's version before running the documented commands.
 
 ## Pros and Cons of the Options
 

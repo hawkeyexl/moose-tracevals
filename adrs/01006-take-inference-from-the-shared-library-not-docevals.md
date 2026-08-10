@@ -64,8 +64,12 @@ Two consequences beyond a straight swap:
    model that never produced it. `resolveProviderIdentity(providerSpecFor(...))` applies the same
    defaults `makeProvider` would.
 
-The package is also renamed to `tracevals`: the unscoped name on npm belongs to an
-unrelated project, so it was never available. The `bin` stays `tracevals`.
+The package is also renamed to `@hawkeyexl/agentevals`: the unscoped `agentevals` on npm belongs to
+an unrelated project, so it was never available. The `bin` stays `agentevals`.
+
+> **Superseded by [ADR 01008](01008-rename-the-project-to-tracevals.md).** The project was later
+> renamed to `tracevals`, which *was* available unscoped — so the scope/bin split described above no
+> longer exists.
 
 ### Consequences
 

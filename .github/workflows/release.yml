@@ -7,11 +7,12 @@
 #   next      -> @next prerelease
 #   feat/**   -> per-branch prerelease channel
 #
-# OPT-IN. The old blocker is gone: the unpublishable `file:../docevals` link was
-# replaced by `@hawkeyexl/inference` from the registry, and the package was
-# renamed to `tracevals` because the unscoped name `tracevals`
-# belongs to another project on npm. Nothing about the package itself now
-# prevents a release.
+# OPT-IN. The old blockers are gone: the unpublishable `file:../docevals` link
+# was replaced by `@hawkeyexl/inference` from the registry, and the package was
+# renamed from `@hawkeyexl/agentevals` to `tracevals` — the unscoped `agentevals`
+# belongs to another project on npm, while `tracevals` was free, so the package
+# name and the `bin` are now one string we own (ADR 01008). Nothing about the
+# package itself now prevents a release.
 #
 # What remains is one-time setup. Configure npm trusted publishing first, so the
 # publish step authenticates without an NPM_TOKEN: on npmjs.com, add a trusted

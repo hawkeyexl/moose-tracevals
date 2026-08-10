@@ -129,16 +129,21 @@ the documented flags via `--help`, so the marginal coverage did not justify a se
 - Bad, because it is a second bespoke script to maintain for overlapping coverage. Revisit if the
   CLI reference drifts in practice.
 
-## Note: `npx tracevals` is not a safe cold command
+## Note: `npx agentevals` is not a safe cold command
 
 Discovered while writing the docs and worth recording, because
 [CLAUDE.md](../CLAUDE.md#release-channels) previously implied otherwise. The `bin` name is
-independent of the package name, but **`npx` resolves by package name**. The unscoped `tracevals`
-on npm belongs to an unrelated project, so `npx tracevals` with nothing installed fetches that
-package, not this one. It resolves correctly only once `tracevals` is a local
+independent of the package name, but **`npx` resolves by package name**. The unscoped `agentevals`
+on npm belongs to an unrelated project, so `npx agentevals` with nothing installed fetches that
+package, not this one. It resolves correctly only once `@hawkeyexl/agentevals` is a local
 dependency, since npm prefers `node_modules/.bin`.
 
-The documentation therefore shows `npm install --save-dev tracevals` before any
-`npx tracevals`, and `npx tracevals` for the zero-install path. The Doc Detective
+The documentation therefore shows `npm install --save-dev @hawkeyexl/agentevals` before any
+`npx agentevals`, and `npx @hawkeyexl/agentevals` for the zero-install path. The Doc Detective
 workflow asserts the linked binary's version matches this package before running any test, so a
 broken `npm link` fails loudly instead of silently testing somebody else's CLI.
+
+> **Resolved by [ADR 01008](01008-rename-the-project-to-tracevals.md).** This hazard is what drove
+> the rename: `tracevals` was available unscoped, so package name and `bin` name are now the same
+> string and `npx tracevals` is safe cold. The install caveats this note produced have been removed
+> from the docs; the Doc Detective version assertion is kept.
