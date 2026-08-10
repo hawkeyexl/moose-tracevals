@@ -1,12 +1,12 @@
 ---
 id: proposed-ia
 type: information-architecture
-scope: Proposed IA for the agentevals documentation site (content under docs/src/content/docs/), designed CUJ-first
+scope: Proposed IA for the tracevals documentation site (content under docs/src/content/docs/), designed CUJ-first
 covers_nav_tab: the whole site
 excludes: [README.md, CLAUDE.md, adrs/, docs/content_strategy/, docs/maintainers/]
 derived_from: ../journeys/
 companion: ia-gap-analysis.md
-base_path: /agentevals
+base_path: /tracevals
 ---
 
 # Proposed information architecture
@@ -53,7 +53,7 @@ Home — router + a proof that runs offline
 │
 ├─ Read a failing eval    (Theo)                  → cuj-triage-failure   (highest traffic)
 │
-├─ Build on agentevals    (Rin)                   → cuj-extend
+├─ Build on tracevals    (Rin)                   → cuj-extend
 │
 └─ Reference (lookup shelf)                       → CLI · Configuration · Graders ·
                                                      Criteria schema · Reports & exit codes ·
@@ -64,13 +64,13 @@ Home — router + a proof that runs offline
 
 | Nav group | Directory | Route prefix |
 |---|---|---|
-| Get started | `get-started/` | `/agentevals/get-started/` |
-| Declare what to check | `declare/` | `/agentevals/declare/` |
-| Run it in CI | `ci/` | `/agentevals/ci/` |
-| Trust the judge | `judge/` | `/agentevals/judge/` |
-| Read a failing eval | `triage/` | `/agentevals/triage/` |
-| Build on agentevals | `extend/` | `/agentevals/extend/` |
-| Reference | `reference/` | `/agentevals/reference/` |
+| Get started | `get-started/` | `/tracevals/get-started/` |
+| Declare what to check | `declare/` | `/tracevals/declare/` |
+| Run it in CI | `ci/` | `/tracevals/ci/` |
+| Trust the judge | `judge/` | `/tracevals/judge/` |
+| Read a failing eval | `triage/` | `/tracevals/triage/` |
+| Build on tracevals | `extend/` | `/tracevals/extend/` |
+| Reference | `reference/` | `/tracevals/reference/` |
 
 Each group is a single `autogenerate` directory in the Starlight sidebar — no page is enumerated in
 config. Ordering inside a group is controlled by `sidebar.order` frontmatter, used only where
@@ -111,7 +111,7 @@ reference/
   graders                            seven kinds: options, validation rules, failure messages
   criteria-schema                    the metadata.evals block, both published versions
   report-and-exit-codes              human / json / markdown shapes, exit codes, history
-  traces                             formats, discovery, project slug, AGENTEVALS_HOME
+  traces                             formats, discovery, project slug, TRACEVALS_HOME
   api                                the export surface, mapped
   glossary                           trace, artifact, criterion, plan, consensus, zone…
 ```

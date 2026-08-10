@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://hawkeyexl.github.io/agentevals/doc-frontmatter.schema.json",
-  "title": "agentevals docs page frontmatter",
+  "$id": "https://hawkeyexl.github.io/tracevals/doc-frontmatter.schema.json",
+  "title": "tracevals docs page frontmatter",
   "description": "Requires every published docs page to declare a non-empty title and description. Starlight-specific keys (sidebar, template, hero, and so on) are allowed but unconstrained.",
   "type": "object",
   "required": ["title", "description"],

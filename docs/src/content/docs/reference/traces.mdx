@@ -1,18 +1,18 @@
 ---
 title: Traces reference
-description: Supported trace formats, how the session store is discovered, the project-slug rule, and what AGENTEVALS_HOME changes.
+description: Supported trace formats, how the session store is discovered, the project-slug rule, and what TRACEVALS_HOME changes.
 sidebar:
   order: 7
 ---
 
 import { Aside } from '@astrojs/starlight/components';
 
-**Scope:** where traces come from and what agentevals reads out of them. Source of truth:
+**Scope:** where traces come from and what tracevals reads out of them. Source of truth:
 `src/trace/` — `detect.ts`, `claude.ts`, `discover.ts`.
 
 ## Supported formats
 
-Format is **sniffed from the content**, not the filename. agentevals scans lines until one
+Format is **sniffed from the content**, not the filename. tracevals scans lines until one
 identifies the format:
 
 | Format | Identified by | Produced by |
@@ -22,7 +22,7 @@ identifies the format:
 
 Both normalise into the same `Trace` model, so everything downstream is format-agnostic. The
 `TraceSource` union is currently just `claude-code`; it is the seam for future adapters
-([ADR 01003](https://github.com/hawkeyexl/agentevals/blob/main/adrs/01003-claude-code-traces-first-with-an-adapter-seam.md)).
+([ADR 01003](https://github.com/hawkeyexl/tracevals/blob/main/adrs/01003-claude-code-traces-first-with-an-adapter-seam.md)).
 
 Lines that parse but identify nothing — `{"type":"summary"}` and similar metadata — are skipped
 rather than treated as an error, so a leading metadata record does not defeat detection.
@@ -51,7 +51,7 @@ All exit `2`:
 
 <Aside type="caution" title="Session files carry no cost data">
 `usage.totalCostUsd` comes only from a stream-json `result` record. Claude Code session files do not
-have it, which is why a [`cost` grader](/agentevals/reference/graders/#cost) skips rather than passes
+have it, which is why a [`cost` grader](/tracevals/reference/graders/#cost) skips rather than passes
 against them.
 </Aside>
 
@@ -67,7 +67,7 @@ Session bookkeeping records are ignored outright: `queue-operation`, `attachment
 
 ## Discovery
 
-`agentevals list` and the interactive picker scan the session store:
+`tracevals list` and the interactive picker scan the session store:
 
 ```
 <home>/.claude/projects/<project-slug>/*.jsonl
@@ -102,25 +102,25 @@ is exported as `slugFor()`.
 To keep listing fast, only the **first 256 KB** of each file is read for the summary. A session
 whose opening prompt sits past that window shows no `firstPrompt`; it is still fully parsed by `run`.
 
-## `AGENTEVALS_HOME`
+## `TRACEVALS_HOME`
 
 Overrides the home directory for **both** trace discovery and user-level artifact lookup —
 `~/.claude/skills/`, `~/.claude/agents/`, and the plugin store.
 
 ```bash
-AGENTEVALS_HOME=./session-store npx agentevals list --all-projects
+TRACEVALS_HOME=./session-store npx tracevals list --all-projects
 ```
 
 - A **relative** value resolves against the current working directory.
 - Unset, it falls back to the OS home directory.
 
 Use it to make a run reproducible on a shared CI runner instead of inheriting whatever home the
-runner has. This repository's own CI sets `AGENTEVALS_HOME=test/fixtures/home` for exactly that
+runner has. This repository's own CI sets `TRACEVALS_HOME=test/fixtures/home` for exactly that
 reason.
 
 <Aside title="It does not affect project lookup">
 Project-level artifacts — `.claude/skills/`, `.claude/agents/`, `CLAUDE.md` — are found relative to
-the trace's recorded `cwd`, or to `--project` when you pass it. `AGENTEVALS_HOME` only moves the
+the trace's recorded `cwd`, or to `--project` when you pass it. `TRACEVALS_HOME` only moves the
 *user* and *plugin* halves of the search.
 </Aside>
 
@@ -129,7 +129,7 @@ the trace's recorded `cwd`, or to `--project` when you pass it. `AGENTEVALS_HOME
 `run` takes any path; it does not have to live in the session store.
 
 ```bash
-npx agentevals run ./traces/refactor-session.jsonl --project ./my-repo
+npx tracevals run ./traces/refactor-session.jsonl --project ./my-repo
 ```
 
 This is the pattern for committing a small corpus of representative sessions and re-evaluating them

@@ -1,6 +1,6 @@
 ---
 title: Configuration reference
-description: Every agentevals.config.yaml key with its type, default, and CLI override, including the knobs that have no flag at all.
+description: Every tracevals.config.yaml key with its type, default, and CLI override, including the knobs that have no flag at all.
 sidebar:
   order: 3
 ---
@@ -10,13 +10,13 @@ import { Aside } from '@astrojs/starlight/components';
 **Scope:** every configuration key. Source of truth: `src/core/config-schema.json` and
 `src/core/config.ts`.
 
-Configuration lives in **`agentevals.config.yaml`** in the working directory. Every key is optional;
+Configuration lives in **`tracevals.config.yaml`** in the working directory. Every key is optional;
 an absent file means every default applies.
 
 ## How a value is resolved
 
 ```
-agentevals.config.yaml  →  schema validation  →  defaults applied  →  CLI override  →  runtime
+tracevals.config.yaml  →  schema validation  →  defaults applied  →  CLI override  →  runtime
 ```
 
 Two properties follow from this, and you can rely on both:
@@ -27,16 +27,16 @@ Two properties follow from this, and you can rely on both:
   misspelled key fails loudly:
 
   ```
-  agentevals: invalid config: /judge must NOT have additional properties
+  tracevals: invalid config: /judge must NOT have additional properties
   ```
 
-  An unparseable file fails the same way: `agentevals: could not parse agentevals.config.yaml: …`
+  An unparseable file fails the same way: `tracevals: could not parse tracevals.config.yaml: …`
 
 ## Complete example
 
 Every key below is shown with its default. You would never write all of this.
 
-```yaml title="agentevals.config.yaml"
+```yaml title="tracevals.config.yaml"
 provider:
   default: claude-cli          # anthropic | openai | claude-cli | mock
   anthropic:
@@ -55,18 +55,18 @@ judge:
   zones:
     autoPass: 0.8
     autoFail: 0.8
-  cacheDir: .agentevals/cache
+  cacheDir: .tracevals/cache
   # maxCostUsd has no default; set it to impose a ceiling
 render:
   maxBlockChars: 2000
   maxTotalChars: 150000
 history:
-  file: .agentevals/history.jsonl
+  file: .tracevals/history.jsonl
 fill:
   confidenceThreshold: 0.7
   maxCriteriaPerArtifact: 8
   temperature: 0
-  cacheDir: .agentevals/cache/fill
+  cacheDir: .tracevals/cache/fill
   # maxCostUsd has no default
 failOnNeedsReview: true
 ```
@@ -115,7 +115,7 @@ There is no configuration section for `mock`; pass `--provider mock` to use it. 
 provider that returns a canned passing verdict, for exercising the pipeline offline.
 
 <Aside type="caution" title="`apiKeyEnv` is a variable name, never a key">
-It names the environment variable agentevals should read. Putting an actual key here commits a
+It names the environment variable tracevals should read. Putting an actual key here commits a
 secret to your repository.
 </Aside>
 
@@ -151,7 +151,7 @@ Cost is computed from a built-in per-model table. A model the table does not rec
 | `temperature` | number 0–2 | `0` | — |
 | `zones.autoPass` | number 0–1 | `0.8` | — |
 | `zones.autoFail` | number 0–1 | `0.8` | — |
-| `cacheDir` | string | `.agentevals/cache` | `--no-cache` disables |
+| `cacheDir` | string | `.tracevals/cache` | `--no-cache` disables |
 | `maxCostUsd` | number ≥ 0 | *(unset)* | `--max-cost-usd` |
 
 - **`ensembleRuns`**: more runs cost proportionally more and make an auto-resolved verdict harder
@@ -164,7 +164,7 @@ Cost is computed from a built-in per-model table. A model the table does not rec
 - **`maxCostUsd`**: checked before each judged eval. Once exhausted, remaining evals are reported
   as `skipped` with the budget named.
 
-See [How the judge decides](/agentevals/judge/) for what these do to an outcome.
+See [How the judge decides](/tracevals/judge/) for what these do to an outcome.
 
 ## `render`
 
@@ -183,10 +183,10 @@ at the cost of a larger prompt.
 
 | Key | Type | Default | CLI |
 |---|---|---|---|
-| `file` | string | `.agentevals/history.jsonl` | — |
+| `file` | string | `.tracevals/history.jsonl` | — |
 
 Where `--history` appends. See
-[Reports & exit codes](/agentevals/reference/report-and-exit-codes/#history).
+[Reports & exit codes](/tracevals/reference/report-and-exit-codes/#history).
 
 ## `fill`
 
@@ -195,7 +195,7 @@ Where `--history` appends. See
 | `confidenceThreshold` | number 0–1 | `0.7` | `--confidence` |
 | `maxCriteriaPerArtifact` | integer ≥ 1 | `8` | `--max-criteria` |
 | `temperature` | number 0–2 | `0` | — |
-| `cacheDir` | string | `.agentevals/cache/fill` | `--no-cache` disables |
+| `cacheDir` | string | `.tracevals/cache/fill` | `--no-cache` disables |
 | `maxCostUsd` | number ≥ 0 | *(unset)* | `--max-cost-usd` |
 
 `maxCriteriaPerArtifact` counts **existing** criteria too, so an artifact already at the cap gets no

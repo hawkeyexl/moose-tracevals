@@ -1,6 +1,6 @@
 /**
  * Session-store discovery: find Claude Code trace files for a project (or all
- * projects) under the user's home directory. AGENTEVALS_HOME overrides the
+ * projects) under the user's home directory. TRACEVALS_HOME overrides the
  * home dir so tests and CI can point at a fixture tree.
  */
 import { open, readdir, stat } from "node:fs/promises";
@@ -37,7 +37,7 @@ export function slugFor(cwd: string): string {
 export function homeDir(
   env: Record<string, string | undefined> = process.env,
 ): string {
-  const override = env.AGENTEVALS_HOME;
+  const override = env.TRACEVALS_HOME;
   if (override) return resolve(override);
   return homedir();
 }

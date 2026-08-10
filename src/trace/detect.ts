@@ -3,7 +3,7 @@
  * session records carry camelCase `sessionId` (and `parentUuid` on message
  * records) while stream-json uses snake_case `session_id`.
  */
-import { AgentevalsError } from "../types.js";
+import { TracevalsError } from "../types.js";
 import type { TraceFormat } from "./types.js";
 
 const SUPPORTED =
@@ -15,14 +15,14 @@ export function detectFormat(line: string): TraceFormat {
   try {
     rec = JSON.parse(line) as Record<string, unknown>;
   } catch {
-    throw new AgentevalsError(`trace is not JSONL (${SUPPORTED})`);
+    throw new TracevalsError(`trace is not JSONL (${SUPPORTED})`);
   }
   if (typeof rec !== "object" || rec === null) {
-    throw new AgentevalsError(`unrecognized trace format (${SUPPORTED})`);
+    throw new TracevalsError(`unrecognized trace format (${SUPPORTED})`);
   }
   if ("parentUuid" in rec || "sessionId" in rec) return "claude-session";
   if ("session_id" in rec) return "claude-stream";
-  throw new AgentevalsError(`unrecognized trace format (${SUPPORTED})`);
+  throw new TracevalsError(`unrecognized trace format (${SUPPORTED})`);
 }
 
 /**
@@ -50,7 +50,7 @@ export function detectContentFormat(content: string): TraceFormat {
     // Parseable but unidentifiable (summary, and other metadata records) —
     // keep scanning for a line that names the format.
   }
-  throw new AgentevalsError(
+  throw new TracevalsError(
     sawParseable
       ? `unrecognized trace format (${SUPPORTED})`
       : `empty or unparseable trace file (${SUPPORTED})`,

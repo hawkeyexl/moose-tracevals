@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "agentevals:config:0.1",
-  "title": "agentevals.config.yaml",
+  "$id": "tracevals:config:0.1",
+  "title": "tracevals.config.yaml",
   "type": "object",
   "additionalProperties": false,
   "properties": {

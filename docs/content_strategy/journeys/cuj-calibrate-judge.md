@@ -4,17 +4,17 @@ type: cuj
 title: Decide whether the judge can be trusted, then tune it
 personas: [persona-eval-owner]
 trigger: "Someone proposes letting a judged eval block a merge, and the eval owner has to decide whether the verdict is evidence."
-entry_point: /agentevals/judge/
+entry_point: /tracevals/judge/
 success_criteria: "The reader can state why a given eval came out pass, fail, or needs-review with the arithmetic to back it — and can change a threshold and predict the effect."
 steps:
-  - { stage: "See how a judged verdict is produced", doc: /agentevals/judge/, exists: true, note: "N independent runs at temperature 0" }
-  - { stage: "Follow the consensus rule", doc: "/agentevals/judge/#from-votes-to-consensus", exists: true, note: "errored runs count against consensus and can never produce a silent pass" }
-  - { stage: "Locate the needs-review boundary", doc: "/agentevals/judge/#confidence-zones", exists: true }
-  - { stage: "Read the evidence behind a verdict", doc: "/agentevals/judge/#what-the-judge-cites", exists: true }
-  - { stage: "Tune runs, zones, and temperature", doc: /agentevals/judge/calibrate/, exists: true }
-  - { stage: "Cap spend per run", doc: /agentevals/reference/configuration/, exists: true, note: "judge.maxCostUsd; and why a model with unknown pricing silently disables the budget" }
-  - { stage: "Avoid stale cached verdicts", doc: /agentevals/judge/calibrate/, exists: true }
-  - { stage: "Choose a provider", doc: /agentevals/reference/configuration/, exists: true }
+  - { stage: "See how a judged verdict is produced", doc: /tracevals/judge/, exists: true, note: "N independent runs at temperature 0" }
+  - { stage: "Follow the consensus rule", doc: "/tracevals/judge/#from-votes-to-consensus", exists: true, note: "errored runs count against consensus and can never produce a silent pass" }
+  - { stage: "Locate the needs-review boundary", doc: "/tracevals/judge/#confidence-zones", exists: true }
+  - { stage: "Read the evidence behind a verdict", doc: "/tracevals/judge/#what-the-judge-cites", exists: true }
+  - { stage: "Tune runs, zones, and temperature", doc: /tracevals/judge/calibrate/, exists: true }
+  - { stage: "Cap spend per run", doc: /tracevals/reference/configuration/, exists: true, note: "judge.maxCostUsd; and why a model with unknown pricing silently disables the budget" }
+  - { stage: "Avoid stale cached verdicts", doc: /tracevals/judge/calibrate/, exists: true }
+  - { stage: "Choose a provider", doc: /tracevals/reference/configuration/, exists: true }
 ---
 
 # CUJ: Decide whether the judge can be trusted, then tune it

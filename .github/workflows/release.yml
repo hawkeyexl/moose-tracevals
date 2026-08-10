@@ -9,18 +9,18 @@
 #
 # OPT-IN. The old blocker is gone: the unpublishable `file:../docevals` link was
 # replaced by `@hawkeyexl/inference` from the registry, and the package was
-# renamed to `@hawkeyexl/agentevals` because the unscoped name `agentevals`
+# renamed to `tracevals` because the unscoped name `tracevals`
 # belongs to another project on npm. Nothing about the package itself now
 # prevents a release.
 #
 # What remains is one-time setup. Configure npm trusted publishing first, so the
 # publish step authenticates without an NPM_TOKEN: on npmjs.com, add a trusted
-# publisher for `@hawkeyexl/agentevals` naming this repository and this workflow
+# publisher for `tracevals` naming this repository and this workflow
 # file (release.yml). npm then exchanges the workflow's OIDC token for a
 # short-lived, scoped publish credential — which is what `id-token: write` below
 # authorizes — and mints provenance automatically. Then:
 #
-#   gh variable set RELEASE_ENABLED --body true --repo hawkeyexl/agentevals
+#   gh variable set RELEASE_ENABLED --body true --repo hawkeyexl/tracevals
 
 name: Release
 

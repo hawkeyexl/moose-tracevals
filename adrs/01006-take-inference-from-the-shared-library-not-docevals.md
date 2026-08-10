@@ -11,15 +11,15 @@ decision-makers: [hawkeyexl]
 ADR 01001 decided to reuse docevals' provider and consensus layer rather than reimplement it. That
 was the right call on substance and the wrong one on packaging: docevals is a *tool*, not a library,
 and it is not on npm. Consuming it meant `"docevals": "file:../docevals"`, which npm publishes
-verbatim, so agentevals could not be published at all.
+verbatim, so tracevals could not be published at all.
 
 The coupling leaked well past the dependency line:
 
 - a sibling clone next to every checkout, plus a junction for every `.claude/worktrees/` worktree;
 - a second `actions/checkout` and a "build the docevals sibling" step in both `ci.yml` and
-  `release.yml`, with every other step pinned to `working-directory: agentevals`;
+  `release.yml`, with every other step pinned to `working-directory: tracevals`;
 - `HUSKY: "0"` in CI purely because the file-dep lifecycle ran docevals' `prepare`;
-- `makeJudgeProvider` serializing agentevals' own config section back to YAML so it could be
+- `makeJudgeProvider` serializing tracevals' own config section back to YAML so it could be
   re-parsed by docevals' `parseConfig`, only to obtain the config object docevals' `makeProvider`
   demanded;
 - a `MockResponse` type re-derived via `ConstructorParameters<typeof MockProvider>[0][number]`
@@ -39,14 +39,14 @@ published on npm, with a flat library-owned `ProviderSpec` in place of consumer 
 
 - Depend on `@hawkeyexl/inference` from the registry
 - Wait for docevals to publish to npm, then depend on it by semver range
-- Vendor the provider and consensus code back into agentevals
+- Vendor the provider and consensus code back into tracevals
 
 ## Decision Outcome
 
 Chosen option: **depend on `@hawkeyexl/inference`**. The dependency on docevals is removed
 entirely — `npm ls docevals` is empty.
 
-What stays in agentevals is what only agentevals can decide: the prompts and `PROMPT_VERSION`, the
+What stays in tracevals is what only tracevals can decide: the prompts and `PROMPT_VERSION`, the
 trace-worded verdict schema (passed as the library's `schema` override so its field descriptions
 survive), the cache-key composition, the per-plan cost budget, and the `JudgedEval` shape the
 reporters consume.
@@ -64,19 +64,19 @@ Two consequences beyond a straight swap:
    model that never produced it. `resolveProviderIdentity(providerSpecFor(...))` applies the same
    defaults `makeProvider` would.
 
-The package is also renamed to `@hawkeyexl/agentevals`: the unscoped name on npm belongs to an
-unrelated project, so it was never available. The `bin` stays `agentevals`.
+The package is also renamed to `tracevals`: the unscoped name on npm belongs to an
+unrelated project, so it was never available. The `bin` stays `tracevals`.
 
 ### Consequences
 
-- Good, because agentevals is publishable — the `file:` blocker is gone, and so is the name
+- Good, because tracevals is publishable — the `file:` blocker is gone, and so is the name
   collision.
 - Good, because setup is a clean clone; the sibling checkout, the worktree junction, and two CI
   steps per workflow are deleted.
 - Good, because a provider fix (the Windows stdin limit, a new model's price) lands once upstream
   instead of three times.
 - Bad, because judge behavior now moves when the library releases. Mitigated by a semver range and
-  by the library's own suite covering the mechanics agentevals used to own.
+  by the library's own suite covering the mechanics tracevals used to own.
 - Neutral, because ADR 01001's substance stands: docevals' `makeJudge` is still page-coupled and
   still deliberately not reused. Only the source of the shared layer changed.
 
@@ -99,9 +99,9 @@ gates exercise the real built CLI through the mock provider on both Linux and Wi
 ### Wait for docevals to publish
 
 - Good, because it needs no new package.
-- Bad, because it leaves agentevals unpublishable on someone else's release schedule, and keeps a
+- Bad, because it leaves tracevals unpublishable on someone else's release schedule, and keeps a
   peer tool as the vendor of a shared layer — docevals' public API would have to stay frozen around
-  agentevals' needs.
+  tracevals' needs.
 
 ### Vendor the code back in
 

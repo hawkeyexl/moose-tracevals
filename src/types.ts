@@ -1,14 +1,14 @@
-/** Shared result model and errors for agentevals. */
+/** Shared result model and errors for tracevals. */
 import type { ConsensusResult } from "@hawkeyexl/inference";
 import type { CoverageEntry } from "./artifacts/types.js";
 import type { ArtifactType } from "./artifacts/types.js";
 import type { Finding } from "./graders/types.js";
 
 /** Operational error: bad usage, unreadable input, unknown format. Exits 2. */
-export class AgentevalsError extends Error {
+export class TracevalsError extends Error {
   constructor(message: string) {
     super(message);
-    this.name = "AgentevalsError";
+    this.name = "TracevalsError";
   }
 }
 

@@ -9,7 +9,7 @@
  *   3. Every CUJ step marked `exists: true` resolves to a real page; the rest
  *      are recorded as gaps, which is the point of the gap analysis.
  *   4. Relative links between strategy files resolve on disk.
- *   5. Every `/agentevals/...` link in a published page points at a page that
+ *   5. Every `/tracevals/...` link in a published page points at a page that
  *      exists.
  *   6. Every published page declares `title` and `description`.
  *   7. Every `#fragment` in a site link resolves to a real heading — renaming a
@@ -23,7 +23,7 @@ import { join, dirname, resolve, relative, sep } from "node:path";
 const ROOT = process.cwd();
 const STRAT = join(ROOT, "docs", "content_strategy");
 const PAGES = join(ROOT, "docs", "src", "content", "docs");
-const BASE = "/agentevals";
+const BASE = "/tracevals";
 
 let failures = 0;
 let sectionFailures = 0;
@@ -142,12 +142,12 @@ summarise(`${linkCount} relative links checked`);
 section("5. Site links in published pages");
 let siteLinks = 0;
 // Three link forms reach a reader, and all three must be checked. Body links
-// (`](/agentevals/…)`) and component props (`href="/agentevals/…"`) are the
+// (`](/tracevals/…)`) and component props (`href="/tracevals/…"`) are the
 // obvious two; the third is `link:` inside frontmatter, which is how a Starlight
 // splash hero declares its call-to-action buttons. Those render as the most
 // prominent links on the landing page, so leaving them unchecked would let the
 // primary nav 404 while this gate stayed green.
-const SITE_LINK = /(?:href=|]\(|^\s*link:\s*)"?(\/agentevals\/[^")\s]*)"?/gm;
+const SITE_LINK = /(?:href=|]\(|^\s*link:\s*)"?(\/tracevals\/[^")\s]*)"?/gm;
 for (const f of walk(PAGES).filter((f) => /\.mdx?$/.test(f))) {
   const text = readFileSync(f, "utf8");
   for (const m of text.matchAll(SITE_LINK)) {
@@ -210,7 +210,7 @@ const sources = [
   ...walk(PAGES).filter((f) => /\.mdx?$/.test(f)),
 ];
 for (const f of sources) {
-  for (const m of readFileSync(f, "utf8").matchAll(/(\/agentevals\/[^"')\s]*?)#([a-z0-9-]+)/g)) {
+  for (const m of readFileSync(f, "utf8").matchAll(/(\/tracevals\/[^"')\s]*?)#([a-z0-9-]+)/g)) {
     anchors++;
     const route = m[1].endsWith("/") ? m[1] : `${m[1]}/`;
     const slugs = headings.get(route);

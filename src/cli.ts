@@ -4,7 +4,7 @@ import { Command } from "commander";
 import { renderList, runList } from "./commands/list.js";
 import { renderFill, runFill } from "./commands/fill.js";
 import { runRun } from "./commands/run.js";
-import { AgentevalsError } from "./types.js";
+import { TracevalsError } from "./types.js";
 import type { ReportFormat } from "./reporters/index.js";
 
 const require = createRequire(import.meta.url);
@@ -13,7 +13,7 @@ const { version } = require("../package.json") as { version: string };
 const program = new Command();
 
 program
-  .name("agentevals")
+  .name("tracevals")
   .description(
     "Deterministic and LLM-as-judge adherence evals for AI agent session traces.",
   )
@@ -36,8 +36,8 @@ async function executeRun(trace: string | undefined, opts: RunFlags) {
   if (trace === undefined) {
     // The interactive picker needs a TTY; scripted callers must name a trace.
     if (!process.stdout.isTTY || !process.stdin.isTTY) {
-      throw new AgentevalsError(
-        "no trace given; pass a trace file or run `agentevals list`",
+      throw new TracevalsError(
+        "no trace given; pass a trace file or run `tracevals list`",
       );
     }
     const { pickTrace } = await import("./trace/picker.js");
@@ -126,7 +126,7 @@ program
     ): void => {
       if (value === undefined) return;
       if (!Number.isFinite(value) || value < min || value > max) {
-        throw new AgentevalsError(
+        throw new TracevalsError(
           `${name} must be a number between ${min} and ${max}, got ${value}`,
         );
       }
@@ -183,8 +183,8 @@ program
 try {
   await program.parseAsync(process.argv);
 } catch (err) {
-  if (err instanceof AgentevalsError) {
-    console.error(`agentevals: ${err.message}`);
+  if (err instanceof TracevalsError) {
+    console.error(`tracevals: ${err.message}`);
     process.exitCode = 2;
   } else {
     throw err;

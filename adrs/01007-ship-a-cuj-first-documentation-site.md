@@ -8,11 +8,11 @@ decision-makers: [hawkeyexl]
 
 ## Context and Problem Statement
 
-agentevals had no documentation set. The entire user-facing corpus was a 202-line `README.md` that
+tracevals had no documentation set. The entire user-facing corpus was a 202-line `README.md` that
 documented the CLI as `node dist/cli.js` — a form that only works inside a clone of this repository,
 leaving no install path at all for anyone consuming the published package. Substantial shipped
 surface was documented nowhere: `--history` and the history file format, `--output`, the markdown
-reporter, the `RunReport` structure, `AGENTEVALS_HOME`, the `type: capability | regression` field
+reporter, the `RunReport` structure, `TRACEVALS_HOME`, the `type: capability | regression` field
 added in artifact-evals 0.2, `registerGrader()`, the programmatic API, and every config key with no
 CLI flag.
 
@@ -26,7 +26,7 @@ product have**, and **what stops it from drifting away from the code** the way a
   line — and they need different content in a different order.
 - Documentation of a CLI rots silently. A flag rename, a changed default, or a reworded failure
   message leaves prose that is confidently wrong.
-- There is **no user research** for agentevals. Any audience model here is a hypothesis, and the
+- There is **no user research** for tracevals. Any audience model here is a hypothesis, and the
   documentation has to say so rather than present invented segments as findings.
 - The sibling [docmeta](https://github.com/hawkeyexl/docmeta) repo already solved this shape and
   the result is in production. Divergence should be earned, not accidental.
@@ -78,7 +78,7 @@ the documented flags via `--help`, so the marginal coverage did not justify a se
   the CLI, never composed.
 - Good: docs dependencies live in a nested `private` project, so `files` stays `dist` + `schemas`.
 - Good: the docs tests are as hermetic as the unit suite — every tested command runs
-  `--deterministic-only` or `--provider mock` with `AGENTEVALS_HOME` pinned to the fixture home.
+  `--deterministic-only` or `--provider mock` with `TRACEVALS_HOME` pinned to the fixture home.
 - Bad: two npm projects means two lockfiles and two installs.
 - Bad: adding a nav group requires an `astro.config.mjs` edit, because `autogenerate` throws on an
   empty directory. The `extend/` group is therefore absent until its first page lands.
@@ -90,7 +90,7 @@ the documented flags via `--help`, so the marginal coverage did not justify a se
 - `.github/workflows/docs.yml` — `npm run docs:validate` (dogfooded `docmeta`) gates the build,
   which gates the Pages deploy. A page missing `title` or `description` does not ship.
 - `.github/workflows/doc-detective.yml` — runs every documented command against the local build.
-  Two guards make it trustworthy: it verifies `npx agentevals --version` matches this package before
+  Two guards make it trustworthy: it verifies `npx tracevals --version` matches this package before
   running anything (see below), and it asserts `test/fixtures/project` is byte-identical afterwards,
   since the docs exercise `fill --dry-run` against the real corpus.
 - `scripts/check-content-strategy.mjs`, run by the same workflow via `npm run docs:check-strategy`,
@@ -129,16 +129,16 @@ the documented flags via `--help`, so the marginal coverage did not justify a se
 - Bad, because it is a second bespoke script to maintain for overlapping coverage. Revisit if the
   CLI reference drifts in practice.
 
-## Note: `npx agentevals` is not a safe cold command
+## Note: `npx tracevals` is not a safe cold command
 
 Discovered while writing the docs and worth recording, because
 [CLAUDE.md](../CLAUDE.md#release-channels) previously implied otherwise. The `bin` name is
-independent of the package name, but **`npx` resolves by package name**. The unscoped `agentevals`
-on npm belongs to an unrelated project, so `npx agentevals` with nothing installed fetches that
-package, not this one. It resolves correctly only once `@hawkeyexl/agentevals` is a local
+independent of the package name, but **`npx` resolves by package name**. The unscoped `tracevals`
+on npm belongs to an unrelated project, so `npx tracevals` with nothing installed fetches that
+package, not this one. It resolves correctly only once `tracevals` is a local
 dependency, since npm prefers `node_modules/.bin`.
 
-The documentation therefore shows `npm install --save-dev @hawkeyexl/agentevals` before any
-`npx agentevals`, and `npx @hawkeyexl/agentevals` for the zero-install path. The Doc Detective
+The documentation therefore shows `npm install --save-dev tracevals` before any
+`npx tracevals`, and `npx tracevals` for the zero-install path. The Doc Detective
 workflow asserts the linked binary's version matches this package before running any test, so a
 broken `npm link` fails loudly instead of silently testing somebody else's CLI.

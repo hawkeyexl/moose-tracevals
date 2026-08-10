@@ -60,7 +60,7 @@ export async function appendHistory(
     await appendFile(file, `${JSON.stringify(entryFor(report))}\n`, "utf-8");
   } catch (err) {
     console.warn(
-      `agentevals: could not write history at ${file} (${(err as Error).message}). Continuing.`,
+      `tracevals: could not write history at ${file} (${(err as Error).message}). Continuing.`,
     );
   }
 }

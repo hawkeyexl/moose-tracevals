@@ -9,7 +9,7 @@ import { planEvals, type EvalPlan } from "./plan.js";
 import { graderFor } from "../graders/registry.js";
 import { renderTrace } from "../judge/render.js";
 import type { TraceJudge } from "../judge/trace-judge.js";
-import type { AgentevalsConfig } from "./config.js";
+import type { TracevalsConfig } from "./config.js";
 import type { EvalResult, RunReport, RunSummary } from "../types.js";
 
 export interface EngineOptions {
@@ -17,7 +17,7 @@ export interface EngineOptions {
   /** Artifact-lookup override; when set it is also the parent-walk ceiling. */
   projectDir?: string;
   env?: Record<string, string | undefined>;
-  config: AgentevalsConfig;
+  config: TracevalsConfig;
   /** Injected judge; required unless deterministicOnly. */
   judge?: TraceJudge;
   deterministicOnly?: boolean;

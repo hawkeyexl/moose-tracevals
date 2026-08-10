@@ -28,7 +28,7 @@ journeys:
 looking at exactly one result and did not choose this tool.
 
 Theo opened a pull request, or is reviewing one, or is on call when a nightly job goes red. Until
-about ninety seconds ago he did not know agentevals existed. He is a competent engineer with no
+about ninety seconds ago he did not know tracevals existed. He is a competent engineer with no
 context on this tool, no appetite for acquiring much, and one specific question.
 
 **Goal:** decode one line of output and act on it, without reading anything else.
@@ -46,7 +46,7 @@ context on this tool, no appetite for acquiring much, and one specific question.
 - **He often cannot fix it.** The artifact belongs to someone else. He needs the path to that
   person as much as the diagnosis.
 
-**How he uses agentevals:** he does not. He reads one page, once, and leaves. If that page does not
+**How he uses tracevals:** he does not. He reads one page, once, and leaves. If that page does not
 resolve it, he pings whoever owns the artifact — and if the page did its job, he pings them with a
 specific question instead of a screenshot.
 

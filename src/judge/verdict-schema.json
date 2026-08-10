@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "agentevals:verdict:0.1",
-  "title": "agentevals judge verdict",
+  "$id": "tracevals:verdict:0.1",
+  "title": "tracevals judge verdict",
   "type": "object",
   "required": ["claim", "observed", "match", "confidence", "reasoning"],
   "properties": {

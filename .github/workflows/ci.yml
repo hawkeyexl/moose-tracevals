@@ -45,21 +45,21 @@ jobs:
         env:
           # Resolve user-level artifacts (the fixture plugin skill) from the
           # fixture home on every machine, not the runner's real home.
-          AGENTEVALS_HOME: test/fixtures/home
+          TRACEVALS_HOME: test/fixtures/home
         # Paths are relative on purpose: on windows-latest Git Bash and node.exe
         # resolve absolute POSIX paths differently. See CLAUDE.md.
         run: |
           set +e
-          node dist/cli.js run test/fixtures/traces/claude-session.jsonl --project test/fixtures/project --deterministic-only --format json > agentevals-run.json
+          node dist/cli.js run test/fixtures/traces/claude-session.jsonl --project test/fixtures/project --deterministic-only --format json > tracevals-run.json
           code=$?
           set -e
           if [ "$code" -ne 1 ]; then
             echo "Expected exit 1 from the fixture corpus, got $code"
-            cat agentevals-run.json
+            cat tracevals-run.json
             exit 1
           fi
           node -e '
-            let raw = require("fs").readFileSync("agentevals-run.json", "utf8");
+            let raw = require("fs").readFileSync("tracevals-run.json", "utf8");
             if (raw.charCodeAt(0) === 0xfeff) raw = raw.slice(1); // tolerate a BOM
             const r = JSON.parse(raw);
             const find = (a, e) => r.evalResults.find((x) => x.artifact.endsWith(a) && x.evalName === e);
@@ -81,19 +81,19 @@ jobs:
       - name: Dogfood run (mock judge)
         shell: bash
         env:
-          AGENTEVALS_HOME: test/fixtures/home
+          TRACEVALS_HOME: test/fixtures/home
         run: |
           set +e
-          node dist/cli.js run test/fixtures/traces/claude-session.jsonl --project test/fixtures/project --provider mock --format json > agentevals-mock.json
+          node dist/cli.js run test/fixtures/traces/claude-session.jsonl --project test/fixtures/project --provider mock --format json > tracevals-mock.json
           code=$?
           set -e
           if [ "$code" -ne 1 ]; then
             echo "Expected exit 1 (deterministic failure persists), got $code"
-            cat agentevals-mock.json
+            cat tracevals-mock.json
             exit 1
           fi
           node -e '
-            let raw = require("fs").readFileSync("agentevals-mock.json", "utf8");
+            let raw = require("fs").readFileSync("tracevals-mock.json", "utf8");
             if (raw.charCodeAt(0) === 0xfeff) raw = raw.slice(1);
             const r = JSON.parse(raw);
             const judged = r.evalResults.filter((x) => x.consensus);
@@ -106,22 +106,22 @@ jobs:
       - name: Dogfood fill (dry run, corpus must not change)
         shell: bash
         env:
-          AGENTEVALS_HOME: test/fixtures/home
+          TRACEVALS_HOME: test/fixtures/home
         run: |
           # --no-cache is load-bearing: `npm test` runs earlier in this job and
           # would otherwise leave a populated cache, turning this gate into a
           # replay that never exercises the provider wiring in dist/.
           set +e
-          node dist/cli.js fill test/fixtures/project --provider mock --dry-run --no-cache --format json > agentevals-fill.json
+          node dist/cli.js fill test/fixtures/project --provider mock --dry-run --no-cache --format json > tracevals-fill.json
           code=$?
           set -e
           if [ "$code" -ne 0 ]; then
             echo "Expected exit 0 from a dry-run fill, got $code"
-            cat agentevals-fill.json
+            cat tracevals-fill.json
             exit 1
           fi
           node -e '
-            let raw = require("fs").readFileSync("agentevals-fill.json", "utf8");
+            let raw = require("fs").readFileSync("tracevals-fill.json", "utf8");
             if (raw.charCodeAt(0) === 0xfeff) raw = raw.slice(1);
             const r = JSON.parse(raw);
             const paths = r.results.map((x) => x.artifact.replace(/\\/g, "/"));
@@ -175,9 +175,9 @@ jobs:
         run: |
           rm -rf .tmp/fill-ci && mkdir -p .tmp/fill-ci
           cp -r test/fixtures/project .tmp/fill-ci/project
-          node dist/cli.js fill .tmp/fill-ci/project --provider mock --no-cache --format json > agentevals-fill-write.json
+          node dist/cli.js fill .tmp/fill-ci/project --provider mock --no-cache --format json > tracevals-fill-write.json
           node -e '
-            let raw = require("fs").readFileSync("agentevals-fill-write.json", "utf8");
+            let raw = require("fs").readFileSync("tracevals-fill-write.json", "utf8");
             if (raw.charCodeAt(0) === 0xfeff) raw = raw.slice(1);
             const r = JSON.parse(raw);
             const filled = r.results.filter((x) => x.status === "filled");
@@ -189,9 +189,9 @@ jobs:
             }
           '
           # The written frontmatter must still parse and plan.
-          node dist/cli.js run test/fixtures/traces/claude-session.jsonl --project .tmp/fill-ci/project --deterministic-only --format json > agentevals-postfill.json || true
+          node dist/cli.js run test/fixtures/traces/claude-session.jsonl --project .tmp/fill-ci/project --deterministic-only --format json > tracevals-postfill.json || true
           node -e '
-            let raw = require("fs").readFileSync("agentevals-postfill.json", "utf8");
+            let raw = require("fs").readFileSync("tracevals-postfill.json", "utf8");
             if (raw.charCodeAt(0) === 0xfeff) raw = raw.slice(1);
             const r = JSON.parse(raw);
             const errored = r.evalResults.filter((x) => x.outcome === "error");
@@ -214,11 +214,11 @@ jobs:
       - name: Dogfood list (fixture session store)
         shell: bash
         env:
-          AGENTEVALS_HOME: test/fixtures/home
+          TRACEVALS_HOME: test/fixtures/home
         run: |
-          node dist/cli.js list --all-projects --json --limit 5 > agentevals-list.json
+          node dist/cli.js list --all-projects --json --limit 5 > tracevals-list.json
           node -e '
-            let raw = require("fs").readFileSync("agentevals-list.json", "utf8");
+            let raw = require("fs").readFileSync("tracevals-list.json", "utf8");
             if (raw.charCodeAt(0) === 0xfeff) raw = raw.slice(1);
             const r = JSON.parse(raw);
             if (!Array.isArray(r.traces) || r.traces.length === 0) {

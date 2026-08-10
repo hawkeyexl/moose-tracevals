@@ -4,15 +4,15 @@ type: cuj
 title: Get coverage over every artifact a session used
 personas: [persona-artifact-author]
 trigger: "A report shows fewer evals than expected, or an artifact the reader knows was used does not appear at all."
-entry_point: /agentevals/declare/coverage/
+entry_point: /tracevals/declare/coverage/
 success_criteria: "The reader can account for every artifact the session touched — evaluated, unresolved, or deliberately skipped — and knows how to close the gap for each."
 steps:
-  - { stage: "Read the artifact coverage table", doc: /agentevals/declare/coverage/, exists: true }
-  - { stage: "Understand how artifacts are resolved from a trace", doc: /agentevals/reference/traces/, exists: true }
-  - { stage: "Fix an unresolved reference", doc: "/agentevals/declare/coverage/#fix-an-unresolved-reference", exists: true }
-  - { stage: "Know what the implicit eval covers", doc: "/agentevals/declare/#the-implicit-eval", exists: true }
-  - { stage: "Skip an artifact deliberately", doc: /agentevals/reference/criteria-schema/, exists: true, note: "the skip flag" }
-  - { stage: "Confirm coverage in the report", doc: /agentevals/reference/report-and-exit-codes/, exists: true }
+  - { stage: "Read the artifact coverage table", doc: /tracevals/declare/coverage/, exists: true }
+  - { stage: "Understand how artifacts are resolved from a trace", doc: /tracevals/reference/traces/, exists: true }
+  - { stage: "Fix an unresolved reference", doc: "/tracevals/declare/coverage/#fix-an-unresolved-reference", exists: true }
+  - { stage: "Know what the implicit eval covers", doc: "/tracevals/declare/#the-implicit-eval", exists: true }
+  - { stage: "Skip an artifact deliberately", doc: /tracevals/reference/criteria-schema/, exists: true, note: "the skip flag" }
+  - { stage: "Confirm coverage in the report", doc: /tracevals/reference/report-and-exit-codes/, exists: true }
 ---
 
 # CUJ: Get coverage over every artifact a session used

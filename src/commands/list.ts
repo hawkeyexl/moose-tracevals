@@ -1,4 +1,4 @@
-/** `agentevals list` — enumerate discoverable traces. */
+/** `tracevals list` — enumerate discoverable traces. */
 import pc from "picocolors";
 import {
   discoverTraces,

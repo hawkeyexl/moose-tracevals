@@ -1,7 +1,7 @@
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { pickTrace } from "../../src/trace/picker.js";
-import { AgentevalsError } from "../../src/types.js";
+import { TracevalsError } from "../../src/types.js";
 
 const fixtureHome = fileURLToPath(new URL("../fixtures/home", import.meta.url));
 
@@ -9,7 +9,7 @@ describe("pickTrace", () => {
   it("prompts with discovered traces and returns the selection", async () => {
     let seenChoices: { name: string; value: string }[] = [];
     const picked = await pickTrace(
-      { allProjects: true, env: { AGENTEVALS_HOME: fixtureHome } },
+      { allProjects: true, env: { TRACEVALS_HOME: fixtureHome } },
       async ({ choices }) => {
         seenChoices = choices;
         return choices[0]!.value;
@@ -23,7 +23,7 @@ describe("pickTrace", () => {
     const picked = await pickTrace(
       {
         project: "C:\\work\\nonexistent",
-        env: { AGENTEVALS_HOME: fixtureHome },
+        env: { TRACEVALS_HOME: fixtureHome },
       },
       async ({ choices }) => choices[0]!.value,
     );
@@ -35,10 +35,10 @@ describe("pickTrace", () => {
       pickTrace(
         {
           allProjects: true,
-          env: { AGENTEVALS_HOME: "C:\\definitely\\missing" },
+          env: { TRACEVALS_HOME: "C:\\definitely\\missing" },
         },
         async ({ choices }) => choices[0]!.value,
       ),
-    ).rejects.toThrow(AgentevalsError);
+    ).rejects.toThrow(TracevalsError);
   });
 });

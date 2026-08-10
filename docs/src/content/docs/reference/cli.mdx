@@ -1,6 +1,6 @@
 ---
 title: CLI reference
-description: Every agentevals command, argument, and flag across run, fill, and list, with defaults, exit codes, and the environment variables that affect them.
+description: Every tracevals command, argument, and flag across run, fill, and list, with defaults, exit codes, and the environment variables that affect them.
 sidebar:
   order: 2
 ---
@@ -10,7 +10,7 @@ import { Aside } from '@astrojs/starlight/components';
 **Scope:** the complete command-line surface. Source of truth: `src/cli.ts`.
 
 ```
-agentevals [options] [command]
+tracevals [options] [command]
 
 Commands:
   run [options] [trace]      Evaluate a trace against the skills and instructions it used
@@ -24,29 +24,27 @@ Options:
   -h, --help                 display help for command
 ```
 
-`run` is the **default command**: `agentevals <trace>` and `agentevals run <trace>` are equivalent.
+`run` is the **default command**: `tracevals <trace>` and `tracevals run <trace>` are equivalent.
 
 {/* Doc Detective inline tests: assert the documented command surface against the
     built CLI, so a flag rename fails CI instead of silently drifting. */}
 {/* test {"testId":"cli-surface","description":"Every documented command and flag is present in the built CLI."} */}
-{/* step {"description":"The top-level help lists all three commands.","runShell":{"command":"agentevals --help","exitCodes":[0],"stdio":"run [options] [trace]"}} */}
-{/* step {"description":"run exposes the documented flags.","runShell":{"command":"agentevals run --help","exitCodes":[0],"stdio":"--deterministic-only"}} */}
-{/* step {"description":"run's format flag defaults to human.","runShell":{"command":"agentevals run --help","exitCodes":[0],"stdio":"human | json | markdown (default: \"human\")"}} */}
-{/* step {"description":"fill exposes the documented flags.","runShell":{"command":"agentevals fill --help","exitCodes":[0],"stdio":"--confidence <n>"}} */}
-{/* step {"description":"list exposes the documented flags.","runShell":{"command":"agentevals list --help","exitCodes":[0],"stdio":"--all-projects"}} */}
+{/* step {"description":"The top-level help lists all three commands.","runShell":{"command":"tracevals --help","exitCodes":[0],"stdio":"run [options] [trace]"}} */}
+{/* step {"description":"run exposes the documented flags.","runShell":{"command":"tracevals run --help","exitCodes":[0],"stdio":"--deterministic-only"}} */}
+{/* step {"description":"run's format flag defaults to human.","runShell":{"command":"tracevals run --help","exitCodes":[0],"stdio":"human | json | markdown (default: \"human\")"}} */}
+{/* step {"description":"fill exposes the documented flags.","runShell":{"command":"tracevals fill --help","exitCodes":[0],"stdio":"--confidence <n>"}} */}
+{/* step {"description":"list exposes the documented flags.","runShell":{"command":"tracevals list --help","exitCodes":[0],"stdio":"--all-projects"}} */}
 {/* test end */}
 
-<Aside type="caution" title="Invoking the binary">
-The `bin` this package installs is called `agentevals`, but the **package** is
-`@hawkeyexl/agentevals`, and the unscoped name on npm belongs to an unrelated project. `npx agentevals`
-resolves to this tool only once `@hawkeyexl/agentevals` is installed locally. Otherwise use
-`npx @hawkeyexl/agentevals`.
+<Aside type="tip" title="Invoking the binary">
+The **package** and the `bin` it installs are both named `tracevals`. Every command below is
+written as the bare `tracevals`; prefix it with `npx` if the CLI is not on your `PATH`.
 </Aside>
 
 ## `run`
 
 ```
-agentevals run [options] [trace]
+tracevals run [options] [trace]
 ```
 
 Evaluates a trace against the skills, agent definitions, and project-rules files the session used.
@@ -61,7 +59,7 @@ Evaluates a trace against the skills, agent definitions, and project-rules files
 Omitting `trace` **without** a TTY produces an error instead of a prompt:
 
 ```
-agentevals: no trace given; pass a trace file or run `agentevals list`
+tracevals: no trace given; pass a trace file or run `tracevals list`
 ```
 
 ### Options
@@ -90,7 +88,7 @@ agentevals: no trace given; pass a trace file or run `agentevals list`
 ## `fill`
 
 ```
-agentevals fill [options] [paths...]
+tracevals fill [options] [paths...]
 ```
 
 Proposes eval criteria for the instruction artifacts in a project and writes those that survive the
@@ -105,7 +103,7 @@ gate. **The only command that writes.** `run` never calls it.
 A path that does not exist is an operational error:
 
 ```
-agentevals: no such file or directory: ./nope
+tracevals: no such file or directory: ./nope
 ```
 
 ### Options
@@ -125,7 +123,7 @@ agentevals: no such file or directory: ./nope
 Numeric flags are range-checked before anything runs. Out of range, or not a number:
 
 ```
-agentevals: --confidence must be a number between 0 and 1, got 1.5
+tracevals: --confidence must be a number between 0 and 1, got 1.5
 ```
 
 ### Exit codes
@@ -139,13 +137,13 @@ agentevals: --confidence must be a number between 0 and 1, got 1.5
 <Aside title="What fill never does">
 Existing criteria are never modified; a name collision fails the run. Only the YAML frontmatter block
 is rewritten; the body is byte-identical. Project rules (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`) are
-proposed but **never written**. See [Fill in criteria](/agentevals/declare/fill/).
+proposed but **never written**. See [Fill in criteria](/tracevals/declare/fill/).
 </Aside>
 
 ## `list`
 
 ```
-agentevals list [options]
+tracevals list [options]
 ```
 
 Lists discoverable traces from the Claude Code session store, newest first. Always exits `0` on
@@ -190,5 +188,5 @@ No traces found. Pass --all-projects to scan every project, or --project <dir> t
 
 | Variable | Effect |
 |---|---|
-| `AGENTEVALS_HOME` | Overrides the home directory for **both** trace discovery and user-level artifact lookup. A relative value resolves against the current working directory. Use it to make a run reproducible on a shared runner. |
-| `AGENTEVALS_LIVE` | Contributor-only. Set to `1` to include the live judge smoke test in this repository's own suite. Has no effect on the CLI. |
+| `TRACEVALS_HOME` | Overrides the home directory for **both** trace discovery and user-level artifact lookup. A relative value resolves against the current working directory. Use it to make a run reproducible on a shared runner. |
+| `TRACEVALS_LIVE` | Contributor-only. Set to `1` to include the live judge smoke test in this repository's own suite. Has no effect on the CLI. |

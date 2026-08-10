@@ -3,7 +3,7 @@
  * project-rules file in a project without a trace.
  *
  * This is the inverse of `resolveArtifacts`, which maps names a trace *used*
- * onto files. Authoring (`agentevals fill`) needs the whole population instead,
+ * onto files. Authoring (`tracevals fill`) needs the whole population instead,
  * including artifacts no session has exercised yet.
  *
  * Scope is deliberately the project only — never the user's `~/.claude` or the
@@ -21,7 +21,7 @@ import {
 } from "node:path";
 import { stat } from "node:fs/promises";
 import { extractCriteria } from "../criteria/extract.js";
-import { AgentevalsError } from "../types.js";
+import { TracevalsError } from "../types.js";
 import { listInTree, safeRead } from "./fs.js";
 import { PROJECT_RULES_FILENAMES } from "./resolve.js";
 import type { ArtifactType, ResolvedArtifact } from "./types.js";
@@ -194,7 +194,7 @@ export async function discoverArtifacts(
     try {
       info = await stat(target);
     } catch {
-      throw new AgentevalsError(`no such file or directory: ${target}`);
+      throw new TracevalsError(`no such file or directory: ${target}`);
     }
 
     if (info.isFile()) {

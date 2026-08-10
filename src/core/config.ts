@@ -8,11 +8,11 @@ import { join } from "node:path";
 import { Ajv2020 } from "ajv/dist/2020.js";
 import { parse as parseYaml } from "yaml";
 import configSchemaJson from "./config-schema.json" with { type: "json" };
-import { AgentevalsError } from "../types.js";
+import { TracevalsError } from "../types.js";
 
 const configSchema = configSchemaJson as Record<string, unknown>;
 
-export const DEFAULT_CONFIG_FILENAME = "agentevals.config.yaml";
+export const DEFAULT_CONFIG_FILENAME = "tracevals.config.yaml";
 
 /** USD per million tokens; overrides the inference library's built-in table. */
 export interface Pricing {
@@ -37,7 +37,7 @@ export interface ProviderConfig {
   "claude-cli": { model: string; command: string };
 }
 
-export interface AgentevalsConfig {
+export interface TracevalsConfig {
   provider: ProviderConfig;
   judge: {
     ensembleRuns: number;
@@ -67,15 +67,15 @@ export interface AgentevalsConfig {
 const ajv = new Ajv2020({ allErrors: true });
 const validate = ajv.compile(configSchema);
 
-export function parseConfig(raw: unknown): AgentevalsConfig {
+export function parseConfig(raw: unknown): TracevalsConfig {
   if (!validate(raw)) {
     const detail = (validate.errors ?? [])
       .map((e) => `${e.instancePath || "/"} ${e.message}`)
       .join("; ");
-    throw new AgentevalsError(`invalid config: ${detail}`);
+    throw new TracevalsError(`invalid config: ${detail}`);
   }
   const r = raw as Record<string, any>;
-  const config: AgentevalsConfig = {
+  const config: TracevalsConfig = {
     provider: {
       // claude-cli by default: it uses the local Claude CLI's own auth, so a
       // fresh checkout judges without anyone provisioning an API key.
@@ -107,14 +107,14 @@ export function parseConfig(raw: unknown): AgentevalsConfig {
         autoPass: r.judge?.zones?.autoPass ?? 0.8,
         autoFail: r.judge?.zones?.autoFail ?? 0.8,
       },
-      cacheDir: r.judge?.cacheDir ?? ".agentevals/cache",
+      cacheDir: r.judge?.cacheDir ?? ".tracevals/cache",
     },
     render: {
       maxBlockChars: r.render?.maxBlockChars ?? 2000,
       maxTotalChars: r.render?.maxTotalChars ?? 150000,
     },
     history: {
-      file: r.history?.file ?? ".agentevals/history.jsonl",
+      file: r.history?.file ?? ".tracevals/history.jsonl",
     },
     fill: {
       // 0.7 matches the manuscript's calibration bar for judged agreement.
@@ -122,7 +122,7 @@ export function parseConfig(raw: unknown): AgentevalsConfig {
       maxCriteriaPerArtifact: r.fill?.maxCriteriaPerArtifact ?? 8,
       temperature: r.fill?.temperature ?? 0,
       // Separate from the judge cache: different key scheme and value shape.
-      cacheDir: r.fill?.cacheDir ?? ".agentevals/cache/fill",
+      cacheDir: r.fill?.cacheDir ?? ".tracevals/cache/fill",
     },
     failOnNeedsReview: r.failOnNeedsReview ?? true,
   };
@@ -136,7 +136,7 @@ export function parseConfig(raw: unknown): AgentevalsConfig {
 }
 
 /** Load the config file from `dir` (cwd by default); absent file = defaults. */
-export async function loadConfig(dir = process.cwd()): Promise<AgentevalsConfig> {
+export async function loadConfig(dir = process.cwd()): Promise<TracevalsConfig> {
   const path = join(dir, DEFAULT_CONFIG_FILENAME);
   let content: string;
   try {
@@ -148,7 +148,7 @@ export async function loadConfig(dir = process.cwd()): Promise<AgentevalsConfig>
   try {
     raw = parseYaml(content);
   } catch (err) {
-    throw new AgentevalsError(
+    throw new TracevalsError(
       `could not parse ${path}: ${(err as Error).message}`,
     );
   }

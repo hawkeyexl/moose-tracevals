@@ -59,7 +59,7 @@ decoration — and change it over time without invalidating everything already d
 - **Stale caches.** A cached verdict that outlives a prompt revision is a wrong answer delivered
   with full confidence.
 
-**How they use agentevals:** Sam reads the consensus and zone rules before running anything. Then
+**How they use tracevals:** Sam reads the consensus and zone rules before running anything. Then
 they tune — runs, zones, temperature, a cost ceiling — against a corpus of sessions with known
 outcomes, checking whether the tool agrees with their own judgment. Once calibrated, they set the
 conventions the rest of the team's criteria follow, and they own the schema version those criteria

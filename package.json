@@ -1,10 +1,10 @@
 {
-  "name": "@hawkeyexl/agentevals",
+  "name": "tracevals",
   "version": "0.0.0-development",
   "description": "Deterministic and LLM-as-judge adherence evals for AI agent session traces. Did the session follow the skills and instructions it used?",
   "type": "module",
   "bin": {
-    "agentevals": "dist/cli.js"
+    "tracevals": "dist/cli.js"
   },
   "main": "dist/index.js",
   "module": "dist/index.js",
@@ -24,10 +24,10 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/hawkeyexl/agentevals.git"
+    "url": "git+https://github.com/hawkeyexl/tracevals.git"
   },
   "bugs": {
-    "url": "https://github.com/hawkeyexl/agentevals/issues"
+    "url": "https://github.com/hawkeyexl/tracevals/issues"
   },
   "publishConfig": {
     "access": "public"
@@ -51,6 +51,8 @@
   },
   "keywords": [
     "agents",
+    "agent-evals",
+    "adherence",
     "evals",
     "llm-as-judge",
     "claude-code",

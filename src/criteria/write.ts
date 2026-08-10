@@ -15,7 +15,7 @@ import {
   parseDocument,
   type YAMLSeq,
 } from "yaml";
-import { AgentevalsError } from "../types.js";
+import { TracevalsError } from "../types.js";
 import type { Severity } from "./extract.js";
 
 /** A criterion to add. Mirrors the published artifact-evals object form. */
@@ -54,7 +54,7 @@ function splitYamlFrontmatter(content: string, path: string): Split {
   const body = bom ? content.slice(1) : content;
   const openMatch = /^---(\r?\n)/.exec(body);
   if (!openMatch) {
-    throw new AgentevalsError(`${path}: no YAML frontmatter block to edit`);
+    throw new TracevalsError(`${path}: no YAML frontmatter block to edit`);
   }
   const eol: "\n" | "\r\n" = openMatch[1] === "\r\n" ? "\r\n" : "\n";
   const lines = body.split(/(?<=\n)/); // split but keep line endings
@@ -71,7 +71,7 @@ function splitYamlFrontmatter(content: string, path: string): Split {
     }
     offset += lines[i]!.length;
   }
-  throw new AgentevalsError(`${path}: unterminated frontmatter block`);
+  throw new TracevalsError(`${path}: unterminated frontmatter block`);
 }
 
 /** Ordered plain object for one criterion, with absent fields dropped. */
@@ -122,7 +122,7 @@ function criteriaSeq(doc: Document, path: string): YAMLSeq {
   const existing = doc.getIn(["metadata", "evals", "criteria"], true);
   if (!isEmptyNode(existing)) {
     if (!isSeq(existing)) {
-      throw new AgentevalsError(
+      throw new TracevalsError(
         `${path}: metadata.evals.criteria is not a list`,
       );
     }
@@ -133,7 +133,7 @@ function criteriaSeq(doc: Document, path: string): YAMLSeq {
     if (isEmptyNode(node)) {
       doc.setIn(at, doc.createNode({}));
     } else if (!isMap(node)) {
-      throw new AgentevalsError(`${path}: ${at.join(".")} is not a mapping`);
+      throw new TracevalsError(`${path}: ${at.join(".")} is not a mapping`);
     }
   }
   const seq = doc.createNode([]) as YAMLSeq;
@@ -158,7 +158,7 @@ export function appendArtifactCriteria(
   if (format === "toml" || format === "json") {
     // Synthesizing a YAML block would leave the artifact with two
     // frontmatter blocks; only YAML can be edited in place.
-    throw new AgentevalsError(
+    throw new TracevalsError(
       `${path}: only YAML frontmatter can be edited (found ${format} frontmatter)`,
     );
   }
@@ -179,7 +179,7 @@ export function appendArtifactCriteria(
   const { open, block, suffix, eol } = splitYamlFrontmatter(content, path);
   const doc = parseDocument(block);
   if (doc.errors.length > 0) {
-    throw new AgentevalsError(
+    throw new TracevalsError(
       `${path}: cannot edit frontmatter — ${doc.errors[0]?.message ?? "parse error"}`,
     );
   }
@@ -190,9 +190,9 @@ export function appendArtifactCriteria(
   } catch (err) {
     // A block that is valid YAML but not a mapping (a sequence, a bare
     // scalar, a `---` that was really a thematic break) makes the yaml
-    // library throw its own error type. Callers are promised AgentevalsError.
-    if (err instanceof AgentevalsError) throw err;
-    throw new AgentevalsError(
+    // library throw its own error type. Callers are promised TracevalsError.
+    if (err instanceof TracevalsError) throw err;
+    throw new TracevalsError(
       `${path}: cannot edit frontmatter — ${err instanceof Error ? err.message : String(err)}`,
     );
   }
@@ -200,7 +200,7 @@ export function appendArtifactCriteria(
   const taken = existingNames(seq);
   for (const criterion of criteria) {
     if (taken.has(criterion.name)) {
-      throw new AgentevalsError(
+      throw new TracevalsError(
         `${path}: criterion "${criterion.name}" already exists in frontmatter`,
       );
     }

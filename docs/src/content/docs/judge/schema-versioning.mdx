@@ -8,8 +8,8 @@ sidebar:
 import { Steps, Aside, LinkCard, CardGrid } from '@astrojs/starlight/components';
 
 **Scope:** the criteria block as a versioned contract, and changing it safely. The block's fields
-are in the [criteria schema reference](/agentevals/reference/criteria-schema/); tuning how a judged
-criterion is *decided* is [Calibrate the judge](/agentevals/judge/calibrate/).
+are in the [criteria schema reference](/tracevals/reference/criteria-schema/); tuning how a judged
+criterion is *decided* is [Calibrate the judge](/tracevals/judge/calibrate/).
 
 ## The block is a published contract
 
@@ -17,7 +17,7 @@ The shape of `metadata.evals` is not an implementation detail. It has a resolvab
 inside the package, and **two versions coexist** so a consumer can pin one:
 
 ```js
-import schema from "@hawkeyexl/agentevals/schemas/artifact-evals-0.2.json" with { type: "json" };
+import schema from "tracevals/schemas/artifact-evals-0.2.json" with { type: "json" };
 ```
 
 | Version | Adds | Use it when |
@@ -30,7 +30,7 @@ no-op for existing artifacts. A released version is never edited in place — a 
 next version, which is what makes pinning meaningful.
 
 <Aside title="Which do I pin?">
-If you are only authoring criteria, you do not pin anything — agentevals validates against the
+If you are only authoring criteria, you do not pin anything — tracevals validates against the
 current schema and both versions parse. Pinning matters when *your own tooling* reads or generates
 these blocks and you need the shape to hold still.
 </Aside>
@@ -84,7 +84,7 @@ assertion: **never flip a whole corpus to `error` at once.**
 2. **Measure coverage.** Count how many artifacts carry it, and how often it actually fires:
 
    ```bash
-   npx agentevals run <trace> --format json \
+   npx tracevals run <trace> --format json \
      | jq '[.evalResults[] | select(.evalName == "cites-a-test-run")]
            | group_by(.outcome) | map({(.[0].outcome): length}) | add'
    ```
@@ -135,11 +135,11 @@ Rename when the meaning genuinely changed. Otherwise leave the name alone and ed
   <LinkCard
     title="Every criteria field"
     description="The full metadata.evals block, both published schema versions, and what each field does."
-    href="/agentevals/reference/criteria-schema/"
+    href="/tracevals/reference/criteria-schema/"
   />
   <LinkCard
     title="Track it over time"
     description="The history file, what counts as a regression, and how to compare two runs."
-    href="/agentevals/ci/consume-results/"
+    href="/tracevals/ci/consume-results/"
   />
 </CardGrid>

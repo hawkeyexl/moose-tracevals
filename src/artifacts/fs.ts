@@ -17,7 +17,7 @@ export const PRUNED_DIRS = new Set([
   "dist",
   "build",
   "coverage",
-  ".agentevals",
+  ".tracevals",
   ".tmp",
   ".next",
   ".venv",

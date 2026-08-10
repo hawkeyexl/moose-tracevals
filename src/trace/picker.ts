@@ -2,7 +2,7 @@
  * Interactive trace picker (TTY only). The prompt function is injectable so
  * tests never touch a real terminal.
  */
-import { AgentevalsError } from "../types.js";
+import { TracevalsError } from "../types.js";
 import {
   discoverTraces,
   type DiscoverOptions,
@@ -50,7 +50,7 @@ export async function pickTrace(
     listings = await discoverTraces({ limit: 25, ...options, allProjects: true });
   }
   if (listings.length === 0) {
-    throw new AgentevalsError(
+    throw new TracevalsError(
       "no traces found in the session store; pass a trace file instead",
     );
   }

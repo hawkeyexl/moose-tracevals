@@ -1,6 +1,6 @@
 ---
-title: Add agentevals to CI
-description: Run agentevals as a gate in GitHub Actions, offline and with no API key, keyed off an exit code you can branch on.
+title: Add tracevals to CI
+description: Run tracevals as a gate in GitHub Actions, offline and with no API key, keyed off an exit code you can branch on.
 sidebar:
   order: 1
 ---
@@ -8,10 +8,10 @@ sidebar:
 import { Tabs, TabItem, Aside, LinkCard, CardGrid } from '@astrojs/starlight/components';
 
 **Scope:** getting a dependable gate into automation. Reading results downstream (JSON, history,
-regressions) is covered in [Exit codes & reports](/agentevals/ci/exit-codes-and-reports/).
-Deciding what the criteria assert is [Declare what to check](/agentevals/declare/).
+regressions) is covered in [Exit codes & reports](/tracevals/ci/exit-codes-and-reports/).
+Deciding what the criteria assert is [Declare what to check](/tracevals/declare/).
 
-The short version: **agentevals can run in a build with no network call and no API key.** That is
+The short version: **tracevals can run in a build with no network call and no API key.** That is
 `--deterministic-only`, and it is a complete mode in its own right.
 
 ## First, where does the trace come from?
@@ -44,7 +44,7 @@ Two flags cover every offline case:
 Set a ceiling with `judge.maxCostUsd` and provision the API key as a secret. Also check that your
 model's pricing is known. A model the pricing table does not recognize is costed at zero, which
 silently disables the budget you set. See
-[configuration](/agentevals/reference/configuration/).
+[configuration](/tracevals/reference/configuration/).
 </Aside>
 
 ## Control the environment
@@ -53,10 +53,10 @@ Trace discovery reads a session store under a home directory. On a shared runner
 instead of inheriting whatever the runner has:
 
 ```bash
-AGENTEVALS_HOME=./session-store npx agentevals run ./traces/session.jsonl
+TRACEVALS_HOME=./session-store npx tracevals run ./traces/session.jsonl
 ```
 
-`AGENTEVALS_HOME` overrides the home directory for **both** trace discovery and user-level artifact
+`TRACEVALS_HOME` overrides the home directory for **both** trace discovery and user-level artifact
 lookup. A relative value resolves against the current working directory. This repository's own CI
 uses it to make runs reproducible on every machine.
 
@@ -69,7 +69,7 @@ On Windows runners, an absolute POSIX path like `/tmp/x` resolves differently in
 
 A gate that evaluates a committed trace corpus on every pull request:
 
-```yaml title=".github/workflows/agentevals.yml"
+```yaml title=".github/workflows/tracevals.yml"
 name: Agent adherence
 
 on:
@@ -99,10 +99,10 @@ jobs:
       # No network call, no API key. Judged evals are skipped, not failed.
       - name: Evaluate agent sessions
         run: |
-          npx agentevals run traces/refactor-session.jsonl \
+          npx tracevals run traces/refactor-session.jsonl \
             --deterministic-only \
             --format markdown \
-            --output agentevals-report.md
+            --output tracevals-report.md
 
       # Runs whether or not the gate passed — a failing report is the one you
       # most want to keep.
@@ -110,8 +110,8 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v5
         with:
-          name: agentevals-report
-          path: agentevals-report.md
+          name: tracevals-report
+          path: tracevals-report.md
 ```
 
 The gate is the exit code: the step fails when `run` exits non-zero, which is exactly when an eval
@@ -125,8 +125,8 @@ and you can discover it instead of naming a file:
 ```yaml
       - name: Evaluate the session that just ran
         run: |
-          npx agentevals list --all-projects --limit 1 --json > traces.json
-          npx agentevals run "$(node -p "require('./traces.json').traces[0].file")" \
+          npx tracevals list --all-projects --limit 1 --json > traces.json
+          npx tracevals run "$(node -p "require('./traces.json').traces[0].file")" \
             --deterministic-only
 ```
 
@@ -145,11 +145,11 @@ optionally a file. Any system that can run Node 24 and branch on an exit code wo
       image: node:24
       script:
         - npm install --no-fund --no-audit
-        - npx agentevals run traces/refactor-session.jsonl --deterministic-only
+        - npx tracevals run traces/refactor-session.jsonl --deterministic-only
       artifacts:
         when: always
         paths:
-          - agentevals-report.md
+          - tracevals-report.md
     ```
   </TabItem>
   <TabItem label="pre-commit">
@@ -157,9 +157,9 @@ optionally a file. Any system that can run Node 24 and branch on an exit code wo
     repos:
       - repo: local
         hooks:
-          - id: agentevals
+          - id: tracevals
             name: agent adherence
-            entry: npx agentevals run traces/refactor-session.jsonl --deterministic-only
+            entry: npx tracevals run traces/refactor-session.jsonl --deterministic-only
             language: system
             pass_filenames: false
     ```
@@ -172,11 +172,11 @@ optionally a file. Any system that can run Node 24 and branch on an exit code wo
   <LinkCard
     title="The exit-code contract"
     description="What 0, 1, and 2 mean, why needs-review counts as a failure by default, and how to change that."
-    href="/agentevals/ci/exit-codes-and-reports/"
+    href="/tracevals/ci/exit-codes-and-reports/"
   />
   <LinkCard
     title="Every configuration key"
     description="Cost ceilings, provider selection, cache locations, and the knobs that have no CLI flag."
-    href="/agentevals/reference/configuration/"
+    href="/tracevals/reference/configuration/"
   />
 </CardGrid>

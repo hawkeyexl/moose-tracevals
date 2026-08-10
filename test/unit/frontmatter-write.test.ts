@@ -5,7 +5,7 @@ import {
   type NewCriterion,
 } from "../../src/criteria/write.js";
 import { extractCriteria } from "../../src/criteria/extract.js";
-import { AgentevalsError } from "../../src/types.js";
+import { TracevalsError } from "../../src/types.js";
 import { makeArtifact } from "../helpers.js";
 
 const ONE: NewCriterion[] = [
@@ -134,14 +134,14 @@ describe("appendArtifactCriteria", () => {
       "",
     ].join("\n");
     expect(() => appendArtifactCriteria(source, "SKILL.md", ONE)).toThrow(
-      AgentevalsError,
+      TracevalsError,
     );
   });
 
   it("refuses non-YAML frontmatter rather than adding a second block", () => {
     const toml = '+++\nname = "x"\n+++\nbody\n';
     expect(() => appendArtifactCriteria(toml, "x.md", ONE)).toThrow(
-      AgentevalsError,
+      TracevalsError,
     );
   });
 
@@ -206,7 +206,7 @@ describe("appendArtifactCriteria", () => {
     // sequence. The yaml library throws its own error type here.
     const source = "---\n- one\n- two\n---\nbody\n";
     expect(() => appendArtifactCriteria(source, "x.md", ONE)).toThrow(
-      AgentevalsError,
+      TracevalsError,
     );
   });
 

@@ -4,17 +4,17 @@ type: cuj
 title: Turn an instruction into a testable criterion
 personas: [persona-artifact-author, persona-eval-owner]
 trigger: "The implicit whole-artifact eval is too coarse — the reader wants a named check on one specific instruction."
-entry_point: /agentevals/declare/
+entry_point: /tracevals/declare/
 success_criteria: "A criterion is declared in an artifact's frontmatter, is picked up on the next run, and fails when the session violates it — with the right grader and the right severity."
 steps:
-  - { stage: "See why the implicit eval is not enough", doc: "/agentevals/declare/#from-implicit-to-declared", exists: true }
-  - { stage: "Add the metadata.evals block", doc: "/agentevals/declare/#declare-your-first-criterion", exists: true, note: "string shorthand first, object form second" }
-  - { stage: "Choose between a judged and a deterministic check", doc: "/agentevals/declare/#judged-or-deterministic", exists: true }
-  - { stage: "Pick the grader that fits", doc: /agentevals/reference/graders/, exists: true }
-  - { stage: "Set severity deliberately", doc: "/agentevals/declare/#severity", exists: true, note: "only error fails the eval" }
-  - { stage: "Look up the full block shape", doc: /agentevals/reference/criteria-schema/, exists: true }
-  - { stage: "Verify it fires", doc: "/agentevals/declare/#confirm-it-fires", exists: true }
-  - { stage: "Mark probes apart from protections", doc: /agentevals/judge/schema-versioning/, exists: true }
+  - { stage: "See why the implicit eval is not enough", doc: "/tracevals/declare/#from-implicit-to-declared", exists: true }
+  - { stage: "Add the metadata.evals block", doc: "/tracevals/declare/#declare-your-first-criterion", exists: true, note: "string shorthand first, object form second" }
+  - { stage: "Choose between a judged and a deterministic check", doc: "/tracevals/declare/#judged-or-deterministic", exists: true }
+  - { stage: "Pick the grader that fits", doc: /tracevals/reference/graders/, exists: true }
+  - { stage: "Set severity deliberately", doc: "/tracevals/declare/#severity", exists: true, note: "only error fails the eval" }
+  - { stage: "Look up the full block shape", doc: /tracevals/reference/criteria-schema/, exists: true }
+  - { stage: "Verify it fires", doc: "/tracevals/declare/#confirm-it-fires", exists: true }
+  - { stage: "Mark probes apart from protections", doc: /tracevals/judge/schema-versioning/, exists: true }
 ---
 
 # CUJ: Turn an instruction into a testable criterion

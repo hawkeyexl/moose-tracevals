@@ -8,7 +8,7 @@ decision-makers: [hawkeyexl, Claude]
 
 ## Context and Problem Statement
 
-The previous agentevals auto-extracted criteria by regex-matching markdown headings ("Entry Criteria", "Constraints", …) in skill and agent files, and its `--detect-criteria` flag wrote merged criteria back into user artifacts mid-evaluation. How should the rework obtain evaluation criteria from artifacts?
+The previous tracevals auto-extracted criteria by regex-matching markdown headings ("Entry Criteria", "Constraints", …) in skill and agent files, and its `--detect-criteria` flag wrote merged criteria back into user artifacts mid-evaluation. How should the rework obtain evaluation criteria from artifacts?
 
 ## Decision Drivers
 

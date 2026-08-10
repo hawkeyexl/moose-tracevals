@@ -28,7 +28,7 @@ function colorFor(outcome: EvalResult["outcome"]): (s: string) => string {
 export function renderHuman(report: RunReport): string {
   const lines: string[] = [];
   const t = report.trace;
-  lines.push(pc.bold(`agentevals — ${t.file}`));
+  lines.push(pc.bold(`tracevals — ${t.file}`));
   lines.push(
     pc.dim(
       `${t.source} · ${t.model ?? "unknown model"} · ${t.turnCount} turn(s) · ${t.cwd}`,

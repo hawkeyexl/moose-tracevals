@@ -4,15 +4,15 @@ type: cuj
 title: Evolve the criteria standard without breaking what exists
 personas: [persona-eval-owner]
 trigger: "The criteria block needs to change — a new field, a tightened rule, or a convention the team should adopt — and artifacts across many repositories already declare criteria against the current shape."
-entry_point: /agentevals/judge/schema-versioning/
+entry_point: /tracevals/judge/schema-versioning/
 success_criteria: "The reader can pin a schema version, adopt a new field incrementally, and distinguish an expected-to-fail probe from a regression guard in reports."
 steps:
-  - { stage: "See the criteria block as a versioned contract", doc: /agentevals/reference/criteria-schema/, exists: true }
-  - { stage: "Pin a schema version", doc: /agentevals/judge/schema-versioning/, exists: true }
-  - { stage: "Adopt capability vs regression", doc: "/agentevals/judge/schema-versioning/#separate-probes-from-guards", exists: true }
-  - { stage: "Roll out a new convention incrementally", doc: "/agentevals/judge/schema-versioning/#roll-out-a-convention-in-stages", exists: true }
-  - { stage: "Handle a malformed criteria block", doc: /agentevals/triage/, exists: true, note: "an invalid block is an error with a line number, never silently ignored" }
-  - { stage: "Keep the vocabulary consistent across artifacts", doc: /agentevals/reference/graders/, exists: true }
+  - { stage: "See the criteria block as a versioned contract", doc: /tracevals/reference/criteria-schema/, exists: true }
+  - { stage: "Pin a schema version", doc: /tracevals/judge/schema-versioning/, exists: true }
+  - { stage: "Adopt capability vs regression", doc: "/tracevals/judge/schema-versioning/#separate-probes-from-guards", exists: true }
+  - { stage: "Roll out a new convention incrementally", doc: "/tracevals/judge/schema-versioning/#roll-out-a-convention-in-stages", exists: true }
+  - { stage: "Handle a malformed criteria block", doc: /tracevals/triage/, exists: true, note: "an invalid block is an error with a line number, never silently ignored" }
+  - { stage: "Keep the vocabulary consistent across artifacts", doc: /tracevals/reference/graders/, exists: true }
 ---
 
 # CUJ: Evolve the criteria standard without breaking what exists

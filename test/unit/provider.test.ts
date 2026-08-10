@@ -11,7 +11,7 @@ import {
   pricingOverrideFor,
   providerSpecFor,
 } from "../../src/judge/provider.js";
-import { AgentevalsError } from "../../src/types.js";
+import { TracevalsError } from "../../src/types.js";
 
 const ORIGINAL_ENV = { ...process.env };
 
@@ -171,7 +171,7 @@ describe("makeJudgeProvider", () => {
   it("wraps a construction failure as an operational error", () => {
     delete process.env["ANTHROPIC_API_KEY"];
     const config = parseConfig({ provider: { default: "anthropic" } });
-    expect(() => makeJudgeProvider(config)).toThrow(AgentevalsError);
+    expect(() => makeJudgeProvider(config)).toThrow(TracevalsError);
     expect(() => makeJudgeProvider(config)).toThrow(/ANTHROPIC_API_KEY/);
   });
 
@@ -179,7 +179,7 @@ describe("makeJudgeProvider", () => {
     // Config is schema-constrained, but the CLI flag is free text.
     expect(() =>
       makeJudgeProvider(parseConfig({}), { provider: "gemini" }),
-    ).toThrow(AgentevalsError);
+    ).toThrow(TracevalsError);
   });
 
   it("seeds the mock with caller-supplied responses", async () => {

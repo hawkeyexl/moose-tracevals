@@ -4,17 +4,17 @@ type: cuj
 title: Propose criteria across a whole project and review the diff
 personas: [persona-artifact-author]
 trigger: "There are more artifacts than anyone will hand-write criteria for, and adoption is about to stall on authoring cost."
-entry_point: /agentevals/declare/fill/
+entry_point: /tracevals/declare/fill/
 success_criteria: "Every instruction artifact in the project has been offered criteria, the reader has reviewed a real diff, and only criteria they accept have been written — with project rules left untouched."
 steps:
-  - { stage: "See what fill is for and what it refuses to do", doc: "/agentevals/declare/fill/#what-fill-does", exists: true }
-  - { stage: "Dry-run across the project", doc: "/agentevals/declare/fill/#dry-run-first", exists: true, note: "--dry-run is the recommended first invocation, always" }
-  - { stage: "Read the proposal report", doc: "/agentevals/declare/fill/#read-the-proposals", exists: true }
-  - { stage: "Understand why a proposal was rejected", doc: "/agentevals/declare/fill/#why-a-proposal-was-rejected", exists: true, note: "the gate order — confidence is last, not first" }
-  - { stage: "Act on needs-sharpening notes", doc: "/agentevals/declare/fill/#instructions-that-cannot-be-tested", exists: true }
-  - { stage: "Write, then review the diff", doc: "/agentevals/declare/fill/#write-and-review", exists: true }
-  - { stage: "Copy project-rules proposals by hand", doc: "/agentevals/declare/fill/#project-rules-are-never-written", exists: true }
-  - { stage: "Tune the threshold and the cap", doc: /agentevals/reference/cli/, exists: true }
+  - { stage: "See what fill is for and what it refuses to do", doc: "/tracevals/declare/fill/#what-fill-does", exists: true }
+  - { stage: "Dry-run across the project", doc: "/tracevals/declare/fill/#dry-run-first", exists: true, note: "--dry-run is the recommended first invocation, always" }
+  - { stage: "Read the proposal report", doc: "/tracevals/declare/fill/#read-the-proposals", exists: true }
+  - { stage: "Understand why a proposal was rejected", doc: "/tracevals/declare/fill/#why-a-proposal-was-rejected", exists: true, note: "the gate order — confidence is last, not first" }
+  - { stage: "Act on needs-sharpening notes", doc: "/tracevals/declare/fill/#instructions-that-cannot-be-tested", exists: true }
+  - { stage: "Write, then review the diff", doc: "/tracevals/declare/fill/#write-and-review", exists: true }
+  - { stage: "Copy project-rules proposals by hand", doc: "/tracevals/declare/fill/#project-rules-are-never-written", exists: true }
+  - { stage: "Tune the threshold and the cap", doc: /tracevals/reference/cli/, exists: true }
 ---
 
 # CUJ: Propose criteria across a whole project and review the diff

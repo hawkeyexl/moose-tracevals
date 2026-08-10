@@ -1,6 +1,6 @@
 ---
 title: Glossary
-description: Definitions of the terms agentevals uses — trace, artifact, criterion, grader, plan, finding, outcome, consensus, zone, sidechain, and the rest.
+description: Definitions of the terms tracevals uses — trace, artifact, criterion, grader, plan, finding, outcome, consensus, zone, sidechain, and the rest.
 sidebar:
   order: 9
 ---
@@ -19,12 +19,12 @@ order.
 ## Inputs
 
 **Trace**
-: A record of an agent session that already happened, stored as JSONL. agentevals reads traces; it
-never writes them. See [Traces reference](/agentevals/reference/traces/).
+: A record of an agent session that already happened, stored as JSONL. tracevals reads traces; it
+never writes them. See [Traces reference](/tracevals/reference/traces/).
 
 **Session store**
 : Where an agent CLI keeps its traces — `~/.claude/projects/<project-slug>/*.jsonl` for Claude Code.
-Scanned by `agentevals list` and the interactive picker.
+Scanned by `tracevals list` and the interactive picker.
 
 **Project slug**
 : A project directory encoded as a store directory name, by replacing every non-alphanumeric
@@ -48,7 +48,7 @@ non-sidechain user prompts.
 
 **Artifact resolution**
 : Mapping each reference in a trace to a file on disk, deterministically — trace content plus
-filesystem lookup, never a model. See [Account for every artifact](/agentevals/declare/coverage/).
+filesystem lookup, never a model. See [Account for every artifact](/tracevals/declare/coverage/).
 
 **Coverage**
 : The record of every artifact a session referenced and whether it resolved. Reported as a table by
@@ -65,7 +65,7 @@ every reporter. An unresolved reference is a coverage row plus a warning, never 
 **Criterion**
 : One named check declared in an artifact's `metadata.evals` frontmatter. Either a string
 (shorthand for a judged assertion) or an object selecting a grader. See the
-[criteria schema](/agentevals/reference/criteria-schema/).
+[criteria schema](/tracevals/reference/criteria-schema/).
 
 **Assertion**
 : The sentence a criterion asserts held during the session. The thing a grader or the judge decides.
@@ -92,7 +92,7 @@ assertion, evidence, examples, and artifact content — is part of the judge cac
 
 **Grader**
 : The mechanism that decides a criterion. `llm` uses the ensemble judge; the other seven kinds are
-deterministic. See the [grader reference](/agentevals/reference/graders/).
+deterministic. See the [grader reference](/tracevals/reference/graders/).
 
 **Deterministic grader**
 : One that decides from the trace alone — no model call, no cost, same answer every time.
@@ -108,7 +108,7 @@ silently constrains everything.
 
 **Judge**
 : The LLM-as-judge path. N independent runs at temperature 0, combined by consensus and routed
-through confidence zones. See [How the judge decides](/agentevals/judge/).
+through confidence zones. See [How the judge decides](/tracevals/judge/).
 
 **Ensemble**
 : The N independent judge runs for one criterion. Three by default (`judge.ensembleRuns`).
@@ -147,7 +147,7 @@ reported but does not route the outcome.
 
 **Report**
 : The output of a run, in `human`, `json`, or `markdown`. The JSON form is the documented contract.
-See [Reports & exit codes](/agentevals/reference/report-and-exit-codes/).
+See [Reports & exit codes](/tracevals/reference/report-and-exit-codes/).
 
 **History**
 : An append-only JSONL log of run summaries, written by `--history`, used to compare a run against
@@ -179,4 +179,4 @@ that are not there.
 
 **Grader contract**
 : What a custom grader must implement: `grade()` **and** `validateOptions()`. A grader missing the
-second can never be proposed by `fill`. See [Custom graders](/agentevals/extend/custom-graders/).
+second can never be proposed by `fill`. See [Custom graders](/tracevals/extend/custom-graders/).

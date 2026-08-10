@@ -4,11 +4,11 @@ date: 2026-07-24
 decision-makers: [hawkeyexl, Claude]
 ---
 
-# Rebuild agentevals as a trace-adherence evaluator on docevals and docmeta
+# Rebuild tracevals as a trace-adherence evaluator on docevals and docmeta
 
 ## Context and Problem Statement
 
-agentevals 0.2.x was a self-contained eval framework with three modes (spec trials via `claude -p`, transcript, prompt), its own LLM judge (spawning the `claude` CLI), and regex-based criteria scraping. The judge duplicated machinery the sibling docevals project already ships (providers, ensemble consensus, confidence zones), and the multi-mode design blurred what the tool is for. What should the ground-up rework be built around, and on what foundations?
+tracevals 0.2.x was a self-contained eval framework with three modes (spec trials via `claude -p`, transcript, prompt), its own LLM judge (spawning the `claude` CLI), and regex-based criteria scraping. The judge duplicated machinery the sibling docevals project already ships (providers, ensemble consensus, confidence zones), and the multi-mode design blurred what the tool is for. What should the ground-up rework be built around, and on what foundations?
 
 ## Decision Drivers
 
@@ -25,13 +25,13 @@ agentevals 0.2.x was a self-contained eval framework with three modes (spec tria
 
 ## Decision Outcome
 
-Chosen option: "Trace-only rework depending on docevals + docmeta". The pipeline is: select trace → parse → deterministically resolve used artifacts → extract criteria → grade (deterministic + ensemble LLM judge) → report. Spec mode, prompt mode, pass@k, and live trial generation are removed. docevals supplies the judge provider layer and ensemble math; docmeta supplies frontmatter extraction and schema validation. Until docevals publishes to npm, it is consumed via a `file:../docevals` dependency, and releases of agentevals stay disabled.
+Chosen option: "Trace-only rework depending on docevals + docmeta". The pipeline is: select trace → parse → deterministically resolve used artifacts → extract criteria → grade (deterministic + ensemble LLM judge) → report. Spec mode, prompt mode, pass@k, and live trial generation are removed. docevals supplies the judge provider layer and ensemble math; docmeta supplies frontmatter extraction and schema validation. Until docevals publishes to npm, it is consumed via a `file:../docevals` dependency, and releases of tracevals stay disabled.
 
 ### Consequences
 
 - Good, because the tool has one job and every run is reproducible from an existing trace file.
 - Good, because judge invariants are inherited from a tested dependency instead of re-implemented.
-- Bad, because generating fresh trials now requires running the agent separately and pointing agentevals at the resulting session file.
+- Bad, because generating fresh trials now requires running the agent separately and pointing tracevals at the resulting session file.
 - Bad, because a `file:` dependency blocks npm publishing until docevals ships.
 
 ### Confirmation

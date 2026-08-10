@@ -10,7 +10,7 @@ describe("runList", () => {
   it("returns discovered traces for --all-projects", async () => {
     const run = await runList({
       allProjects: true,
-      env: { AGENTEVALS_HOME: fixtureHome },
+      env: { TRACEVALS_HOME: fixtureHome },
     });
     expect(run.traces.length).toBe(2);
     const ids = run.traces.map((t) => t.sessionId);
@@ -23,7 +23,7 @@ describe("renderList", () => {
   it("renders one line per trace with prompt and project", async () => {
     const run = await runList({
       allProjects: true,
-      env: { AGENTEVALS_HOME: fixtureHome },
+      env: { TRACEVALS_HOME: fixtureHome },
     });
     const out = renderList(run, { color: false });
     expect(out).toContain("Fix the crash in src/app.ts.");

@@ -1,5 +1,5 @@
 /**
- * `agentevals fill [paths...]` — propose eval criteria for a project's
+ * `tracevals fill [paths...]` — propose eval criteria for a project's
  * instruction artifacts and append the survivors to their frontmatter.
  *
  * Authoring, not evaluation: `run` never calls this, and everything written is
@@ -13,7 +13,7 @@ import pc from "picocolors";
 import { discoverArtifacts, type DiscoveredArtifact } from "../artifacts/discover.js";
 import { appendArtifactCriteria, type NewCriterion } from "../criteria/write.js";
 import { loadConfig } from "../core/config.js";
-import { AgentevalsError } from "../types.js";
+import { TracevalsError } from "../types.js";
 import {
   costOfUsage,
   pricingFor,
@@ -275,7 +275,7 @@ export async function runFill(options: FillOptions = {}): Promise<FillRun> {
         // An operational failure (no API key, unknown provider) is not this
         // artifact's fault and would repeat for every one: let it out so the
         // CLI reports it once and exits 2.
-        if (err instanceof AgentevalsError) throw err;
+        if (err instanceof TracevalsError) throw err;
         return {
           ...base,
           status: "error",

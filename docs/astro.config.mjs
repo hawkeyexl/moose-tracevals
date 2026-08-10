@@ -13,17 +13,17 @@ import starlight from "@astrojs/starlight";
 // first page.
 export default defineConfig({
   site: "https://hawkeyexl.github.io",
-  base: "/agentevals",
+  base: "/tracevals",
   integrations: [
     starlight({
-      title: "agentevals",
+      title: "tracevals",
       description:
         "Adherence evals for AI agent session traces. Did the session follow the skills and instructions it used?",
       social: [
         {
           icon: "github",
           label: "GitHub",
-          href: "https://github.com/hawkeyexl/agentevals",
+          href: "https://github.com/hawkeyexl/tracevals",
         },
       ],
       sidebar: [
@@ -48,7 +48,7 @@ export default defineConfig({
           items: [{ autogenerate: { directory: "triage" } }],
         },
         {
-          label: "Build on agentevals",
+          label: "Build on tracevals",
           items: [{ autogenerate: { directory: "extend" } }],
         },
         {

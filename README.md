@@ -1,6 +1,6 @@
-# agentevals
+# tracevals
 
-Adherence evals for AI agent session traces. Point agentevals at a [Claude Code](https://docs.anthropic.com/en/docs/claude-code) session, and it deterministically looks up every skill, agent definition, and project-rules file the session used, then evaluates whether the session **adhered to the instructions in those artifacts** — with deterministic graders where possible and an ensemble LLM judge everywhere else.
+Adherence evals for AI agent session traces. Point tracevals at a [Claude Code](https://docs.anthropic.com/en/docs/claude-code) session, and it deterministically looks up every skill, agent definition, and project-rules file the session used, then evaluates whether the session **adhered to the instructions in those artifacts** — with deterministic graders where possible and an ensemble LLM judge everywhere else.
 
 Built on two sibling libraries: [@hawkeyexl/inference](https://github.com/hawkeyexl/inference) (providers, ensemble consensus, confidence zones, response caching) and [docmeta](https://github.com/hawkeyexl/docmeta) (frontmatter extraction, JSON-Schema validation).
 
@@ -9,21 +9,20 @@ Built on two sibling libraries: [@hawkeyexl/inference](https://github.com/hawkey
 Requires Node.js 24+.
 
 ```bash
-npm install --save-dev @hawkeyexl/agentevals
+npm install --save-dev tracevals
 ```
 
-> **The package is `@hawkeyexl/agentevals`; the binary is `agentevals`.** `npx` resolves by *package*
-> name, and the unscoped `agentevals` on npm belongs to an unrelated project — so `npx agentevals`
-> only reaches this tool once it is installed locally. With nothing installed, use
-> `npx @hawkeyexl/agentevals`.
+> **The package and the binary are both named `tracevals`.** `npx` resolves by *package* name,
+> so `npx tracevals` reaches this tool either way — from `node_modules/.bin` when it is a local
+> dependency, and straight from the registry when nothing is installed.
 
 ## Quick start
 
 Evaluate a session that already happened. No instrumentation, no re-running work, no API key:
 
 ```bash
-npx agentevals list --all-projects --limit 5
-npx agentevals run <trace-file> --deterministic-only
+npx tracevals list --all-projects --limit 5
+npx tracevals run <trace-file> --deterministic-only
 ```
 
 ```
@@ -38,7 +37,7 @@ npx agentevals run <trace-file> --deterministic-only
 
 The skill said *"this skill is edit-only"*. The session ran a shell command.
 
-Exit codes: `0` all passed or skipped · `1` a check failed, errored, or needs review · `2` agentevals itself could not run.
+Exit codes: `0` all passed or skipped · `1` a check failed, errored, or needs review · `2` tracevals itself could not run.
 
 ## How it works
 
@@ -67,16 +66,16 @@ report (human / json / markdown) + artifact coverage + history
 
 Full guides, recipes, and reference live on the documentation site:
 
-**https://hawkeyexl.github.io/agentevals/**
+**https://hawkeyexl.github.io/tracevals/**
 
 | Track | What it covers |
 |-------|----------------|
-| [Get started](https://hawkeyexl.github.io/agentevals/get-started/) | Install, find a session, and read your first result. |
-| [Declare what to check](https://hawkeyexl.github.io/agentevals/declare/) | Turn an instruction into a criterion; propose criteria across a project with `fill`. |
-| [Run it in CI](https://hawkeyexl.github.io/agentevals/ci/) | An offline GitHub Actions recipe, the exit-code contract, and report formats. |
-| [Trust the judge](https://hawkeyexl.github.io/agentevals/judge/) | Ensembles, consensus, and confidence zones — with the arithmetic. |
-| [Read a failing eval](https://hawkeyexl.github.io/agentevals/triage/) | One page: what failed, whether the verdict holds, and what to do. |
-| [Reference](https://hawkeyexl.github.io/agentevals/reference/) | Every CLI flag, config key, grader option, criteria field, and report field. |
+| [Get started](https://hawkeyexl.github.io/tracevals/get-started/) | Install, find a session, and read your first result. |
+| [Declare what to check](https://hawkeyexl.github.io/tracevals/declare/) | Turn an instruction into a criterion; propose criteria across a project with `fill`. |
+| [Run it in CI](https://hawkeyexl.github.io/tracevals/ci/) | An offline GitHub Actions recipe, the exit-code contract, and report formats. |
+| [Trust the judge](https://hawkeyexl.github.io/tracevals/judge/) | Ensembles, consensus, and confidence zones — with the arithmetic. |
+| [Read a failing eval](https://hawkeyexl.github.io/tracevals/triage/) | One page: what failed, whether the verdict holds, and what to do. |
+| [Reference](https://hawkeyexl.github.io/tracevals/reference/) | Every CLI flag, config key, grader option, criteria field, and report field. |
 
 ## Development
 
@@ -86,7 +85,7 @@ See [CLAUDE.md](CLAUDE.md) for the working agreements (TDD, hermetic offline tes
 npm test              # offline suite (mocked judge, fixture traces)
 npm run typecheck
 npm run build
-AGENTEVALS_LIVE=1 npm test   # adds the live judge smoke test
+TRACEVALS_LIVE=1 npm test   # adds the live judge smoke test
 
 npm run docs:validate # dogfood docmeta against the docs' own frontmatter
 npm run docs:build    # build the Starlight site

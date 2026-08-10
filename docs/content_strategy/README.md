@@ -1,7 +1,7 @@
 # Content strategy
 
 **Scope:** the durable audience, persona, critical-user-journey, and information-architecture
-strategy for the agentevals documentation site. Every writing task consults this directory before
+strategy for the tracevals documentation site. Every writing task consults this directory before
 drafting. It does **not** contain user-facing documentation; that lives in `docs/src/content/docs/`.
 
 These files sit inside `docs/` but outside `docs/src/content/docs/**`, so they are never built into
@@ -22,7 +22,7 @@ Stable IDs are the glue. Every artifact declares an `id:` and references others 
 
 ```
 audience ──< persona ──< journey ──> doc touchpoint
- aud-*        persona-*    cuj-*        /agentevals/<route>
+ aud-*        persona-*    cuj-*        /tracevals/<route>
 ```
 
 | Artifact | ID prefix | References |
@@ -62,7 +62,7 @@ Before drafting or editing any page under `docs/src/content/docs/**`:
 
 ## Verifying technical claims
 
-agentevals documents a real CLI, so every flag, exit code, output string, config default, and grader
+tracevals documents a real CLI, so every flag, exit code, output string, config default, and grader
 rule must match the code, never the writer's assumption.
 
 - **Source files are the contract for behavior.** `information_architecture/ia-gap-analysis.md`
@@ -74,14 +74,14 @@ rule must match the code, never the writer's assumption.
   against `test/fixtures/`, instead of hand-writing it. That keeps docs and CI in lockstep, and
   the Doc Detective inline tests in each page then run those same commands on every push.
 - **Two gates enforce this mechanically.** `.github/workflows/docs.yml` blocks the Pages deploy
-  unless every page's frontmatter validates (agentevals dogfoods its own `docmeta` dependency to do
+  unless every page's frontmatter validates (tracevals dogfoods its own `docmeta` dependency to do
   it), and `.github/workflows/doc-detective.yml` runs every documented command against the fixture
   corpus.
 
 ## Evidence basis, and its limitation
 
 **These segments are not derived from user research.** The usual method for this strategy, which is
-to cluster recorded customer and prospect calls into segments bottom-up, was unavailable: agentevals
+to cluster recorded customer and prospect calls into segments bottom-up, was unavailable: tracevals
 has no call evidence. What is written here is derived from three real but indirect sources:
 
 1. **The product's own surface**: the CLI in `src/cli.ts`, the config schema, the grader registry,
