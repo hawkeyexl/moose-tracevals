@@ -4,17 +4,17 @@ type: cuj
 title: Read a failing eval and decide what to do
 personas: [persona-run-triager]
 trigger: "A build went red, or a report shows FAIL, ERROR, REVIEW, or SKIP, and the reader has no context on this tool."
-entry_point: /agentevals/triage/
+entry_point: /moose-tracevals/triage/
 success_criteria: "Within one page and under two minutes, the reader knows which instruction was violated, whether the verdict is trustworthy, and whether to change the session's behavior, challenge the criterion, or escalate — and to whom."
 steps:
-  - { stage: "Read one result line", doc: /agentevals/triage/, exists: true, note: "artifact, criterion, and outcome defined in place" }
-  - { stage: "Understand a deterministic failure", doc: "/agentevals/triage/#a-check-failed", exists: true, note: "the finding names what the session did" }
-  - { stage: "Weigh a judged verdict", doc: "/agentevals/triage/#a-judged-verdict", exists: true, note: "the vote split and the cited observation are the evidence" }
-  - { stage: "Decode needs-review", doc: "/agentevals/triage/#review-is-not-a-failure", exists: true }
-  - { stage: "Decode the several reasons for skipped", doc: "/agentevals/triage/#why-something-was-skipped", exists: true }
-  - { stage: "Tell an error from a failure", doc: "/agentevals/triage/#error-means-the-check-broke", exists: true, note: "including a malformed criteria block, which carries a line number" }
-  - { stage: "Decide: fix the session, fix the criterion, or escalate", doc: "/agentevals/triage/#what-to-do-next", exists: true }
-  - { stage: "Answer a follow-up question", doc: /agentevals/triage/faq/, exists: true }
+  - { stage: "Read one result line", doc: /moose-tracevals/triage/, exists: true, note: "artifact, criterion, and outcome defined in place" }
+  - { stage: "Understand a deterministic failure", doc: "/moose-tracevals/triage/#a-check-failed", exists: true, note: "the finding names what the session did" }
+  - { stage: "Weigh a judged verdict", doc: "/moose-tracevals/triage/#a-judged-verdict", exists: true, note: "the vote split and the cited observation are the evidence" }
+  - { stage: "Decode needs-review", doc: "/moose-tracevals/triage/#review-is-not-a-failure", exists: true }
+  - { stage: "Decode the several reasons for skipped", doc: "/moose-tracevals/triage/#why-something-was-skipped", exists: true }
+  - { stage: "Tell an error from a failure", doc: "/moose-tracevals/triage/#error-means-the-check-broke", exists: true, note: "including a malformed criteria block, which carries a line number" }
+  - { stage: "Decide: fix the session, fix the criterion, or escalate", doc: "/moose-tracevals/triage/#what-to-do-next", exists: true }
+  - { stage: "Answer a follow-up question", doc: /moose-tracevals/triage/faq/, exists: true }
 ---
 
 # CUJ: Read a failing eval and decide what to do

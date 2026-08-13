@@ -1,5 +1,5 @@
 /**
- * Judge-provider construction: map agentevals' provider config section onto
+ * Judge-provider construction: map moose-tracevals' provider config section onto
  * the shared inference library's `ProviderSpec`.
  *
  * This used to serialize the config section back to YAML and re-parse it
@@ -17,13 +17,13 @@ import {
   type ProviderSpec,
 } from "@hawkeyexl/inference";
 import { mockVerdict } from "@hawkeyexl/inference";
-import { AgentevalsError } from "../types.js";
-import type { AgentevalsConfig } from "../core/config.js";
+import { TracevalsError } from "../types.js";
+import type { TracevalsConfig } from "../core/config.js";
 
 export type { MockResponse };
 
 export function makeJudgeProvider(
-  config: AgentevalsConfig,
+  config: TracevalsConfig,
   options: {
     provider?: string;
     model?: string;
@@ -42,7 +42,7 @@ export function makeJudgeProvider(
   try {
     return makeProvider(providerSpecFor(config, name, options));
   } catch (err) {
-    throw new AgentevalsError(
+    throw new TracevalsError(
       `could not construct judge provider "${name}": ${err instanceof Error ? err.message : String(err)}`,
     );
   }
@@ -58,7 +58,7 @@ export function makeJudgeProvider(
  * makes the config key a lie.
  */
 export function pricingOverrideFor(
-  config: AgentevalsConfig,
+  config: TracevalsConfig,
   options: { provider?: string } = {},
 ): Pricing | undefined {
   const name = (options.provider ??
@@ -76,7 +76,7 @@ export function pricingOverrideFor(
  * must be the one `makeProvider` would actually use, defaults included.
  */
 export function providerSpecFor(
-  config: AgentevalsConfig,
+  config: TracevalsConfig,
   name: ProviderName,
   options: { model?: string; mockResponses?: MockResponse[] } = {},
 ): ProviderSpec {
@@ -114,7 +114,7 @@ export function providerSpecFor(
     default:
       // Unreachable via config (the schema constrains the enum), but a CLI
       // --provider flag is free text and lands here.
-      throw new AgentevalsError(
+      throw new TracevalsError(
         `unknown provider "${String(name)}". Available: anthropic, openai, claude-cli, mock.`,
       );
   }

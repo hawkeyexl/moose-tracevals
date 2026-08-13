@@ -32,7 +32,7 @@ function run(overrides: Record<string, unknown> = {}) {
   return runEvals({
     tracePath: sessionFixture,
     projectDir: fixtureProject,
-    env: { AGENTEVALS_HOME: fixtureHome },
+    env: { MOOSE_TRACEVALS_HOME: fixtureHome },
     config,
     judge: passJudge,
     ...overrides,

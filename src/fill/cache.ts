@@ -67,7 +67,7 @@ export class FillCache {
   private readonly store: JsonCache<unknown>;
 
   constructor(dir: string, enabled: boolean = true) {
-    this.store = new JsonCache<unknown>(dir, enabled, "agentevals");
+    this.store = new JsonCache<unknown>(dir, enabled, "moose-tracevals");
   }
 
   get(key: string): Record<string, unknown> | undefined {

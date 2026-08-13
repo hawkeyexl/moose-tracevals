@@ -5,16 +5,16 @@ title: Evaluate your first session end to end
 personas: [persona-artifact-author, persona-platform-engineer]
 backbone: true
 trigger: "Someone suspects their agent is not following the instructions it was given, and wants proof either way."
-entry_point: /agentevals/get-started/
+entry_point: /moose-tracevals/get-started/
 success_criteria: "A real past session is evaluated and the reader can say, per artifact, which instructions held and which did not — without an API key and without re-running any work."
 steps:
-  - { stage: "Understand what is being checked", doc: /agentevals/, exists: true }
-  - { stage: "Install and confirm the CLI runs", doc: /agentevals/get-started/, exists: true }
-  - { stage: "Find an evaluable session", doc: "/agentevals/get-started/#find-a-session", exists: true, note: "agentevals list; where the session store lives" }
-  - { stage: "Run the first evaluation offline", doc: "/agentevals/get-started/#run-your-first-evaluation", exists: true, note: "--deterministic-only, then --provider mock" }
-  - { stage: "Read the report", doc: "/agentevals/get-started/#read-the-report", exists: true }
-  - { stage: "Understand artifact coverage", doc: /agentevals/declare/coverage/, exists: true }
-  - { stage: "Look up a flag", doc: /agentevals/reference/cli/, exists: true }
+  - { stage: "Understand what is being checked", doc: /moose-tracevals/, exists: true }
+  - { stage: "Install and confirm the CLI runs", doc: /moose-tracevals/get-started/, exists: true }
+  - { stage: "Find an evaluable session", doc: "/moose-tracevals/get-started/#find-a-session", exists: true, note: "moose-tracevals list; where the session store lives" }
+  - { stage: "Run the first evaluation offline", doc: "/moose-tracevals/get-started/#run-your-first-evaluation", exists: true, note: "--deterministic-only, then --provider mock" }
+  - { stage: "Read the report", doc: "/moose-tracevals/get-started/#read-the-report", exists: true }
+  - { stage: "Understand artifact coverage", doc: /moose-tracevals/declare/coverage/, exists: true }
+  - { stage: "Look up a flag", doc: /moose-tracevals/reference/cli/, exists: true }
 ---
 
 # CUJ: Evaluate your first session end to end

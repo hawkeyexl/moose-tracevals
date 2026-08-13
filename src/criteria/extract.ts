@@ -10,7 +10,7 @@ import { extractFrontmatter, Validator, type FieldError } from "docmeta";
 import type { ResolvedArtifact } from "../artifacts/types.js";
 
 export const ARTIFACT_EVALS_SCHEMA_ID =
-  "https://raw.githubusercontent.com/hawkeyexl/agentevals/main/schemas/artifact-evals-0.2.json";
+  "https://raw.githubusercontent.com/hawkeyexl/moose-tracevals/main/schemas/artifact-evals-0.2.json";
 
 /** Absolute path of the packaged schema (works from src and dist). */
 export function artifactEvalsSchemaPath(): string {

@@ -1,16 +1,16 @@
 ---
-title: agentevals
+title: moose-tracevals
 description: Adherence evals for AI agent session traces. Did the session follow the skills and instructions it used?
 template: splash
 hero:
-  tagline: You wrote the instructions. Did the agent follow them? Point agentevals at a session that already happened and find out.
+  tagline: You wrote the instructions. Did the agent follow them? Point moose-tracevals at a session that already happened and find out.
   actions:
     - text: Get started
-      link: /agentevals/get-started/
+      link: /moose-tracevals/get-started/
       icon: right-arrow
       variant: primary
     - text: Read a failing eval
-      link: /agentevals/triage/
+      link: /moose-tracevals/triage/
       icon: error
       variant: minimal
 ---
@@ -21,7 +21,7 @@ Agent instructions accumulate. A `SKILL.md` here, a subagent definition there, a
 has grown past the point anyone rereads it. Nothing checks whether any of it is still being
 followed.
 
-agentevals closes that loop. Give it a session that already happened, and it deterministically
+moose-tracevals closes that loop. Give it a session that already happened, and it deterministically
 looks up every skill, agent definition, and project-rules file the session used, then evaluates
 whether the session **adhered to the instructions in those artifacts**.
 
@@ -31,32 +31,32 @@ whether the session **adhered to the instructions in those artifacts**.
   <LinkCard
     title="Evaluate my first session"
     description="Install, find a session, and read a real result, offline and with no API key."
-    href="/agentevals/get-started/"
+    href="/moose-tracevals/get-started/"
   />
   <LinkCard
     title="Check one specific instruction"
     description="Declare a criterion in an artifact's frontmatter and make it fail when it should."
-    href="/agentevals/declare/"
+    href="/moose-tracevals/declare/"
   />
   <LinkCard
     title="Gate agent work in CI"
     description="One workflow, no network calls, an exit code you can branch on."
-    href="/agentevals/ci/"
+    href="/moose-tracevals/ci/"
   />
   <LinkCard
     title="Decide whether to trust the judge"
     description="Ensembles, consensus, and why an errored run can never produce a silent pass."
-    href="/agentevals/judge/"
+    href="/moose-tracevals/judge/"
   />
   <LinkCard
     title="Understand why my build went red"
     description="One page: what failed, whether the verdict holds, and what to do about it."
-    href="/agentevals/triage/"
+    href="/moose-tracevals/triage/"
   />
   <LinkCard
     title="Look something up"
     description="Every flag, config key, grader option, and report field."
-    href="/agentevals/reference/"
+    href="/moose-tracevals/reference/"
   />
 </CardGrid>
 
@@ -65,11 +65,11 @@ whether the session **adhered to the instructions in those artifacts**.
 Everything below runs with no API key and no network call.
 
 ```bash
-npm install --save-dev @hawkeyexl/agentevals
+npm install --save-dev moose-tracevals
 ```
 
 ```bash
-npx agentevals run ./session.jsonl --deterministic-only
+npx moose-tracevals run ./session.jsonl --deterministic-only
 ```
 
 ```
@@ -84,10 +84,9 @@ npx agentevals run ./session.jsonl --deterministic-only
 
 The skill said *"this skill is edit-only"*. The session ran a shell command. Nobody had to notice.
 
-<Aside type="caution" title="Install first, then use the short name">
-The unscoped name `agentevals` on npm belongs to an unrelated project. `npx agentevals` only
-resolves to this tool once `@hawkeyexl/agentevals` is installed locally. With nothing installed, use
-the full name: `npx @hawkeyexl/agentevals`.
+<Aside type="tip" title="Nothing to install first">
+The package and the binary are both named `moose-tracevals`, so `npx moose-tracevals` reaches this tool
+whether or not it is already a dependency of your project.
 </Aside>
 
 ## How it works

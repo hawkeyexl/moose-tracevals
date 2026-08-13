@@ -1,4 +1,4 @@
-/** Programmatic API for agentevals. */
+/** Programmatic API for moose-tracevals. */
 export * from "./types.js";
 export * from "./trace/types.js";
 export { detectFormat, detectContentFormat } from "./trace/detect.js";
@@ -68,7 +68,7 @@ export {
   DEFAULT_CONFIG_FILENAME,
   loadConfig,
   parseConfig,
-  type AgentevalsConfig,
+  type TracevalsConfig,
   type Pricing,
   type ProviderConfig,
 } from "./core/config.js";

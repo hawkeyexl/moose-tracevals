@@ -1,5 +1,5 @@
 ---
-title: Build on agentevals
+title: Build on moose-tracevals
 description: The intended entry points of the programmatic API, the injection seams that keep your own test suite offline, and where the trace-adapter seam sits.
 sidebar:
   order: 1
@@ -7,12 +7,12 @@ sidebar:
 
 import { Aside, LinkCard, CardGrid } from '@astrojs/starlight/components';
 
-**Scope:** consuming agentevals as a library rather than a CLI. It assumes the vocabulary from the
+**Scope:** consuming moose-tracevals as a library rather than a CLI. It assumes the vocabulary from the
 journey pages — a custom grader cannot be explained before the
-[built-in graders](/agentevals/reference/graders/) are.
+[built-in graders](/moose-tracevals/reference/graders/) are.
 
 ```bash
-npm install @hawkeyexl/agentevals
+npm install moose-tracevals
 ```
 
 ESM-only, Node.js 24+, types shipped.
@@ -33,7 +33,7 @@ reachable but is there to serve the CLI.
 | Load configuration | `loadConfig()` / `parseConfig(raw)` |
 
 ```ts
-import { loadConfig, runEvals, render } from "@hawkeyexl/agentevals";
+import { loadConfig, runEvals, render } from "moose-tracevals";
 
 const config = await loadConfig();
 const report = await runEvals({
@@ -48,8 +48,8 @@ console.log(report.summary, report.exitCode);
 ```
 
 `RunReport` is the same structure `--format json` prints, documented field by field in
-[Reports & exit codes](/agentevals/reference/report-and-exit-codes/). The full export list is in the
-[API reference](/agentevals/reference/api/).
+[Reports & exit codes](/moose-tracevals/reference/report-and-exit-codes/). The full export list is in the
+[API reference](/moose-tracevals/reference/api/).
 
 <Aside type="caution" title="`runEvals` needs a judge, or `deterministicOnly`">
 `EngineOptions.judge` is optional in the type but **required unless `deterministicOnly: true`**.
@@ -58,13 +58,13 @@ Omit both and judged evals have nothing to run them.
 
 ## Injection seams
 
-Every place agentevals reaches outside the process is injectable, so anything you build on top can
+Every place moose-tracevals reaches outside the process is injectable, so anything you build on top can
 keep its own suite hermetic — the same seams this project's tests use.
 
 | Seam | Where | Replaces |
 |---|---|---|
 | `EngineOptions.judge` | `runEvals` | The whole judged path. Pass your own `TraceJudge`, or set `deterministicOnly` and pass nothing. |
-| `EngineOptions.env` | `runEvals` | Environment lookup, including `AGENTEVALS_HOME`. Point artifact resolution at a fixture home. |
+| `EngineOptions.env` | `runEvals` | Environment lookup, including `MOOSE_TRACEVALS_HOME`. Point artifact resolution at a fixture home. |
 | `ResolveOptions.env` | `resolveArtifacts` | The same, when resolving directly. |
 | `DiscoverOptions.env` | `discoverTraces` | The session store root. |
 | `promptFn` | `pickTrace(options, promptFn)` | The interactive prompt, so the picker is testable without a TTY. |
@@ -73,7 +73,7 @@ keep its own suite hermetic — the same seams this project's tests use.
 A `TraceJudge` is just a function, so a stub is one line:
 
 ```ts
-import { runEvals, type TraceJudge } from "@hawkeyexl/agentevals";
+import { runEvals, type TraceJudge } from "moose-tracevals";
 
 const alwaysPasses: TraceJudge = async (plans) =>
   plans.map((plan) => ({
@@ -92,7 +92,7 @@ const report = await runEvals({ tracePath, config, judge: alwaysPasses });
 
 <Aside title="Pin the home directory in your tests too">
 Artifact resolution reads `~/.claude/skills/`, `~/.claude/agents/`, and the plugin store. Pass
-`env: { AGENTEVALS_HOME: "test/fixtures/home" }` so results do not depend on whose machine the suite
+`env: { MOOSE_TRACEVALS_HOME: "test/fixtures/home" }` so results do not depend on whose machine the suite
 runs on.
 </Aside>
 
@@ -102,20 +102,20 @@ runs on.
 nothing to do with adherence:
 
 ```ts
-import { parseTraceFile } from "@hawkeyexl/agentevals";
+import { parseTraceFile } from "moose-tracevals";
 
 const trace = await parseTraceFile("./traces/session.jsonl");
 console.log(trace.turnCount, trace.skillInvocations.map((s) => s.name));
 ```
 
-Every field is described in [Traces reference](/agentevals/reference/traces/). Note `usage` is
+Every field is described in [Traces reference](/moose-tracevals/reference/traces/). Note `usage` is
 absent for Claude Code session files — only stream-json transcripts carry cost.
 
 ## The trace-adapter seam
 
 `TraceSource` is a union with one member today, `claude-code`. Support for other formats is
 **deferred rather than rejected**
-([ADR 01003](https://github.com/hawkeyexl/agentevals/blob/main/adrs/01003-claude-code-traces-first-with-an-adapter-seam.md)),
+([ADR 01003](https://github.com/hawkeyexl/moose-tracevals/blob/main/adrs/01003-claude-code-traces-first-with-an-adapter-seam.md)),
 and the shape a new adapter has to conform to is the normalised `Trace`:
 
 - **Required for anything to work:** `source`, `file`, `cwd`, `events`, `turnCount`, and the derived
@@ -135,11 +135,11 @@ seam is a shape to conform to, not a plugin point.
   <LinkCard
     title="Write a custom grader"
     description="The two-part contract, why option validation is not optional, and how to register one."
-    href="/agentevals/extend/custom-graders/"
+    href="/moose-tracevals/extend/custom-graders/"
   />
   <LinkCard
     title="The export surface, mapped"
     description="Everything the package exports, grouped, with what each group is for."
-    href="/agentevals/reference/api/"
+    href="/moose-tracevals/reference/api/"
   />
 </CardGrid>

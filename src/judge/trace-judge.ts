@@ -5,7 +5,7 @@
  *
  * The ensemble mechanics (retry-once, errored runs counting against consensus,
  * cache replay) now live in the inference library; what stays here is what is
- * agentevals-specific — the per-plan budget gate, the trace-worded verdict
+ * moose-tracevals-specific — the per-plan budget gate, the trace-worded verdict
  * schema, and the `JudgedEval` shape the reporters consume.
  */
 import {
@@ -26,7 +26,7 @@ import { cacheKey } from "./cache.js";
 import { buildUserContent, JUDGE_SYSTEM_PROMPT } from "./prompt.js";
 
 /**
- * agentevals' own verdict wording. Structurally identical to the library's
+ * moose-tracevals' own verdict wording. Structurally identical to the library's
  * canonical schema, but the field descriptions talk about sessions and tool
  * calls rather than pages — and those descriptions are prompt surface that
  * steers the model, so they are worth keeping (inference ADR 01001).
@@ -75,9 +75,9 @@ export function makeTraceJudge(options: TraceJudgeOptions): TraceJudge {
   const temperature = options.temperature ?? 0;
   const zones = options.zones ?? { autoPass: 0.8, autoFail: 0.8 };
   const cache = new JsonCache<JudgeRun[]>(
-    options.cacheDir ?? ".agentevals/cache",
+    options.cacheDir ?? ".moose-tracevals/cache",
     options.noCache !== true && options.cacheDir !== undefined,
-    "agentevals",
+    "moose-tracevals",
   );
   const pricing = pricingFor(provider.modelName(), options.pricing);
 
@@ -122,7 +122,7 @@ export function makeTraceJudge(options: TraceJudgeOptions): TraceJudge {
           renderedTrace,
           plan,
         ),
-        label: "agentevals",
+        label: "moose-tracevals",
       });
 
       const consensusBase = computeConsensus(runs);

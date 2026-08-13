@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://raw.githubusercontent.com/hawkeyexl/agentevals/main/schemas/artifact-evals-0.2.json",
-  "title": "agentevals artifact evals block",
-  "description": "Shape of the `metadata.evals` frontmatter block agentevals reads from skill, agent, and project-rules artifacts. A criterion is either a plain string (shorthand for an LLM-judged assertion) or an object selecting a grader.",
+  "$id": "https://raw.githubusercontent.com/hawkeyexl/moose-tracevals/main/schemas/artifact-evals-0.2.json",
+  "title": "moose-tracevals artifact evals block",
+  "description": "Shape of the `metadata.evals` frontmatter block moose-tracevals reads from skill, agent, and project-rules artifacts. A criterion is either a plain string (shorthand for an LLM-judged assertion) or an object selecting a grader.",
   "type": "object",
   "additionalProperties": false,
   "properties": {

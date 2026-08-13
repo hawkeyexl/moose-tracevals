@@ -1,7 +1,13 @@
 node_modules/
 dist/
 .tmp/
+.moose-tracevals/
+# Transitional: the state directory was `.agentevals/` before the rename
+# (ADR 01008). A working copy that ran the tool under an older name still
+# has one, and dropping the entry would un-ignore it. Remove once stale
+# checkouts are gone.
 .agentevals/
+.tracevals/
 *.tsbuildinfo
 # Doc Detective run output. The docs site's own build artifacts are ignored by
 # docs/.gitignore, which keeps that nested project self-contained.

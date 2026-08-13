@@ -2,7 +2,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { detectContentFormat, detectFormat } from "../../src/trace/detect.js";
 import { parseTraceFile } from "../../src/trace/claude.js";
-import { AgentevalsError } from "../../src/types.js";
+import { TracevalsError } from "../../src/types.js";
 
 const sessionFixture = fileURLToPath(
   new URL("../fixtures/traces/claude-session.jsonl", import.meta.url),
@@ -28,8 +28,8 @@ describe("detectFormat", () => {
   });
 
   it("rejects unknown formats with an operational error", () => {
-    expect(() => detectFormat(`{"hello":"world"}`)).toThrow(AgentevalsError);
-    expect(() => detectFormat("not json at all")).toThrow(AgentevalsError);
+    expect(() => detectFormat(`{"hello":"world"}`)).toThrow(TracevalsError);
+    expect(() => detectFormat("not json at all")).toThrow(TracevalsError);
   });
 });
 
@@ -55,7 +55,7 @@ describe("detectContentFormat", () => {
       `{"type":"summary","leafUuid":"abc"}`,
       `{"type":"other","foo":1}`,
     ].join("\n");
-    expect(() => detectContentFormat(content)).toThrow(AgentevalsError);
+    expect(() => detectContentFormat(content)).toThrow(TracevalsError);
   });
 });
 

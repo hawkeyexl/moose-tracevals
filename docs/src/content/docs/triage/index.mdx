@@ -1,6 +1,6 @@
 ---
 title: Read a failing eval
-description: Decode a FAIL, ERROR, REVIEW, or SKIP from an agentevals run in one page, then decide whether to fix the session, fix the criterion, or escalate.
+description: Decode a FAIL, ERROR, REVIEW, or SKIP from a moose-tracevals run in one page, then decide whether to fix the session, fix the criterion, or escalate.
 ---
 
 import { Aside, LinkCard, CardGrid } from '@astrojs/starlight/components';
@@ -32,7 +32,7 @@ check was the general question *"did the session follow this file's instructions
 {/* Doc Detective inline tests: the outcomes described on this page are produced
     by running the CLI against this repository's committed fixtures. */}
 {/* test {"testId":"triage-fail-line","description":"A deterministic failure names the artifact, criterion, and what the session did."} */}
-{/* step {"description":"The documented FAIL line appears verbatim.","runShell":{"command":"agentevals run test/fixtures/traces/claude-session.jsonl --project test/fixtures/project --deterministic-only","exitCodes":[1],"stdio":"tool Bash was used 1 time(s) but must not be"}} */}
+{/* step {"description":"The documented FAIL line appears verbatim.","runShell":{"command":"moose-tracevals run test/fixtures/traces/claude-session.jsonl --project test/fixtures/project --deterministic-only","exitCodes":[1],"stdio":"tool Bash was used 1 time(s) but must not be"}} */}
 {/* test end */}
 
 ## A check failed
@@ -182,11 +182,11 @@ result, you can: evaluation is read-only and never modifies traces or artifacts.
   <LinkCard
     title="Why a judged verdict came out that way"
     description="The consensus arithmetic behind pass, fail, and review, and why an errored run can never produce a silent pass."
-    href="/agentevals/judge/"
+    href="/moose-tracevals/judge/"
   />
   <LinkCard
     title="What the criterion is actually asserting"
     description="How criteria are declared, what each grader checks, and what severity means."
-    href="/agentevals/declare/"
+    href="/moose-tracevals/declare/"
   />
 </CardGrid>

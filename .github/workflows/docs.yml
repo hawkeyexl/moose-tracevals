@@ -1,7 +1,7 @@
 name: Docs
 
 # Build the Starlight docs site and publish it to GitHub Pages on every push to
-# main. The deploy is gated on agentevals validating its own docs frontmatter
+# main. The deploy is gated on moose-tracevals validating its own docs frontmatter
 # with its own `docmeta` dependency (dogfooding): if a page is missing a
 # required field, the site does not ship.
 on:
@@ -36,7 +36,7 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  # Dogfood: agentevals already depends on docmeta for frontmatter extraction,
+  # Dogfood: moose-tracevals already depends on docmeta for frontmatter extraction,
   # so the same library that reads `metadata.evals` from a SKILL.md validates
   # this site's own pages. -s overrides docmeta's default schema with a
   # docs-specific one requiring title + description.

@@ -8,7 +8,7 @@ sidebar:
 import { Aside } from '@astrojs/starlight/components';
 
 **Scope:** everything `run` emits. The policy discussion, meaning what to do about `needs-review`
-in a pipeline, is in [Exit codes & reports](/agentevals/ci/exit-codes-and-reports/). Source of truth:
+in a pipeline, is in [Exit codes & reports](/moose-tracevals/ci/exit-codes-and-reports/). Source of truth:
 `src/types.ts`, `src/reporters/`, `src/history.ts`.
 
 ## Exit codes
@@ -19,7 +19,7 @@ in a pipeline, is in [Exit codes & reports](/agentevals/ci/exit-codes-and-report
 | `1` | any `fail` or `error`, and `needs-review` unless `failOnNeedsReview: false` |
 | `2` | operational error — bad usage, unreadable trace, unknown format, nonexistent path |
 
-`2` is written to stderr as `agentevals: <message>`; `0` and `1` write the report to stdout.
+`2` is written to stderr as `moose-tracevals: <message>`; `0` and `1` write the report to stdout.
 
 ## Outcomes
 
@@ -101,7 +101,7 @@ Present on every judged eval.
 | `zone` | string | `auto-pass`, `auto-fail`, or `human-review`. This is what maps to the outcome. |
 
 Each `verdict` carries `claim`, `observed`, `match`, `confidence`, and `reasoning`. See
-[How the judge decides](/agentevals/judge/).
+[How the judge decides](/moose-tracevals/judge/).
 
 ### `CoverageEntry`
 
@@ -137,7 +137,7 @@ covering several files (`CLAUDE.md` *and* `AGENTS.md`), so the entry is `resolve
 The default. Structure:
 
 ```
-agentevals — /path/to/session.jsonl
+moose-tracevals — /path/to/session.jsonl
 claude-code · claude-opus-4-8 · 2 turn(s) · /work/demo-project
 
   PASS   fix-bug › used-read
@@ -170,7 +170,7 @@ Coverage marks: `✓` resolved, `○` not. The location follows the rule
 
 ## `--format markdown`
 
-The same run as tables: `# agentevals report`, bullet metadata, then `## Evals`
+The same run as tables: `# moose-tracevals report`, bullet metadata, then `## Evals`
 (`| Outcome | Artifact | Eval | Grader | Detail |`), `## Artifact coverage`
 (`| Resolved | Kind | Ref | Where |`), `## Warnings`, and a bold summary sentence. Pipe characters
 in messages are escaped. Suited to a build summary or a PR comment.
@@ -181,12 +181,12 @@ Writes the rendered report to a file **in addition to** stdout, in whichever for
 selected.
 
 ```bash
-npx agentevals run <trace> --format markdown --output agentevals-report.md
+npx moose-tracevals run <trace> --format markdown --output moose-tracevals-report.md
 ```
 
 ## History
 
-`--history` appends one line to `history.file` (default `.agentevals/history.jsonl`) and compares
+`--history` appends one line to `history.file` (default `.moose-tracevals/history.jsonl`) and compares
 this run against the most recent previous entry for the same session.
 
 Each line is a `HistoryEntry`:

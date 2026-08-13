@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { parseConfig } from "../../src/core/config.js";
-import { AgentevalsError } from "../../src/types.js";
+import { TracevalsError } from "../../src/types.js";
 
 describe("parseConfig", () => {
   it("fills every default from an empty config", () => {
@@ -8,10 +8,10 @@ describe("parseConfig", () => {
     expect(config.judge.ensembleRuns).toBe(3);
     expect(config.judge.temperature).toBe(0);
     expect(config.judge.zones).toEqual({ autoPass: 0.8, autoFail: 0.8 });
-    expect(config.judge.cacheDir).toBe(".agentevals/cache");
+    expect(config.judge.cacheDir).toBe(".moose-tracevals/cache");
     expect(config.render.maxBlockChars).toBe(2000);
     expect(config.render.maxTotalChars).toBe(150000);
-    expect(config.history.file).toBe(".agentevals/history.jsonl");
+    expect(config.history.file).toBe(".moose-tracevals/history.jsonl");
     expect(config.failOnNeedsReview).toBe(true);
   });
 
@@ -32,7 +32,7 @@ describe("parseConfig", () => {
     expect(config.fill.confidenceThreshold).toBe(0.7);
     expect(config.fill.maxCriteriaPerArtifact).toBe(8);
     expect(config.fill.temperature).toBe(0);
-    expect(config.fill.cacheDir).toBe(".agentevals/cache/fill");
+    expect(config.fill.cacheDir).toBe(".moose-tracevals/cache/fill");
     expect(config.fill.maxCostUsd).toBeUndefined();
 
     const explicit = parseConfig({ fill: { confidenceThreshold: 0.5, maxCostUsd: 2 } });
@@ -43,19 +43,19 @@ describe("parseConfig", () => {
 
   it("rejects out-of-range and unknown fill keys", () => {
     expect(() => parseConfig({ fill: { confidenceThreshold: 2 } })).toThrow(
-      AgentevalsError,
+      TracevalsError,
     );
     expect(() => parseConfig({ fill: { maxCriteriaPerArtifact: 0 } })).toThrow(
-      AgentevalsError,
+      TracevalsError,
     );
-    expect(() => parseConfig({ fill: { bogus: true } })).toThrow(AgentevalsError);
+    expect(() => parseConfig({ fill: { bogus: true } })).toThrow(TracevalsError);
   });
 
   it("rejects invalid configs with an operational error", () => {
     expect(() => parseConfig({ judge: { ensembleRuns: 0 } })).toThrow(
-      AgentevalsError,
+      TracevalsError,
     );
-    expect(() => parseConfig({ unknownKey: true })).toThrow(AgentevalsError);
+    expect(() => parseConfig({ unknownKey: true })).toThrow(TracevalsError);
   });
 
   describe("provider section", () => {
@@ -103,23 +103,23 @@ describe("parseConfig", () => {
       // or a misspelled section name sailed through validation and the run
       // quietly used a different provider than the author intended.
       expect(() => parseConfig({ provider: { default: "antropic" } })).toThrow(
-        AgentevalsError,
+        TracevalsError,
       );
       expect(() =>
         parseConfig({ provider: { anthropc: { model: "x" } } }),
-      ).toThrow(AgentevalsError);
+      ).toThrow(TracevalsError);
     });
 
     it("rejects a typo'd key inside a provider section", () => {
       expect(() =>
         parseConfig({ provider: { anthropic: { modl: "x" } } }),
-      ).toThrow(AgentevalsError);
+      ).toThrow(TracevalsError);
     });
 
     it("rejects an empty apiKeyEnv", () => {
       expect(() =>
         parseConfig({ provider: { anthropic: { apiKeyEnv: "" } } }),
-      ).toThrow(AgentevalsError);
+      ).toThrow(TracevalsError);
     });
 
     it("rejects a half-specified pricing override", () => {
@@ -127,7 +127,7 @@ describe("parseConfig", () => {
         parseConfig({
           provider: { anthropic: { pricing: { inputPerMTok: 3 } } },
         }),
-      ).toThrow(AgentevalsError);
+      ).toThrow(TracevalsError);
     });
   });
 });

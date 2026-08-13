@@ -1,17 +1,17 @@
 ---
 title: API reference
-description: Everything @hawkeyexl/agentevals exports, grouped by what it is for, with the intended entry points marked.
+description: Everything moose-tracevals exports, grouped by what it is for, with the intended entry points marked.
 sidebar:
   order: 8
 ---
 
 import { Aside } from '@astrojs/starlight/components';
 
-**Scope:** the export surface. How to *use* it is [Build on agentevals](/agentevals/extend/).
+**Scope:** the export surface. How to *use* it is [Build on moose-tracevals](/moose-tracevals/extend/).
 Source of truth: `src/index.ts`.
 
 ```ts
-import { runEvals, parseTraceFile, registerGrader } from "@hawkeyexl/agentevals";
+import { runEvals, parseTraceFile, registerGrader } from "moose-tracevals";
 ```
 
 ESM-only, Node.js 24+, types shipped. **★ marks an intended entry point** — the rest is exported
@@ -22,9 +22,9 @@ first.
 
 | Specifier | What it is |
 |---|---|
-| `@hawkeyexl/agentevals` | The API below. |
-| `@hawkeyexl/agentevals/schemas/artifact-evals-0.2.json` | The current criteria-block schema. |
-| `@hawkeyexl/agentevals/schemas/artifact-evals-0.1.json` | The previous version, for pinned consumers. |
+| `moose-tracevals` | The API below. |
+| `moose-tracevals/schemas/artifact-evals-0.2.json` | The current criteria-block schema. |
+| `moose-tracevals/schemas/artifact-evals-0.1.json` | The previous version, for pinned consumers. |
 
 ## Engine
 
@@ -51,7 +51,7 @@ The CLI's three commands, callable directly. Each pairs a runner with a renderer
 | `parseTraceContent(text)` | The same from a string. |
 | `detectFormat(path)`, `detectContentFormat(text)` | Format sniffing on its own. |
 | ★ `discoverTraces(options)` | Scan the session store. Returns `TraceListing[]`, newest first. |
-| `homeDir(env?)` | Resolves `AGENTEVALS_HOME`, falling back to the OS home. |
+| `homeDir(env?)` | Resolves `MOOSE_TRACEVALS_HOME`, falling back to the OS home. |
 | `slugFor(cwd)` | The project-slug rule: every non-alphanumeric character to `-`. |
 | `pickTrace(options, promptFn?)` | The interactive picker. `promptFn` makes it testable. |
 | `DiscoverOptions`, `TraceListing`, `PickerChoice`, `PromptFn` | |
@@ -83,7 +83,7 @@ The CLI's three commands, callable directly. Each pairs a runner with a renderer
 |---|---|
 | `planEvals(artifacts)` | Turn artifacts into `EvalPlan[]`. |
 | `IMPLICIT_EVAL_NAME` | `"adheres-to-artifact"`. |
-| ★ `registerGrader(grader)` | Add a kind at runtime. See [Custom graders](/agentevals/extend/custom-graders/). |
+| ★ `registerGrader(grader)` | Add a kind at runtime. See [Custom graders](/moose-tracevals/extend/custom-graders/). |
 | `graderFor(kind)`, `listGraderKinds()` | |
 | `EvalPlan` | |
 | *(all of `graders/types`)* | `TraceGrader`, `GradeResult`, `Finding`, `TraceGraderContext`. |
@@ -111,8 +111,8 @@ offline-able. You rarely need `makeTraceJudge` unless you want the real ensemble
 |---|---|
 | ★ `loadConfig(dir?)` | Read, validate, and fully populate defaults. |
 | `parseConfig(raw)` | The same from an object. |
-| `DEFAULT_CONFIG_FILENAME` | `"agentevals.config.yaml"`. |
-| `AgentevalsConfig`, `ProviderConfig`, `Pricing` | |
+| `DEFAULT_CONFIG_FILENAME` | `"moose-tracevals.config.yaml"`. |
+| `TracevalsConfig`, `ProviderConfig`, `Pricing` | |
 
 Downstream code always receives a fully-populated config, so there is no need to re-apply defaults.
 
@@ -124,9 +124,9 @@ Downstream code always receives a fully-populated config, so there is no need to
 | `ReportFormat` | |
 | `appendHistory(file, report)`, `loadHistory(file)`, `compareToLast(...)`, `entryFor(report)` | |
 | `HistoryEntry`, `HistoryEval`, `HistoryComparison` | |
-| *(all of `types`)* | `AgentevalsError`, `RunReport`, `EvalResult`, `RunSummary`, `Outcome`. |
+| *(all of `types`)* | `TracevalsError`, `RunReport`, `EvalResult`, `RunSummary`, `Outcome`. |
 
-`AgentevalsError` is the operational-failure type. The CLI maps it to exit `2`; catch it if you want
+`TracevalsError` is the operational-failure type. The CLI maps it to exit `2`; catch it if you want
 to distinguish "the tool could not run" from "a check failed".
 
 ## `fill` internals

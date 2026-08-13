@@ -1,6 +1,6 @@
 /**
  * Live smoke test — the only test allowed to reach a real provider. Gated
- * behind AGENTEVALS_LIVE=1 and skipped by default; requires an installed,
+ * behind MOOSE_TRACEVALS_LIVE=1 and skipped by default; requires an installed,
  * authenticated Claude Code CLI.
  */
 import { describe, expect, it } from "vitest";
@@ -9,7 +9,7 @@ import { makeTraceJudge } from "../../src/judge/trace-judge.js";
 import { parseConfig } from "../../src/core/config.js";
 import { makePlan, makeArtifact } from "../helpers.js";
 
-const live = process.env.AGENTEVALS_LIVE === "1";
+const live = process.env.MOOSE_TRACEVALS_LIVE === "1";
 
 describe.skipIf(!live)("live judge (claude-cli)", () => {
   it("judges one obvious criterion end to end", { timeout: 120_000 }, async () => {

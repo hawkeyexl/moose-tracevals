@@ -4,15 +4,15 @@ type: cuj
 title: Feed results into your own tooling
 personas: [persona-platform-engineer, persona-toolsmith]
 trigger: "The gate is green and someone now wants trend data, a dashboard, or a regression alert."
-entry_point: /agentevals/ci/consume-results/
+entry_point: /moose-tracevals/ci/consume-results/
 success_criteria: "Run results are parsed from a documented structure rather than scraped from rendered output, and a regression between two runs of the same session can be detected automatically."
 steps:
-  - { stage: "Emit machine-readable output", doc: /agentevals/ci/consume-results/, exists: true }
-  - { stage: "Parse the report structure", doc: /agentevals/reference/report-and-exit-codes/, exists: true }
-  - { stage: "Track runs over time", doc: "/agentevals/ci/consume-results/#track-runs-over-time", exists: true }
-  - { stage: "Detect a regression between runs", doc: "/agentevals/ci/consume-results/#detect-a-regression", exists: true }
-  - { stage: "Publish a human-readable summary", doc: "/agentevals/ci/exit-codes-and-reports/#keep-the-report", exists: true, note: "the markdown reporter" }
-  - { stage: "Call the library instead of the CLI", doc: /agentevals/extend/, exists: true }
+  - { stage: "Emit machine-readable output", doc: /moose-tracevals/ci/consume-results/, exists: true }
+  - { stage: "Parse the report structure", doc: /moose-tracevals/reference/report-and-exit-codes/, exists: true }
+  - { stage: "Track runs over time", doc: "/moose-tracevals/ci/consume-results/#track-runs-over-time", exists: true }
+  - { stage: "Detect a regression between runs", doc: "/moose-tracevals/ci/consume-results/#detect-a-regression", exists: true }
+  - { stage: "Publish a human-readable summary", doc: "/moose-tracevals/ci/exit-codes-and-reports/#keep-the-report", exists: true, note: "the markdown reporter" }
+  - { stage: "Call the library instead of the CLI", doc: /moose-tracevals/extend/, exists: true }
 ---
 
 # CUJ: Feed results into your own tooling
@@ -23,7 +23,7 @@ Getting the gate installed in the first place is [`cuj-gate-ci`](cuj-gate-ci.md)
 **Trigger.** The gate has been quiet for a few weeks and someone asks the obvious follow-up: is
 adherence getting better or worse, and can we be told when it regresses?
 
-**Narrative.** This is the journey where agentevals stops being a pass/fail gate and becomes a
+**Narrative.** This is the journey where moose-tracevals stops being a pass/fail gate and becomes a
 source of data, and it is currently the largest undocumented surface in the product relative to how
 finished the underlying features are. Three capabilities exist and are described nowhere:
 

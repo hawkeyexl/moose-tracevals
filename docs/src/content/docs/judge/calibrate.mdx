@@ -8,7 +8,7 @@ sidebar:
 import { Steps, Aside, LinkCard, CardGrid } from '@astrojs/starlight/components';
 
 **Scope:** the knobs, what each one trades, and the two ways calibration goes wrong without telling
-you. It assumes [How the judge decides](/agentevals/judge/) — you cannot tune a zone threshold
+you. It assumes [How the judge decides](/moose-tracevals/judge/) — you cannot tune a zone threshold
 before you know what consensus is.
 
 ## Tune against known answers
@@ -25,7 +25,7 @@ already know the verdict.
 2. **Run them and compare.** Cache the verdicts so re-tuning is free:
 
    ```bash
-   npx agentevals run <trace> --format json --output baseline.json
+   npx moose-tracevals run <trace> --format json --output baseline.json
    ```
 
 3. **Count three things**, not one:
@@ -41,8 +41,8 @@ already know the verdict.
 
 ## The knobs
 
-All live under `judge` in `agentevals.config.yaml`; see the
-[configuration reference](/agentevals/reference/configuration/) for types and defaults.
+All live under `judge` in `moose-tracevals.config.yaml`; see the
+[configuration reference](/moose-tracevals/reference/configuration/) for types and defaults.
 
 | Knob | Default | Moving it up | Moving it down |
 |---|---|---|---|
@@ -63,7 +63,7 @@ ensemble through.
 
 <Aside type="caution" title="Leave temperature at 0">
 Nonzero temperature adds noise to verdicts, which is the opposite of what an ensemble is for — you
-want independent samples of the same judgement, not varied ones. agentevals warns once per process
+want independent samples of the same judgement, not varied ones. moose-tracevals warns once per process
 if you set it above zero.
 </Aside>
 
@@ -84,7 +84,7 @@ no threshold will fix them — go sharpen the criteria instead.
 
 ## Cap what it can spend
 
-```yaml title="agentevals.config.yaml"
+```yaml title="moose-tracevals.config.yaml"
 judge:
   maxCostUsd: 2.50
 ```
@@ -118,7 +118,7 @@ provider:
 
 ## What invalidates a cached verdict
 
-Verdicts are cached under `judge.cacheDir` (default `.agentevals/cache`), keyed on seven things:
+Verdicts are cached under `judge.cacheDir` (default `.moose-tracevals/cache`), keyed on seven things:
 
 1. provider
 2. model
@@ -151,11 +151,11 @@ question.
   <LinkCard
     title="Evolve the criteria standard"
     description="Pin a schema version, separate probes from regression guards, and roll out a convention in stages."
-    href="/agentevals/judge/schema-versioning/"
+    href="/moose-tracevals/judge/schema-versioning/"
   />
   <LinkCard
     title="Every judge key"
     description="ensembleRuns, zones, temperature, cacheDir, maxCostUsd, and the provider pricing override."
-    href="/agentevals/reference/configuration/"
+    href="/moose-tracevals/reference/configuration/"
   />
 </CardGrid>

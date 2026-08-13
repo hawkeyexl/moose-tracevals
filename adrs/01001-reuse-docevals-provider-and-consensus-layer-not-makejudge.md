@@ -8,7 +8,7 @@ decision-makers: [hawkeyexl, Claude]
 
 ## Context and Problem Statement
 
-docevals exports both a full ensemble judge (`makeJudge`) and the layers beneath it (`makeProvider`/`JudgeProvider`, `MockProvider`, `computeConsensus`, `zoneFor`). Which boundary should agentevals build its trace-adherence judge on?
+docevals exports both a full ensemble judge (`makeJudge`) and the layers beneath it (`makeProvider`/`JudgeProvider`, `MockProvider`, `computeConsensus`, `zoneFor`). Which boundary should moose-tracevals build its trace-adherence judge on?
 
 ## Decision Drivers
 
@@ -20,7 +20,7 @@ docevals exports both a full ensemble judge (`makeJudge`) and the layers beneath
 
 - Reuse `makeProvider` + `MockProvider` + `computeConsensus` + `zoneFor`; write a trace-specific ensemble wrapper
 - Refactor docevals to generalize `makeJudge` over a content abstraction, then reuse it
-- Fork the judge code into agentevals
+- Fork the judge code into moose-tracevals
 
 ## Decision Outcome
 
@@ -29,7 +29,7 @@ Chosen option: "Reuse the provider and consensus layer". `src/judge/trace-judge.
 ### Consequences
 
 - Good, because the inherited invariants cannot drift from docevals' tested behavior.
-- Good, because no docevals release is needed to ship agentevals changes.
+- Good, because no docevals release is needed to ship moose-tracevals changes.
 - Bad, because the ~150-line ensemble wrapper is structurally parallel to docevals' and fixes there must be considered here.
 
 ### Confirmation

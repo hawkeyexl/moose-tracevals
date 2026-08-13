@@ -1,6 +1,6 @@
 # Architecture Decision Records
 
-Every **behavior change** in agentevals ships with an ADR here. The ADR records the intended behavior and the reasoning — write it before or alongside the code, so it is the reviewable source of truth rather than an afterthought. The full rule lives in [CLAUDE.md](../CLAUDE.md#architecture-decision-records-required).
+Every **behavior change** in moose-tracevals ships with an ADR here. The ADR records the intended behavior and the reasoning — write it before or alongside the code, so it is the reviewable source of truth rather than an afterthought. The full rule lives in [CLAUDE.md](../CLAUDE.md#architecture-decision-records-required).
 
 ## Conventions
 
@@ -13,7 +13,7 @@ Every **behavior change** in agentevals ships with an ADR here. The ADR records 
 
 | ADR | Title | Status |
 |---|---|---|
-| [01000](01000-rebuild-as-trace-adherence-evaluator-on-docevals-and-docmeta.md) | Rebuild agentevals as a trace-adherence evaluator on docevals and docmeta | accepted |
+| [01000](01000-rebuild-as-trace-adherence-evaluator-on-docevals-and-docmeta.md) | Rebuild moose-tracevals as a trace-adherence evaluator on docevals and docmeta | accepted |
 | [01001](01001-reuse-docevals-provider-and-consensus-layer-not-makejudge.md) | Reuse docevals' provider and consensus layer, not makeJudge | accepted |
 | [01002](01002-declared-criteria-plus-implicit-whole-artifact-eval.md) | Declared frontmatter criteria plus an implicit whole-artifact eval; drop heading scraping | accepted |
 | [01003](01003-claude-code-traces-first-with-an-adapter-seam.md) | Claude Code traces first, with an adapter seam and graceful degradation | accepted |
@@ -21,3 +21,4 @@ Every **behavior change** in agentevals ships with an ADR here. The ADR records 
 | [01005](01005-fill-proposes-criteria-at-authoring-time.md) | `fill` proposes criteria at authoring time, with deterministic graders and a confidence gate | accepted |
 | [01006](01006-take-inference-from-the-shared-library-not-docevals.md) | Take the inference layer from `@hawkeyexl/inference`, not from docevals | accepted |
 | [01007](01007-ship-a-cuj-first-documentation-site.md) | Ship a CUJ-first documentation site, with a committed content strategy and mechanical drift gates | accepted |
+| [01008](01008-rename-the-project-to-moose-tracevals.md) | Rename the project to `moose-tracevals` and publish it unscoped | accepted |

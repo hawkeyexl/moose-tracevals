@@ -52,7 +52,7 @@ instructions it was given?* — and route the answer into the reporting the orga
 - **Unspecified output.** He will parse the JSON report; he needs its shape documented well enough
   that he never opens the source to do it.
 
-**How he uses agentevals:** one recipe, copied into a workflow file, running deterministic graders
+**How he uses moose-tracevals:** one recipe, copied into a workflow file, running deterministic graders
 only, keyed off the exit code. If it stays quiet he never thinks about it again. Later, if someone
 asks for trend data, he starts piping the JSON report and the history file somewhere.
 

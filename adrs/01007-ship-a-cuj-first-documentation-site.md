@@ -8,11 +8,11 @@ decision-makers: [hawkeyexl]
 
 ## Context and Problem Statement
 
-agentevals had no documentation set. The entire user-facing corpus was a 202-line `README.md` that
+moose-tracevals had no documentation set. The entire user-facing corpus was a 202-line `README.md` that
 documented the CLI as `node dist/cli.js` — a form that only works inside a clone of this repository,
 leaving no install path at all for anyone consuming the published package. Substantial shipped
 surface was documented nowhere: `--history` and the history file format, `--output`, the markdown
-reporter, the `RunReport` structure, `AGENTEVALS_HOME`, the `type: capability | regression` field
+reporter, the `RunReport` structure, `MOOSE_TRACEVALS_HOME`, the `type: capability | regression` field
 added in artifact-evals 0.2, `registerGrader()`, the programmatic API, and every config key with no
 CLI flag.
 
@@ -26,7 +26,7 @@ product have**, and **what stops it from drifting away from the code** the way a
   line — and they need different content in a different order.
 - Documentation of a CLI rots silently. A flag rename, a changed default, or a reworded failure
   message leaves prose that is confidently wrong.
-- There is **no user research** for agentevals. Any audience model here is a hypothesis, and the
+- There is **no user research** for moose-tracevals. Any audience model here is a hypothesis, and the
   documentation has to say so rather than present invented segments as findings.
 - The sibling [docmeta](https://github.com/hawkeyexl/docmeta) repo already solved this shape and
   the result is in production. Divergence should be earned, not accidental.
@@ -78,7 +78,7 @@ the documented flags via `--help`, so the marginal coverage did not justify a se
   the CLI, never composed.
 - Good: docs dependencies live in a nested `private` project, so `files` stays `dist` + `schemas`.
 - Good: the docs tests are as hermetic as the unit suite — every tested command runs
-  `--deterministic-only` or `--provider mock` with `AGENTEVALS_HOME` pinned to the fixture home.
+  `--deterministic-only` or `--provider mock` with `MOOSE_TRACEVALS_HOME` pinned to the fixture home.
 - Bad: two npm projects means two lockfiles and two installs.
 - Bad: adding a nav group requires an `astro.config.mjs` edit, because `autogenerate` throws on an
   empty directory. The `extend/` group is therefore absent until its first page lands.
@@ -90,7 +90,7 @@ the documented flags via `--help`, so the marginal coverage did not justify a se
 - `.github/workflows/docs.yml` — `npm run docs:validate` (dogfooded `docmeta`) gates the build,
   which gates the Pages deploy. A page missing `title` or `description` does not ship.
 - `.github/workflows/doc-detective.yml` — runs every documented command against the local build.
-  Two guards make it trustworthy: it verifies `npx agentevals --version` matches this package before
+  Two guards make it trustworthy: it verifies `npx moose-tracevals --version` matches this package before
   running anything (see below), and it asserts `test/fixtures/project` is byte-identical afterwards,
   since the docs exercise `fill --dry-run` against the real corpus.
 - `scripts/check-content-strategy.mjs`, run by the same workflow via `npm run docs:check-strategy`,
@@ -142,3 +142,8 @@ The documentation therefore shows `npm install --save-dev @hawkeyexl/agentevals`
 `npx agentevals`, and `npx @hawkeyexl/agentevals` for the zero-install path. The Doc Detective
 workflow asserts the linked binary's version matches this package before running any test, so a
 broken `npm link` fails loudly instead of silently testing somebody else's CLI.
+
+> **Resolved by [ADR 01008](01008-rename-the-project-to-moose-tracevals.md).** This hazard is what drove
+> the rename: `moose-tracevals` was available unscoped, so package name and `bin` name are now the same
+> string and `npx moose-tracevals` is safe cold. The install caveats this note produced have been removed
+> from the docs; the Doc Detective version assertion is kept.

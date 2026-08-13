@@ -12,7 +12,7 @@ axis: who owns the agent instruction artifacts × how agent behavior is governed
 
 # Audiences
 
-**Scope:** the five target segments for the agentevals documentation set and the axis that
+**Scope:** the five target segments for the moose-tracevals documentation set and the axis that
 separates them. Per-segment detail lives in the individual files; the readers themselves are
 modelled in [`../personas/`](../personas/_overview.md).
 
@@ -20,7 +20,7 @@ modelled in [`../personas/`](../personas/_overview.md).
 
 **Who owns the agent instruction artifacts × how agent behavior is governed.**
 
-agentevals exists because instructions and behavior have drifted apart. Someone writes a `SKILL.md`,
+moose-tracevals exists because instructions and behavior have drifted apart. Someone writes a `SKILL.md`,
 an agent definition, or a `CLAUDE.md`; something else — an agent session — is supposed to follow it;
 and nothing checks. The segments fall out of *which end of that gap a person stands on*:
 
@@ -45,7 +45,7 @@ exist and whether anyone owns the standard as a distinct job, not what the perso
 | [`aud-platform-ci`](platform-ci.md) | AI-platform and CI engineers | Pipelines, runners, the merge gate | Focused: exit codes, offline mode, machine-readable output. |
 | [`aud-eval-standard`](eval-standard.md) | Eval and quality owners | The criteria standard itself | Deep but narrow: graders, severity, schema versioning, judge calibration. |
 | [`aud-run-triagers`](run-triagers.md) | Session triagers | Nothing — they arrive at one failure | Shallow, highest traffic. One page carries the whole journey. |
-| [`aud-toolsmiths`](toolsmiths.md) | Toolsmiths — **cross-cutting** | Code built on top of agentevals | Narrow: the programmatic API and the extension seams. |
+| [`aud-toolsmiths`](toolsmiths.md) | Toolsmiths — **cross-cutting** | Code built on top of moose-tracevals | Narrow: the programmatic API and the extension seams. |
 
 ## Why `aud-artifact-authors` leads
 
@@ -58,7 +58,7 @@ criteria, and reporting in one line. Every other segment either serves them or i
 ## The cross-cutting lens
 
 [`aud-toolsmiths`](toolsmiths.md) is marked `cross_cutting: true`. It is not a fifth point on the
-ownership axis — it is defined by *what someone builds on top of agentevals* rather than by which
+ownership axis — it is defined by *what someone builds on top of moose-tracevals* rather than by which
 artifacts they own, and it overlaps all four primaries:
 
 - A **platform engineer** who parses `RunReport` JSON into a dashboard is a toolsmith for that task.

@@ -43,7 +43,7 @@ describe.skipIf(!built)("built CLI", () => {
         "--format",
         "json",
       ],
-      { AGENTEVALS_HOME: "test/fixtures/home" },
+      { MOOSE_TRACEVALS_HOME: "test/fixtures/home" },
     );
     expect(code).toBe(1);
     const report = JSON.parse(stdout);
@@ -74,7 +74,7 @@ describe.skipIf(!built)("built CLI", () => {
         "--format",
         "json",
       ],
-      { AGENTEVALS_HOME: "test/fixtures/home" },
+      { MOOSE_TRACEVALS_HOME: "test/fixtures/home" },
     );
     expect(code).toBe(1); // the deterministic failure persists
     const report = JSON.parse(stdout);
@@ -87,7 +87,7 @@ describe.skipIf(!built)("built CLI", () => {
   it("list --json enumerates the fixture session store", async () => {
     const { code, stdout } = await runCli(
       ["list", "--all-projects", "--json", "--limit", "5"],
-      { AGENTEVALS_HOME: "test/fixtures/home" },
+      { MOOSE_TRACEVALS_HOME: "test/fixtures/home" },
     );
     expect(code).toBe(0);
     const { traces } = JSON.parse(stdout);
@@ -104,7 +104,7 @@ describe.skipIf(!built)("built CLI", () => {
   it("fill --dry-run reports proposals without touching the corpus", async () => {
     const { code, stdout } = await runCli(
       // --no-cache keeps this hermetic: without it the run writes into
-      // <repo>/.agentevals/cache/fill and a later run replays it.
+      // <repo>/.moose-tracevals/cache/fill and a later run replays it.
       [
         "fill",
         "test/fixtures/project",
@@ -115,7 +115,7 @@ describe.skipIf(!built)("built CLI", () => {
         "--format",
         "json",
       ],
-      { AGENTEVALS_HOME: "test/fixtures/home" },
+      { MOOSE_TRACEVALS_HOME: "test/fixtures/home" },
     );
     expect(code).toBe(0);
     const report = JSON.parse(stdout);
@@ -165,7 +165,7 @@ describe.skipIf(!built)("built CLI", () => {
         "--format",
         "json",
       ],
-      { AGENTEVALS_HOME: "test/fixtures/home" },
+      { MOOSE_TRACEVALS_HOME: "test/fixtures/home" },
     );
     const report = JSON.parse(stdout);
     expect(report.trace.source).toBe("claude-code");

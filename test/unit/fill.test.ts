@@ -6,7 +6,7 @@ import { MockProvider } from "@hawkeyexl/inference";
 import { runFill } from "../../src/commands/fill.js";
 import { extractCriteria } from "../../src/criteria/extract.js";
 import { planEvals } from "../../src/core/plan.js";
-import { AgentevalsError } from "../../src/types.js";
+import { TracevalsError } from "../../src/types.js";
 
 const fixtureProject = fileURLToPath(
   new URL("../fixtures/project", import.meta.url),
@@ -230,7 +230,7 @@ describe("runFill", () => {
         noCache: true,
         provider: "no-such-provider",
       }),
-    ).rejects.toThrow(AgentevalsError);
+    ).rejects.toThrow(TracevalsError);
   });
 
   it("counts existing criteria against the per-artifact cap", async () => {

@@ -8,7 +8,7 @@ decision-makers: [hawkeyexl, Claude]
 
 ## Context and Problem Statement
 
-Artifacts without a `metadata.evals` block fall back to one implicit whole-artifact eval (ADR 01002), which is coarse and expensive. Writing criteria by hand is the bottleneck for adopting agentevals across a project. The sibling docevals shipped `fill`, which asks an LLM to propose evals per page and appends those above a confidence threshold. How should agentevals bulk-propose criteria — and does writing into artifacts contradict ADR 01002, which removed exactly that?
+Artifacts without a `metadata.evals` block fall back to one implicit whole-artifact eval (ADR 01002), which is coarse and expensive. Writing criteria by hand is the bottleneck for adopting moose-tracevals across a project. The sibling docevals shipped `fill`, which asks an LLM to propose evals per page and appends those above a confidence threshold. How should moose-tracevals bulk-propose criteria — and does writing into artifacts contradict ADR 01002, which removed exactly that?
 
 ## Decision Drivers
 
@@ -38,7 +38,7 @@ The accepted cost: `run` results now depend on whether `fill` has been run again
 
 ### Deterministic graders are proposable
 
-docevals restricts `fill` to `llm` because a `command`-grader eval without a command is scriptgen's target state, so bulk-filling would seed LLM code generation and eventual execution. **agentevals has no such hazard**: its graders are a fixed registry configured by declarative options — no codegen, no execution — and there is no `promote`/`generate` pipeline to recover determinism later, so an llm-only port would strand it permanently.
+docevals restricts `fill` to `llm` because a `command`-grader eval without a command is scriptgen's target state, so bulk-filling would seed LLM code generation and eventual execution. **moose-tracevals has no such hazard**: its graders are a fixed registry configured by declarative options — no codegen, no execution — and there is no `promote`/`generate` pipeline to recover determinism later, so an llm-only port would strand it permanently.
 
 Grader choice is gated by an allowlist per artifact type. `cost`, `turn-count`, and `json-output` are excluded everywhere: they are whole-session graders, so a budget declared inside one skill silently constrains the entire session and double-counts when several artifacts declare it. `skill-invoked` is excluded from skills and agents because artifact resolution is trace-driven — a criterion asserting that its own artifact was used can only ever be graded in a session that used it, making it permanently green.
 
@@ -74,7 +74,7 @@ An agent's `tools:` grant and a skill's `name`/`description` are fed to the mode
 
 ### Consequences
 
-- Good, because adopting agentevals across a project stops being a hand-authoring exercise, and deterministic criteria — the cheap, CI-friendly kind — are proposed where they fit.
+- Good, because adopting moose-tracevals across a project stops being a hand-authoring exercise, and deterministic criteria — the cheap, CI-friendly kind — are proposed where they fit.
 - Good, because every write is gated by checks that do not depend on the model's self-assessment, and every rejection is explained.
 - Good, because threshold experiments cost no tokens.
 - Bad, because `run` results now depend on whether `fill` has been run.
@@ -96,7 +96,7 @@ An agent's `tools:` grant and a skill's `name`/`description` are fed to the mode
 ### Port docevals' `fill` verbatim (llm-only)
 
 - Good, because it is the smallest diff and keeps the two tools identical.
-- Bad, because agentevals has no `promote` step, so determinism would never be recovered.
+- Bad, because moose-tracevals has no `promote` step, so determinism would never be recovered.
 - Bad, because it inherits a restriction whose justification (generated code execution) does not exist here.
 
 ### Leave criteria hand-authored
