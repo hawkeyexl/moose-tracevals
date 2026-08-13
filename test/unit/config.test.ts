@@ -1,5 +1,7 @@
-import { describe, expect, it } from "vitest";
-import { parseConfig } from "../../src/core/config.js";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { join } from "node:path";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { loadConfig, parseConfig } from "../../src/core/config.js";
 import { TracevalsError } from "../../src/types.js";
 
 describe("parseConfig", () => {
@@ -129,5 +131,118 @@ describe("parseConfig", () => {
         }),
       ).toThrow(TracevalsError);
     });
+  });
+});
+
+describe("loadConfig", () => {
+  let dir: string;
+
+  beforeEach(async () => {
+    // .tmp/ is gitignored, so a fresh checkout won't have it yet.
+    await mkdir(".tmp", { recursive: true });
+    dir = await mkdtemp(join(".tmp", "config-"));
+  });
+
+  afterEach(async () => {
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  const write = (name: string, body: string) =>
+    writeFile(join(dir, name), body, "utf-8");
+
+  it("reads settings from the tracevals section of moose.config.yaml", async () => {
+    await write(
+      "moose.config.yaml",
+      "tracevals:\n  judge:\n    ensembleRuns: 5\n  failOnNeedsReview: false\n",
+    );
+    const config = await loadConfig(dir);
+    expect(config.judge.ensembleRuns).toBe(5);
+    expect(config.failOnNeedsReview).toBe(false);
+    // Untouched sections still get their defaults.
+    expect(config.judge.temperature).toBe(0);
+  });
+
+  it("ignores sibling sections owned by other tools in the family", async () => {
+    // The whole point of the shared file: docevals/docmeta keys are none of
+    // our business and must not trip `additionalProperties: false`.
+    await write(
+      "moose.config.yaml",
+      [
+        "docevals:",
+        "  judge:",
+        "    ensembleRuns: 99",
+        "docmeta:",
+        "  schemas: [a, b]",
+        "tracevals:",
+        "  judge:",
+        "    ensembleRuns: 5",
+      ].join("\n") + "\n",
+    );
+    const config = await loadConfig(dir);
+    expect(config.judge.ensembleRuns).toBe(5);
+  });
+
+  it("returns defaults when the file is absent", async () => {
+    const config = await loadConfig(dir);
+    expect(config.judge.ensembleRuns).toBe(3);
+  });
+
+  it("returns defaults when the file holds only other tools' sections", async () => {
+    await write("moose.config.yaml", "docmeta:\n  schemas: [a]\n");
+    const config = await loadConfig(dir);
+    expect(config.judge.ensembleRuns).toBe(3);
+  });
+
+  it("rejects tracevals keys left at the top level instead of nested", async () => {
+    // Silently defaulting here would discard the author's entire config.
+    await write("moose.config.yaml", "judge:\n  ensembleRuns: 5\n");
+    await expect(loadConfig(dir)).rejects.toThrow(TracevalsError);
+    await expect(loadConfig(dir)).rejects.toThrow(/tracevals:/);
+  });
+
+  it("rejects a lone legacy moose-tracevals.config.yaml", async () => {
+    await write("moose-tracevals.config.yaml", "judge:\n  ensembleRuns: 5\n");
+    await expect(loadConfig(dir)).rejects.toThrow(TracevalsError);
+    await expect(loadConfig(dir)).rejects.toThrow(/moose\.config\.yaml/);
+  });
+
+  it("validates the tracevals section", async () => {
+    await write("moose.config.yaml", "tracevals:\n  judge:\n    ensembleRuns: 0\n");
+    await expect(loadConfig(dir)).rejects.toThrow(TracevalsError);
+  });
+
+  it("reports an unparseable file by path", async () => {
+    await write("moose.config.yaml", "tracevals:\n  judge: [unclosed\n");
+    await expect(loadConfig(dir)).rejects.toThrow(/could not parse/);
+  });
+
+  it("rejects a section key that is only miscased", async () => {
+    // Nested correctly, but under `Tracevals:`, so the stray-key scan finds
+    // nothing at the top level and every value would be lost silently.
+    await write(
+      "moose.config.yaml",
+      ["Tracevals:", "  judge:", "    ensembleRuns: 5"].join("\n") + "\n",
+    );
+    await expect(loadConfig(dir)).rejects.toThrow(TracevalsError);
+    await expect(loadConfig(dir)).rejects.toThrow(/Tracevals/);
+  });
+
+  it("surfaces a config that exists but cannot be read", async () => {
+    // A directory by that name stands in for any non-ENOENT failure; calling
+    // it "absent" would run on defaults with a config sitting right there.
+    await mkdir(join(dir, "moose.config.yaml"), { recursive: true });
+    await expect(loadConfig(dir)).rejects.toThrow(TracevalsError);
+    await expect(loadConfig(dir)).rejects.toThrow(/could not read/);
+  });
+
+  it("does not blame the legacy file when the new one is unreadable", async () => {
+    await mkdir(join(dir, "moose.config.yaml"), { recursive: true });
+    await write("moose-tracevals.config.yaml", "judge:\n  ensembleRuns: 5\n");
+    await expect(loadConfig(dir)).rejects.not.toThrow(/no moose\.config\.yaml/);
+  });
+
+  it("rejects a file whose root is not a mapping", async () => {
+    await write("moose.config.yaml", "- one\n- two\n");
+    await expect(loadConfig(dir)).rejects.toThrow(TracevalsError);
   });
 });

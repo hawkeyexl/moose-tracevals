@@ -183,10 +183,13 @@ Pipeline: **select trace → parse (adapter) → resolve artifacts → extract c
 Every user-facing knob flows through the resolved config. CLI flags do **not** bypass it — they override it.
 
 ```text
-moose-tracevals.config.yaml  →  Ajv validate (src/core/config-schema.json)  →  defaults applied  →  CLI override  →  runtime
+moose.config.yaml  →  `tracevals:` section  →  Ajv validate (src/core/config-schema.json)  →  defaults applied  →  CLI override  →  runtime
 ```
 
+**One file, many tools.** Settings live under a `tracevals:` key in `moose.config.yaml`, shared with the rest of the moose family (ADR 01009). Top-level keys beside `tracevals:` belong to other tools — never validate or touch them. `config-schema.json` describes the **section**, not the file, and `parseConfig()` takes the section object.
+
 - `parseConfig()` in `src/core/config.ts` validates and fills **every** default; downstream code receives a fully-populated config.
+- `loadConfig()` owns the file: it unwraps `tracevals:`, tolerates sibling sections, and errors rather than silently defaulting when a config is un-nested, miscased (`Tracevals:`), unreadable, or left in the pre-centralization `moose-tracevals.config.yaml`.
 - CLI options are overlaid at the read site with `??` (e.g. `options.runs ?? config.judge.ensembleRuns`).
 - Runtime code never reads `argv`.
 

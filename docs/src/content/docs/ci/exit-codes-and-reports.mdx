@@ -59,8 +59,9 @@ eval into review. They can never push one into a silent pass.
 By default that counts as a failure, on the reasoning that an unreviewed ambiguous result should not
 merge quietly. If your pipeline has somewhere better to send those, change it:
 
-```yaml title="moose-tracevals.config.yaml"
-failOnNeedsReview: false
+```yaml title="moose.config.yaml"
+tracevals:
+  failOnNeedsReview: false
 ```
 
 Now `needs-review` no longer contributes to a non-zero exit. It still appears in the report and in

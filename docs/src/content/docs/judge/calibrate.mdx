@@ -41,7 +41,7 @@ already know the verdict.
 
 ## The knobs
 
-All live under `judge` in `moose-tracevals.config.yaml`; see the
+All live under `tracevals.judge` in `moose.config.yaml`; see the
 [configuration reference](/moose-tracevals/reference/configuration/) for types and defaults.
 
 | Knob | Default | Moving it up | Moving it down |
@@ -84,9 +84,10 @@ no threshold will fix them — go sharpen the criteria instead.
 
 ## Cap what it can spend
 
-```yaml title="moose-tracevals.config.yaml"
-judge:
-  maxCostUsd: 2.50
+```yaml title="moose.config.yaml"
+tracevals:
+  judge:
+    maxCostUsd: 2.50
 ```
 
 Checked **before each judged eval**. Once the budget is spent, the remaining evals are reported as
@@ -107,12 +108,13 @@ costed at zero**, which silently disables `maxCostUsd` entirely — the budget n
 spend never accumulates. If you run a model that is not in the table, set its price explicitly:
 
 ```yaml
-provider:
-  openai:
-    model: my-self-hosted-model
-    pricing:
-      inputPerMTok: 0.15
-      outputPerMTok: 0.60
+tracevals:
+  provider:
+    openai:
+      model: my-self-hosted-model
+      pricing:
+        inputPerMTok: 0.15
+        outputPerMTok: 0.60
 ```
 </Aside>
 
