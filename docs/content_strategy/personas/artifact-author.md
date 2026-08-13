@@ -56,7 +56,7 @@ be told when a rule she added months ago quietly stops being followed.
 - Hand-writing criteria for eleven artifacts is the step most likely to end her adoption right
   after her first successful run.
 
-**How she uses tracevals:** she runs it against a session that already happened — no
+**How she uses moose-tracevals:** she runs it against a session that already happened — no
 instrumentation, no re-running work — and reads the report. Once convinced, she runs `fill
 --dry-run` across the project, reviews what it proposes, and keeps the criteria that are honest.
 Later she wires it into CI, at which point she hands the pipeline half to Devin. She returns when

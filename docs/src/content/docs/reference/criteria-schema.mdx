@@ -8,7 +8,7 @@ sidebar:
 import { Aside } from '@astrojs/starlight/components';
 
 **Scope:** the exact shape of the `metadata.evals` block. How to decide what to put in it is
-[Declare what to check](/tracevals/declare/). Source of truth:
+[Declare what to check](/moose-tracevals/declare/). Source of truth:
 `schemas/artifact-evals-0.2.json`.
 
 ## Where the block goes
@@ -75,7 +75,7 @@ you want to reference or track over time.
 | `name` | string | derived from position | Stable identifier. Must match `^[a-z0-9][a-z0-9-]*$` — lowercase kebab-case. |
 | `assertion` | string | **required** | What must have held in the session. |
 | `grader` | enum | `llm` | `llm`, `tool-usage`, `skill-invoked`, `file-access`, `turn-count`, `cost`, `regex`, `json-output`. `llm` uses the ensemble judge; everything else is deterministic. |
-| `options` | object | — | Grader-specific options, validated by the grader itself. See the [grader reference](/tracevals/reference/graders/). |
+| `options` | object | — | Grader-specific options, validated by the grader itself. See the [grader reference](/moose-tracevals/reference/graders/). |
 | `severity` | `error` \| `warning` \| `info` | `error` | Only `error` findings fail the eval. |
 | `type` | `capability` \| `regression` | `regression` | Reported, never enforced. See below. |
 | `evidence` | string | — | A hint telling the judge where in the session to look. Judged criteria only. |
@@ -128,7 +128,7 @@ The block's schema is a **published artifact** that ships with the package, so c
 Both are importable from the package:
 
 ```js
-import schema from "tracevals/schemas/artifact-evals-0.2.json" with { type: "json" };
+import schema from "moose-tracevals/schemas/artifact-evals-0.2.json" with { type: "json" };
 ```
 
 `0.1` → `0.2` is additive: every valid `0.1` block is a valid `0.2` block. A released version is

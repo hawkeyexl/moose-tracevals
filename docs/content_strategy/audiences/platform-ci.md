@@ -13,13 +13,13 @@ features_emphasized:
   - --format json
   - --output
   - --history
-  - TRACEVALS_HOME
+  - MOOSE_TRACEVALS_HOME
   - failOnNeedsReview
 ---
 
 # Audience: AI-platform and CI engineers
 
-**Scope:** people who run tracevals as a gate in automation across repositories they do not
+**Scope:** people who run moose-tracevals as a gate in automation across repositories they do not
 author. It does not cover writing the instruction artifacts (see
 [`aud-artifact-authors`](artifact-authors.md)) or deciding what the criteria should assert (see
 [`aud-eval-standard`](eval-standard.md)) — this audience plumbs a check whose content someone else

@@ -9,7 +9,7 @@ import { Aside, LinkCard, CardGrid } from '@astrojs/starlight/components';
 
 **Scope:** the *denominator* — every instruction file a session referenced, including the ones that
 could not be found. Deciding what to check on a resolved artifact is
-[Declare what to check](/tracevals/declare/).
+[Declare what to check](/moose-tracevals/declare/).
 
 Every report ends with a coverage section, and it answers a question the eval list cannot:
 **what did you not check?**
@@ -26,8 +26,8 @@ Artifact coverage
     the CLI against this repository's committed fixtures, so a change to
     resolution or to the coverage renderer fails CI rather than drifting. */}
 {/* test {"testId":"coverage-states","description":"The documented coverage states appear against the fixture corpus."} */}
-{/* step {"description":"A built-in agent is reported as unresolved with an explanatory note.","runShell":{"command":"tracevals run test/fixtures/traces/claude-session.jsonl --project test/fixtures/project --deterministic-only","exitCodes":[1],"stdio":"built-in agent (no definition file)"}} */}
-{/* step {"description":"A resolved skill is reported with the file it resolved to.","runShell":{"command":"tracevals run test/fixtures/traces/claude-session.jsonl --project test/fixtures/project --deterministic-only","exitCodes":[1],"stdio":"skill: fix-bug"}} */}
+{/* step {"description":"A built-in agent is reported as unresolved with an explanatory note.","runShell":{"command":"moose-tracevals run test/fixtures/traces/claude-session.jsonl --project test/fixtures/project --deterministic-only","exitCodes":[1],"stdio":"built-in agent (no definition file)"}} */}
+{/* step {"description":"A resolved skill is reported with the file it resolved to.","runShell":{"command":"moose-tracevals run test/fixtures/traces/claude-session.jsonl --project test/fixtures/project --deterministic-only","exitCodes":[1],"stdio":"skill: fix-bug"}} */}
 {/* test end */}
 
 ## The five states
@@ -48,7 +48,7 @@ exactly what the table is telling you.
 ## How an artifact is resolved
 
 Resolution is **deterministic** — trace content plus filesystem lookup, with no model involved. The
-trace records which skills were invoked and which agents were spawned; tracevals then looks for the
+trace records which skills were invoked and which agents were spawned; moose-tracevals then looks for the
 matching files in a fixed order and records every location it tried.
 
 ### Skills
@@ -91,7 +91,7 @@ Resolution starts from the session's recorded `cwd`. If that directory no longer
 came from another machine, or the checkout was moved — point it somewhere else:
 
 ```bash
-npx tracevals run <trace> --project ./my-repo
+npx moose-tracevals run <trace> --project ./my-repo
 ```
 </Aside>
 
@@ -101,7 +101,7 @@ The coverage entry records **every location it tried**, which is usually the who
 JSON output that is the `tried` array:
 
 ```bash
-npx tracevals run <trace> --deterministic-only --format json
+npx moose-tracevals run <trace> --deterministic-only --format json
 ```
 
 ```jsonc
@@ -115,8 +115,8 @@ npx tracevals run <trace> --deterministic-only --format json
 
 Read the list and the cause is usually one of:
 
-- **The plugin is not installed** on the machine running tracevals. Install it, or run with
-  `TRACEVALS_HOME` pointed at a directory that has it.
+- **The plugin is not installed** on the machine running moose-tracevals. Install it, or run with
+  `MOOSE_TRACEVALS_HOME` pointed at a directory that has it.
 - **The artifact moved** relative to the project — a skill relocated from `skills/` to
   `.claude/skills/` resolves fine, but one moved outside those roots will not.
 - **The project root is wrong**, so the walk started somewhere unexpected. Set `--project`.
@@ -159,7 +159,7 @@ metadata:
 
 It is then reported as `skipped` with the reason `artifact skipped via metadata.evals.skip`, which
 keeps it visible rather than silently absent. Full field reference in the
-[criteria schema](/tracevals/reference/criteria-schema/).
+[criteria schema](/moose-tracevals/reference/criteria-schema/).
 
 ## Duplicate references collapse
 
@@ -172,12 +172,12 @@ the same file are evaluated once.
 <CardGrid>
   <LinkCard
     title="Trace formats and discovery"
-    description="Which trace formats are supported, how the session store is scanned, and what TRACEVALS_HOME changes."
-    href="/tracevals/reference/traces/"
+    description="Which trace formats are supported, how the session store is scanned, and what MOOSE_TRACEVALS_HOME changes."
+    href="/moose-tracevals/reference/traces/"
   />
   <LinkCard
     title="The full report structure"
     description="Every field of a CoverageEntry, including tried and note, in the JSON report."
-    href="/tracevals/reference/report-and-exit-codes/"
+    href="/moose-tracevals/reference/report-and-exit-codes/"
   />
 </CardGrid>

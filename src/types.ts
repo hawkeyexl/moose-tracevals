@@ -1,4 +1,4 @@
-/** Shared result model and errors for tracevals. */
+/** Shared result model and errors for moose-tracevals. */
 import type { ConsensusResult } from "@hawkeyexl/inference";
 import type { CoverageEntry } from "./artifacts/types.js";
 import type { ArtifactType } from "./artifacts/types.js";

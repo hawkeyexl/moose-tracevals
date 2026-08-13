@@ -28,10 +28,10 @@ describe("slugFor", () => {
     // Pinned against real observed session-store directory names.
     expect(
       slugFor(
-        "C:\\Users\\hawkeyexl\\Documents\\Workspaces\\tracevals\\.claude\\worktrees\\agent-evals-rework-5306e7",
+        "C:\\Users\\hawkeyexl\\Documents\\Workspaces\\moose-tracevals\\.claude\\worktrees\\agent-evals-rework-5306e7",
       ),
     ).toBe(
-      "C--Users-hawkeyexl-Documents-Workspaces-tracevals--claude-worktrees-agent-evals-rework-5306e7",
+      "C--Users-hawkeyexl-Documents-Workspaces-moose-tracevals--claude-worktrees-agent-evals-rework-5306e7",
     );
     expect(slugFor("C:\\Users\\hawkeyexl\\Documents\\Workspaces\\doc-detective")).toBe(
       "C--Users-hawkeyexl-Documents-Workspaces-doc-detective",
@@ -44,12 +44,12 @@ describe("slugFor", () => {
 });
 
 describe("homeDir", () => {
-  it("prefers TRACEVALS_HOME when set", () => {
-    expect(homeDir({ TRACEVALS_HOME: fixtureHome })).toBe(fixtureHome);
+  it("prefers MOOSE_TRACEVALS_HOME when set", () => {
+    expect(homeDir({ MOOSE_TRACEVALS_HOME: fixtureHome })).toBe(fixtureHome);
   });
 
-  it("resolves a relative TRACEVALS_HOME against the cwd", () => {
-    const resolved = homeDir({ TRACEVALS_HOME: "test/fixtures/home" });
+  it("resolves a relative MOOSE_TRACEVALS_HOME against the cwd", () => {
+    const resolved = homeDir({ MOOSE_TRACEVALS_HOME: "test/fixtures/home" });
     expect(resolved.endsWith("home")).toBe(true);
     expect(resolved).not.toBe("test/fixtures/home");
   });
@@ -62,7 +62,7 @@ describe("discoverTraces", () => {
     await utimes(otherTrace, new Date("2026-07-02"), new Date("2026-07-02"));
     const traces = await discoverTraces({
       allProjects: true,
-      env: { TRACEVALS_HOME: fixtureHome },
+      env: { MOOSE_TRACEVALS_HOME: fixtureHome },
     });
     expect(traces).toHaveLength(2);
     expect(traces[0]?.sessionId).toBe("22222222-2222-2222-2222-222222222222");
@@ -72,7 +72,7 @@ describe("discoverTraces", () => {
   it("scopes to one project via its cwd", async () => {
     const traces = await discoverTraces({
       project: "C:\\work\\demo-project",
-      env: { TRACEVALS_HOME: fixtureHome },
+      env: { MOOSE_TRACEVALS_HOME: fixtureHome },
     });
     expect(traces).toHaveLength(1);
     expect(traces[0]?.project).toBe("C:\\work\\demo-project");
@@ -83,7 +83,7 @@ describe("discoverTraces", () => {
     const traces = await discoverTraces({
       allProjects: true,
       limit: 1,
-      env: { TRACEVALS_HOME: fixtureHome },
+      env: { MOOSE_TRACEVALS_HOME: fixtureHome },
     });
     expect(traces).toHaveLength(1);
   });
@@ -91,7 +91,7 @@ describe("discoverTraces", () => {
   it("returns an empty list for a project with no sessions", async () => {
     const traces = await discoverTraces({
       project: "C:\\work\\nonexistent",
-      env: { TRACEVALS_HOME: fixtureHome },
+      env: { MOOSE_TRACEVALS_HOME: fixtureHome },
     });
     expect(traces).toEqual([]);
   });

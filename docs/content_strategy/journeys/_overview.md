@@ -38,7 +38,7 @@ ones are `[GAP]`s, and enumerating them is the point.
 | [`cuj-calibrate-judge`](cuj-calibrate-judge.md) | Decide whether the judge can be trusted, then tune it | Sam |
 | [`cuj-evolve-criteria`](cuj-evolve-criteria.md) | Evolve the criteria standard without breaking what exists | Sam |
 | [`cuj-triage-failure`](cuj-triage-failure.md) | Read a failing eval and decide what to do | Theo |
-| [`cuj-extend`](cuj-extend.md) | Build on tracevals instead of around it | Rin |
+| [`cuj-extend`](cuj-extend.md) | Build on moose-tracevals instead of around it | Rin |
 
 ## Persona → CUJ coverage matrix
 

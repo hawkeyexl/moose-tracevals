@@ -69,7 +69,7 @@ jobs:
             PR DESCRIPTION: ${{ github.event.pull_request.body }}
             PR AUTHOR: ${{ github.event.pull_request.user.login }}
 
-            Review this pull request to tracevals, a CLI that runs
+            Review this pull request to moose-tracevals, a CLI that runs
             deterministic and LLM-as-judge adherence evals against AI agent
             session traces (Claude Code sessions).
 
@@ -83,7 +83,7 @@ jobs:
             - Exit codes: 0 pass, 1 any fail/error, 2 operational.
             - PROMPT_VERSION must be bumped when judge prompts change, or stale
               cached verdicts survive a prompt revision.
-            - Evaluation is read-only: tracevals never mutates trace files or
+            - Evaluation is read-only: moose-tracevals never mutates trace files or
               the artifacts it evaluates.
             - Artifact resolution is deterministic (trace content + filesystem
               lookup); unresolved refs degrade to warnings and coverage notes,
@@ -110,7 +110,7 @@ jobs:
             Testing
             - The suite must stay offline: providers are mocked and prompts are
               injected. Flag any test that would reach the network or spawn a
-              real agent CLI outside the TRACEVALS_LIVE gate.
+              real agent CLI outside the MOOSE_TRACEVALS_LIVE gate.
             - Flag new logic without coverage, especially new trace-adapter and
               judge/consensus branches.
 

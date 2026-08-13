@@ -1,5 +1,5 @@
 /**
- * `tracevals fill [paths...]` — propose eval criteria for a project's
+ * `moose-tracevals fill [paths...]` — propose eval criteria for a project's
  * instruction artifacts and append the survivors to their frontmatter.
  *
  * Authoring, not evaluation: `run` never calls this, and everything written is

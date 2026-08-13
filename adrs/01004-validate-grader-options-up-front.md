@@ -8,7 +8,7 @@ decision-makers: [hawkeyexl, Claude]
 
 ## Context and Problem Statement
 
-Every deterministic grader parsed its own `options` inline inside `grade()`, using ad-hoc `typeof` checks. Required keys were caught, but enum-valued keys were not: `expect: "usd"` on `tool-usage` matched no branch and fell through to `return pass`, so a typo produced a silently passing eval rather than an error. Separately, criteria authoring (`tracevals fill`, ADR 01005) needs to know whether a proposed criterion's options are usable *before* a trace exists — and there was no way to ask.
+Every deterministic grader parsed its own `options` inline inside `grade()`, using ad-hoc `typeof` checks. Required keys were caught, but enum-valued keys were not: `expect: "usd"` on `tool-usage` matched no branch and fell through to `return pass`, so a typo produced a silently passing eval rather than an error. Separately, criteria authoring (`moose-tracevals fill`, ADR 01005) needs to know whether a proposed criterion's options are usable *before* a trace exists — and there was no way to ask.
 
 ## Decision Drivers
 

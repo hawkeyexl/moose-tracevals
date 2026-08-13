@@ -8,7 +8,7 @@ sidebar:
 import { Aside } from '@astrojs/starlight/components';
 
 **Scope:** the deterministic graders: every kind, its options, and what it emits. The judged
-grader (`llm`) is covered in [How the judge decides](/tracevals/judge/). Source of truth:
+grader (`llm`) is covered in [How the judge decides](/moose-tracevals/judge/). Source of truth:
 `src/graders/`.
 
 A deterministic grader decides its question **from the trace alone**: no model call, no cost, and
@@ -29,7 +29,7 @@ is why a grader that cannot validate its options can never be proposed.
 
 **Only `error` severity fails an eval.** A finding at `warning` or `info` is reported and the eval
 passes. Severity is set per criterion; see the
-[criteria schema](/tracevals/reference/criteria-schema/).
+[criteria schema](/moose-tracevals/reference/criteria-schema/).
 
 ### Shared validation messages
 

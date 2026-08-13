@@ -3,7 +3,7 @@ id: persona-toolsmith
 type: persona
 name: "Rin — Toolsmith"
 audience: aud-toolsmiths
-role: TypeScript engineer building tooling on top of tracevals
+role: TypeScript engineer building tooling on top of moose-tracevals
 proficiency: [typescript, esm, json-schema, dependency-injection, npm-packaging]
 prerequisites:
   - reads a type signature as documentation
@@ -33,7 +33,7 @@ cross_cutting: true
 **Scope:** the builder persona for [`aud-toolsmiths`](../audiences/toolsmiths.md), the cross-cutting
 audience. Rin imports the library; the CLI is incidental to them.
 
-Rin maintains internal tooling, or an open-source agent framework, and has decided tracevals is
+Rin maintains internal tooling, or an open-source agent framework, and has decided moose-tracevals is
 close enough to what they need that extending it beats rebuilding it. They opened `src/index.ts`
 before they opened any guide, and treat an undocumented export as an invitation.
 
@@ -54,7 +54,7 @@ and eventually read a trace format the tool does not support yet.
 - **Undocumented report shape.** Parsing a structure they reverse-engineered means every release
   is a gamble.
 
-**How they use tracevals:** as a dependency. They register a grader at startup, run the engine
+**How they use moose-tracevals:** as a dependency. They register a grader at startup, run the engine
 with an injected judge so their own suite stays offline, and read the typed report instead of the
 rendered one. They will contribute upstream if the seam is clear enough to make it obvious where
 their change belongs.

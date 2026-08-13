@@ -3,7 +3,7 @@
  * project-rules file in a project without a trace.
  *
  * This is the inverse of `resolveArtifacts`, which maps names a trace *used*
- * onto files. Authoring (`tracevals fill`) needs the whole population instead,
+ * onto files. Authoring (`moose-tracevals fill`) needs the whole population instead,
  * including artifacts no session has exercised yet.
  *
  * Scope is deliberately the project only — never the user's `~/.claude` or the

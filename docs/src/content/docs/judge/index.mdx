@@ -8,15 +8,15 @@ sidebar:
 import { Aside, LinkCard, CardGrid } from '@astrojs/starlight/components';
 
 **Scope:** how a judged eval becomes a `pass`, `fail`, or `needs-review`, with the arithmetic. What
-a criterion should assert is [Declare what to check](/tracevals/declare/); every configuration key
-mentioned here is in the [configuration reference](/tracevals/reference/configuration/).
+a criterion should assert is [Declare what to check](/moose-tracevals/declare/); every configuration key
+mentioned here is in the [configuration reference](/moose-tracevals/reference/configuration/).
 
 If you are deciding whether to let a judged eval block a merge, this page is the argument. It is
 made with numbers, because numbers are the only form of this argument worth anything.
 
 ## One sample is not a measurement
 
-Ask a model once whether a session followed an instruction and you have a sample. tracevals runs
+Ask a model once whether a session followed an instruction and you have a sample. moose-tracevals runs
 the question **N independent times**, three by default, each a fresh request with no shared context,
 at **temperature 0**.
 
@@ -140,7 +140,7 @@ one written as a slogan.
 Cost is computed from a built-in per-model price table. A model the table does not recognize is
 costed at **zero**, which silently disables `maxCostUsd`. If you run a model the table does not
 know, set `pricing` explicitly in your provider config. See
-[configuration](/tracevals/reference/configuration/).
+[configuration](/moose-tracevals/reference/configuration/).
 </Aside>
 
 ## Where to go next
@@ -149,11 +149,11 @@ know, set `pricing` explicitly in your provider config. See
   <LinkCard
     title="Configure runs, zones, and budgets"
     description="Every judge key — ensembleRuns, temperature, zones, cacheDir, maxCostUsd — with its type and default."
-    href="/tracevals/reference/configuration/"
+    href="/moose-tracevals/reference/configuration/"
   />
   <LinkCard
     title="Read a verdict you disagree with"
     description="What to do when an eval comes back REVIEW or FAIL and you think it is wrong."
-    href="/tracevals/triage/"
+    href="/moose-tracevals/triage/"
   />
 </CardGrid>

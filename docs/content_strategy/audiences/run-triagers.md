@@ -18,7 +18,7 @@ features_emphasized:
 
 # Audience: Session triagers
 
-**Scope:** people who did not install or configure tracevals and are looking at exactly one
+**Scope:** people who did not install or configure moose-tracevals and are looking at exactly one
 result — a `FAIL`, an `ERROR`, or a `REVIEW` — that they need to decode and act on. It does not
 cover configuring the tool, authoring criteria, or calibrating the judge; every one of those is
 somebody else's job and a link away.
@@ -27,7 +27,7 @@ somebody else's job and a link away.
 
 Whoever is standing in front of the output: the contributor whose pull request went red, the
 reviewer deciding whether the run is trustworthy, the person on call when a nightly eval job fails.
-They may not have known tracevals existed until this moment.
+They may not have known moose-tracevals existed until this moment.
 
 They are technically competent — they can read a terminal and a diff — but they have zero context
 on this tool, no interest in acquiring much, and a specific question they need answered now.

@@ -1,21 +1,21 @@
 ---
 title: Get started
-description: Install tracevals, find a session that already happened, evaluate it offline, and read the report line by line.
+description: Install moose-tracevals, find a session that already happened, evaluate it offline, and read the report line by line.
 ---
 
 import { Steps, Tabs, TabItem, Aside, LinkCard, CardGrid } from '@astrojs/starlight/components';
 
-**Scope:** installing tracevals and getting a real, readable result from a session that already
+**Scope:** installing moose-tracevals and getting a real, readable result from a session that already
 happened. It stops once you trust the output. Making the checks say something specific is
-[Declare what to check](/tracevals/declare/); putting this in a pipeline is
-[Run it in CI](/tracevals/ci/).
+[Declare what to check](/moose-tracevals/declare/); putting this in a pipeline is
+[Run it in CI](/moose-tracevals/ci/).
 
 Everything on this page runs **offline**, with no API key.
 
 {/* Doc Detective inline tests: verify this page's documented behavior against the
-    local build, exposed as `tracevals` via `npm link` (see
+    local build, exposed as `moose-tracevals` via `npm link` (see
     .github/workflows/doc-detective.yml), over committed fixtures. The workflow
-    sets TRACEVALS_HOME=test/fixtures/home so trace discovery reads the fixture
+    sets MOOSE_TRACEVALS_HOME=test/fixtures/home so trace discovery reads the fixture
     session store instead of the runner's home.
     Run with `npx doc-detective`. Config: .doc-detective.json. */}
 
@@ -23,19 +23,19 @@ Everything on this page runs **offline**, with no API key.
 
 1. ### Install
 
-   tracevals needs **Node.js 24 or newer**.
+   moose-tracevals needs **Node.js 24 or newer**.
 
    <Tabs>
      <TabItem label="Project dependency">
        ```bash
-       npm install --save-dev tracevals
+       npm install --save-dev moose-tracevals
        ```
 
-       Then invoke it as `npx tracevals`.
+       Then invoke it as `npx moose-tracevals`.
      </TabItem>
      <TabItem label="No install">
        ```bash
-       npx tracevals --version
+       npx moose-tracevals --version
        ```
 
        Nothing to add to your project first.
@@ -43,25 +43,25 @@ Everything on this page runs **offline**, with no API key.
    </Tabs>
 
    <Aside type="tip" title="One name, both paths">
-   The package and the `bin` it installs are both called `tracevals`, and `npx` resolves by
-   package name — so `npx tracevals` reaches this CLI whether or not it is installed. With a
+   The package and the `bin` it installs are both called `moose-tracevals`, and `npx` resolves by
+   package name — so `npx moose-tracevals` reaches this CLI whether or not it is installed. With a
    local dependency npm prefers `node_modules/.bin`; without one it fetches the package.
    </Aside>
 
    {/* test {"testId":"get-started-install","description":"The CLI runs and reports a version."} */}
-   {/* step {"description":"The installed binary responds to --version.","runShell":{"command":"tracevals --version","exitCodes":[0]}} */}
+   {/* step {"description":"The installed binary responds to --version.","runShell":{"command":"moose-tracevals --version","exitCodes":[0]}} */}
    {/* test end */}
 
 2. ### Find a session
 
-   tracevals evaluates a **trace**: a record of a session that already happened, sitting on disk.
+   moose-tracevals evaluates a **trace**: a record of a session that already happened, sitting on disk.
    You do not instrument anything and you do not re-run any work.
 
    Claude Code writes one JSONL file per session under `~/.claude/projects/<project-slug>/`. To see
    what is evaluable:
 
    ```bash
-   npx tracevals list --all-projects --limit 5
+   npx moose-tracevals list --all-projects --limit 5
    ```
 
    ```
@@ -77,7 +77,7 @@ Everything on this page runs **offline**, with no API key.
    path you can pass to `run`. Drop `--all-projects` to scope to the current directory's project.
 
    {/* test {"testId":"get-started-list","description":"list discovers traces in the session store."} */}
-   {/* step {"description":"Listing every project finds the fixture sessions and exits 0.","runShell":{"command":"tracevals list --all-projects --limit 5","exitCodes":[0],"stdio":"demo-project"}} */}
+   {/* step {"description":"Listing every project finds the fixture sessions and exits 0.","runShell":{"command":"moose-tracevals list --all-projects --limit 5","exitCodes":[0],"stdio":"demo-project"}} */}
    {/* test end */}
 
 3. ### Run your first evaluation
@@ -85,16 +85,16 @@ Everything on this page runs **offline**, with no API key.
    Start with the mode that makes no model call at all:
 
    ```bash
-   npx tracevals run <trace-file> --deterministic-only
+   npx moose-tracevals run <trace-file> --deterministic-only
    ```
 
-   `--deterministic-only` runs the seven [deterministic graders](/tracevals/reference/graders/),
+   `--deterministic-only` runs the seven [deterministic graders](/moose-tracevals/reference/graders/),
    the checks decidable from the trace alone, and **skips** judged evals instead of failing them.
 
    To exercise the whole pipeline, including the judge, without a network call:
 
    ```bash
-   npx tracevals run <trace-file> --provider mock
+   npx moose-tracevals run <trace-file> --provider mock
    ```
 
    <Aside title="Two other things worth knowing early">
@@ -110,7 +110,7 @@ Everything on this page runs **offline**, with no API key.
    looks like this:
 
    ```
-   tracevals — /path/to/session.jsonl
+   moose-tracevals — /path/to/session.jsonl
    claude-code · claude-opus-4-8 · 2 turn(s) · /work/demo-project
 
      PASS   fix-bug › used-read
@@ -158,8 +158,8 @@ Everything on this page runs **offline**, with no API key.
    session ran a shell command; the finding names the tool and the count.
 
    {/* test {"testId":"get-started-first-run","description":"A deterministic-only run produces the documented outcomes and exit code."} */}
-   {/* step {"description":"The run exits 1 because the fixture session violates a declared criterion.","runShell":{"command":"tracevals run test/fixtures/traces/claude-session.jsonl --project test/fixtures/project --deterministic-only","exitCodes":[1],"stdio":"tool Bash was used 1 time(s) but must not be"}} */}
-   {/* step {"description":"Judged evals are skipped, not failed, under --deterministic-only.","runShell":{"command":"tracevals run test/fixtures/traces/claude-session.jsonl --project test/fixtures/project --deterministic-only","exitCodes":[1],"stdio":"llm evals skipped (deterministic-only run)"}} */}
+   {/* step {"description":"The run exits 1 because the fixture session violates a declared criterion.","runShell":{"command":"moose-tracevals run test/fixtures/traces/claude-session.jsonl --project test/fixtures/project --deterministic-only","exitCodes":[1],"stdio":"tool Bash was used 1 time(s) but must not be"}} */}
+   {/* step {"description":"Judged evals are skipped, not failed, under --deterministic-only.","runShell":{"command":"moose-tracevals run test/fixtures/traces/claude-session.jsonl --project test/fixtures/project --deterministic-only","exitCodes":[1],"stdio":"llm evals skipped (deterministic-only run)"}} */}
    {/* test end */}
 
 5. ### Check the exit code
@@ -168,11 +168,11 @@ Everything on this page runs **offline**, with no API key.
    |---|---|
    | `0` | every eval passed or was skipped |
    | `1` | something failed, errored, or needs review |
-   | `2` | tracevals itself could not run — bad usage, unreadable trace, unknown format |
+   | `2` | moose-tracevals itself could not run — bad usage, unreadable trace, unknown format |
 
    The distinction between `1` and `2` is the one to hold on to: `1` means the agent did something,
    `2` means the tool did. Full detail in
-   [Exit codes & reports](/tracevals/ci/exit-codes-and-reports/).
+   [Exit codes & reports](/moose-tracevals/ci/exit-codes-and-reports/).
 
 </Steps>
 
@@ -184,11 +184,11 @@ Two doors from here, depending on what you came for.
   <LinkCard
     title="Make the checks specific"
     description="The implicit eval is coarse. Declare a criterion on the one instruction you actually care about — then let fill propose the rest."
-    href="/tracevals/declare/"
+    href="/moose-tracevals/declare/"
   />
   <LinkCard
     title="Put this in a pipeline"
     description="A GitHub Actions recipe that runs offline, plus the exit-code contract and a policy for needs-review."
-    href="/tracevals/ci/"
+    href="/moose-tracevals/ci/"
   />
 </CardGrid>

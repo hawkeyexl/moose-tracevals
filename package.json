@@ -1,10 +1,10 @@
 {
-  "name": "tracevals",
+  "name": "moose-tracevals",
   "version": "0.0.0-development",
   "description": "Deterministic and LLM-as-judge adherence evals for AI agent session traces. Did the session follow the skills and instructions it used?",
   "type": "module",
   "bin": {
-    "tracevals": "dist/cli.js"
+    "moose-tracevals": "dist/cli.js"
   },
   "main": "dist/index.js",
   "module": "dist/index.js",
@@ -24,10 +24,10 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/hawkeyexl/tracevals.git"
+    "url": "git+https://github.com/hawkeyexl/moose-tracevals.git"
   },
   "bugs": {
-    "url": "https://github.com/hawkeyexl/tracevals/issues"
+    "url": "https://github.com/hawkeyexl/moose-tracevals/issues"
   },
   "publishConfig": {
     "access": "public"

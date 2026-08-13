@@ -1,5 +1,5 @@
 /**
- * Judge-provider construction: map tracevals' provider config section onto
+ * Judge-provider construction: map moose-tracevals' provider config section onto
  * the shared inference library's `ProviderSpec`.
  *
  * This used to serialize the config section back to YAML and re-parse it

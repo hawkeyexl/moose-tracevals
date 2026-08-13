@@ -1,13 +1,13 @@
 ---
 title: Triage FAQ
-description: Short answers to the questions that come up after reading a failing tracevals result — skipped checks, missing artifacts, judged verdicts you disagree with, and who owns the fix.
+description: Short answers to the questions that come up after reading a failing moose-tracevals result — skipped checks, missing artifacts, judged verdicts you disagree with, and who owns the fix.
 sidebar:
   order: 2
 ---
 
 import { Aside } from '@astrojs/starlight/components';
 
-**Scope:** the follow-up questions that survive [Read a failing eval](/tracevals/triage/). If you
+**Scope:** the follow-up questions that survive [Read a failing eval](/moose-tracevals/triage/). If you
 have not read that page yet, start there — it decodes a result in one pass.
 
 ## About the result
@@ -64,7 +64,7 @@ the criterion, because it will keep passing otherwise.
 Yes, and it is read-only: `run` never modifies a trace or the artifacts it evaluates.
 
 ```bash
-npx tracevals run <trace-file> --deterministic-only
+npx moose-tracevals run <trace-file> --deterministic-only
 ```
 
 **I re-ran it and got the identical judged verdict. Is it cached?**
@@ -79,7 +79,7 @@ offline but returns a canned verdict, so use it to check wiring rather than adhe
 Point artifact lookup somewhere real:
 
 ```bash
-npx tracevals run <trace-file> --project ./my-repo --deterministic-only
+npx moose-tracevals run <trace-file> --project ./my-repo --deterministic-only
 ```
 
 ## About ownership
@@ -100,6 +100,6 @@ per criterion — but both are decisions for whoever owns the gate, not a workar
 time pressure.
 
 <Aside title="Still stuck?">
-The two pages worth opening next are [How the judge decides](/tracevals/judge/) if the verdict is
-what puzzles you, and [Declare what to check](/tracevals/declare/) if the *criterion* is.
+The two pages worth opening next are [How the judge decides](/moose-tracevals/judge/) if the verdict is
+what puzzles you, and [Declare what to check](/moose-tracevals/declare/) if the *criterion* is.
 </Aside>

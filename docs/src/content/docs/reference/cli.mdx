@@ -1,6 +1,6 @@
 ---
 title: CLI reference
-description: Every tracevals command, argument, and flag across run, fill, and list, with defaults, exit codes, and the environment variables that affect them.
+description: Every moose-tracevals command, argument, and flag across run, fill, and list, with defaults, exit codes, and the environment variables that affect them.
 sidebar:
   order: 2
 ---
@@ -10,7 +10,7 @@ import { Aside } from '@astrojs/starlight/components';
 **Scope:** the complete command-line surface. Source of truth: `src/cli.ts`.
 
 ```
-tracevals [options] [command]
+moose-tracevals [options] [command]
 
 Commands:
   run [options] [trace]      Evaluate a trace against the skills and instructions it used
@@ -24,27 +24,27 @@ Options:
   -h, --help                 display help for command
 ```
 
-`run` is the **default command**: `tracevals <trace>` and `tracevals run <trace>` are equivalent.
+`run` is the **default command**: `moose-tracevals <trace>` and `moose-tracevals run <trace>` are equivalent.
 
 {/* Doc Detective inline tests: assert the documented command surface against the
     built CLI, so a flag rename fails CI instead of silently drifting. */}
 {/* test {"testId":"cli-surface","description":"Every documented command and flag is present in the built CLI."} */}
-{/* step {"description":"The top-level help lists all three commands.","runShell":{"command":"tracevals --help","exitCodes":[0],"stdio":"run [options] [trace]"}} */}
-{/* step {"description":"run exposes the documented flags.","runShell":{"command":"tracevals run --help","exitCodes":[0],"stdio":"--deterministic-only"}} */}
-{/* step {"description":"run's format flag defaults to human.","runShell":{"command":"tracevals run --help","exitCodes":[0],"stdio":"human | json | markdown (default: \"human\")"}} */}
-{/* step {"description":"fill exposes the documented flags.","runShell":{"command":"tracevals fill --help","exitCodes":[0],"stdio":"--confidence <n>"}} */}
-{/* step {"description":"list exposes the documented flags.","runShell":{"command":"tracevals list --help","exitCodes":[0],"stdio":"--all-projects"}} */}
+{/* step {"description":"The top-level help lists all three commands.","runShell":{"command":"moose-tracevals --help","exitCodes":[0],"stdio":"run [options] [trace]"}} */}
+{/* step {"description":"run exposes the documented flags.","runShell":{"command":"moose-tracevals run --help","exitCodes":[0],"stdio":"--deterministic-only"}} */}
+{/* step {"description":"run's format flag defaults to human.","runShell":{"command":"moose-tracevals run --help","exitCodes":[0],"stdio":"human | json | markdown (default: \"human\")"}} */}
+{/* step {"description":"fill exposes the documented flags.","runShell":{"command":"moose-tracevals fill --help","exitCodes":[0],"stdio":"--confidence <n>"}} */}
+{/* step {"description":"list exposes the documented flags.","runShell":{"command":"moose-tracevals list --help","exitCodes":[0],"stdio":"--all-projects"}} */}
 {/* test end */}
 
 <Aside type="tip" title="Invoking the binary">
-The **package** and the `bin` it installs are both named `tracevals`. Every command below is
-written as the bare `tracevals`; prefix it with `npx` if the CLI is not on your `PATH`.
+The **package** and the `bin` it installs are both named `moose-tracevals`. Every command below is
+written as the bare `moose-tracevals`; prefix it with `npx` if the CLI is not on your `PATH`.
 </Aside>
 
 ## `run`
 
 ```
-tracevals run [options] [trace]
+moose-tracevals run [options] [trace]
 ```
 
 Evaluates a trace against the skills, agent definitions, and project-rules files the session used.
@@ -59,7 +59,7 @@ Evaluates a trace against the skills, agent definitions, and project-rules files
 Omitting `trace` **without** a TTY produces an error instead of a prompt:
 
 ```
-tracevals: no trace given; pass a trace file or run `tracevals list`
+moose-tracevals: no trace given; pass a trace file or run `moose-tracevals list`
 ```
 
 ### Options
@@ -88,7 +88,7 @@ tracevals: no trace given; pass a trace file or run `tracevals list`
 ## `fill`
 
 ```
-tracevals fill [options] [paths...]
+moose-tracevals fill [options] [paths...]
 ```
 
 Proposes eval criteria for the instruction artifacts in a project and writes those that survive the
@@ -103,7 +103,7 @@ gate. **The only command that writes.** `run` never calls it.
 A path that does not exist is an operational error:
 
 ```
-tracevals: no such file or directory: ./nope
+moose-tracevals: no such file or directory: ./nope
 ```
 
 ### Options
@@ -123,7 +123,7 @@ tracevals: no such file or directory: ./nope
 Numeric flags are range-checked before anything runs. Out of range, or not a number:
 
 ```
-tracevals: --confidence must be a number between 0 and 1, got 1.5
+moose-tracevals: --confidence must be a number between 0 and 1, got 1.5
 ```
 
 ### Exit codes
@@ -137,13 +137,13 @@ tracevals: --confidence must be a number between 0 and 1, got 1.5
 <Aside title="What fill never does">
 Existing criteria are never modified; a name collision fails the run. Only the YAML frontmatter block
 is rewritten; the body is byte-identical. Project rules (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`) are
-proposed but **never written**. See [Fill in criteria](/tracevals/declare/fill/).
+proposed but **never written**. See [Fill in criteria](/moose-tracevals/declare/fill/).
 </Aside>
 
 ## `list`
 
 ```
-tracevals list [options]
+moose-tracevals list [options]
 ```
 
 Lists discoverable traces from the Claude Code session store, newest first. Always exits `0` on
@@ -188,5 +188,5 @@ No traces found. Pass --all-projects to scan every project, or --project <dir> t
 
 | Variable | Effect |
 |---|---|
-| `TRACEVALS_HOME` | Overrides the home directory for **both** trace discovery and user-level artifact lookup. A relative value resolves against the current working directory. Use it to make a run reproducible on a shared runner. |
-| `TRACEVALS_LIVE` | Contributor-only. Set to `1` to include the live judge smoke test in this repository's own suite. Has no effect on the CLI. |
+| `MOOSE_TRACEVALS_HOME` | Overrides the home directory for **both** trace discovery and user-level artifact lookup. A relative value resolves against the current working directory. Use it to make a run reproducible on a shared runner. |
+| `MOOSE_TRACEVALS_LIVE` | Contributor-only. Set to `1` to include the live judge smoke test in this repository's own suite. Has no effect on the CLI. |

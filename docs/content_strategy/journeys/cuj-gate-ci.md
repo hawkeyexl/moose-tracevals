@@ -4,17 +4,17 @@ type: cuj
 title: Gate agent work in CI, offline
 personas: [persona-platform-engineer]
 trigger: "Agent-assisted work is routine and someone has asked whether any of it can be verified before merge."
-entry_point: /tracevals/ci/
-success_criteria: "A workflow runs tracevals on every push, makes no network call, and fails the build on a real adherence violation — with a stated policy for every exit code and for needs-review."
+entry_point: /moose-tracevals/ci/
+success_criteria: "A workflow runs moose-tracevals on every push, makes no network call, and fails the build on a real adherence violation — with a stated policy for every exit code and for needs-review."
 steps:
-  - { stage: "Copy the GitHub Actions recipe", doc: /tracevals/ci/, exists: true }
-  - { stage: "Run deterministic graders only", doc: "/tracevals/ci/#stay-offline", exists: true, note: "--deterministic-only makes no model call; --provider mock exercises the full pipeline" }
-  - { stage: "Pin the session store on a shared runner", doc: "/tracevals/ci/#control-the-environment", exists: true, note: "TRACEVALS_HOME" }
-  - { stage: "Branch on the exit code", doc: /tracevals/ci/exit-codes-and-reports/, exists: true }
-  - { stage: "Decide the needs-review policy", doc: "/tracevals/ci/exit-codes-and-reports/#the-third-outcome", exists: true, note: "failOnNeedsReview" }
-  - { stage: "Cap spend if the judge does run", doc: /tracevals/reference/configuration/, exists: true, note: "judge.maxCostUsd" }
-  - { stage: "Publish the report as an artifact", doc: "/tracevals/ci/exit-codes-and-reports/#keep-the-report", exists: true, note: "--format markdown, --output" }
-  - { stage: "Add a second CI platform", doc: "/tracevals/ci/#other-ci-platforms", exists: true, note: "GitLab CI and pre-commit; the contract is identical, only the syntax changes" }
+  - { stage: "Copy the GitHub Actions recipe", doc: /moose-tracevals/ci/, exists: true }
+  - { stage: "Run deterministic graders only", doc: "/moose-tracevals/ci/#stay-offline", exists: true, note: "--deterministic-only makes no model call; --provider mock exercises the full pipeline" }
+  - { stage: "Pin the session store on a shared runner", doc: "/moose-tracevals/ci/#control-the-environment", exists: true, note: "MOOSE_TRACEVALS_HOME" }
+  - { stage: "Branch on the exit code", doc: /moose-tracevals/ci/exit-codes-and-reports/, exists: true }
+  - { stage: "Decide the needs-review policy", doc: "/moose-tracevals/ci/exit-codes-and-reports/#the-third-outcome", exists: true, note: "failOnNeedsReview" }
+  - { stage: "Cap spend if the judge does run", doc: /moose-tracevals/reference/configuration/, exists: true, note: "judge.maxCostUsd" }
+  - { stage: "Publish the report as an artifact", doc: "/moose-tracevals/ci/exit-codes-and-reports/#keep-the-report", exists: true, note: "--format markdown, --output" }
+  - { stage: "Add a second CI platform", doc: "/moose-tracevals/ci/#other-ci-platforms", exists: true, note: "GitLab CI and pre-commit; the contract is identical, only the syntax changes" }
 ---
 
 # CUJ: Gate agent work in CI, offline
@@ -48,5 +48,5 @@ Environment control is the quiet requirement: trace discovery reads a session st
 directory, and on a shared runner that has to be pinned explicitly rather than inherited.
 
 **Coverage.** No gaps. `ci/` carries where a trace comes from in CI, the offline modes,
-`TRACEVALS_HOME`, and recipes for three platforms; `ci/exit-codes-and-reports/` carries the
+`MOOSE_TRACEVALS_HOME`, and recipes for three platforms; `ci/exit-codes-and-reports/` carries the
 exit-code contract and the `needs-review` policy decision.

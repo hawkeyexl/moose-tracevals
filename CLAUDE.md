@@ -1,6 +1,6 @@
 # Claude Code Configuration
 
-Repo-wide guidance for AI agents working on **tracevals** — a TypeScript/ESM CLI and library that runs deterministic and LLM-as-judge adherence evals against AI agent session traces (Claude Code sessions today; other trace formats later).
+Repo-wide guidance for AI agents working on **moose-tracevals** — a TypeScript/ESM CLI and library that runs deterministic and LLM-as-judge adherence evals against AI agent session traces (Claude Code sessions today; other trace formats later).
 
 Conventions here are ported from the sibling [docevals](https://github.com/hawkeyexl/docevals) and [docmeta](https://github.com/hawkeyexl/docmeta) repos and adapted to this one.
 
@@ -21,7 +21,7 @@ npm install
 
 Use `npm install`, **not `npm ci`** — the lockfile is authored on Windows, where npm prunes optional-dependency subtrees that `npm ci`'s sync check then reports as missing on every runner. CI uses `npm install` for the same reason.
 
-**No sibling checkout is needed.** tracevals used to consume docevals through a `file:../docevals` link, which demanded a sibling clone, a junction for every worktree, an extra CI checkout, and blocked publishing outright. The inference layer now comes from [`@hawkeyexl/inference`](https://github.com/hawkeyexl/inference) on the registry (ADR 01006), so a clean clone plus `npm install` is the entire setup.
+**No sibling checkout is needed.** moose-tracevals used to consume docevals through a `file:../docevals` link, which demanded a sibling clone, a junction for every worktree, an extra CI checkout, and blocked publishing outright. The inference layer now comes from [`@hawkeyexl/inference`](https://github.com/hawkeyexl/inference) on the registry (ADR 01006), so a clean clone plus `npm install` is the entire setup.
 
 **Never reintroduce a `file:` or `link:` dependency spec.** npm publishes them verbatim, so a package carrying one is broken for everyone who installs it.
 
@@ -46,7 +46,7 @@ Always use **red → green** test-driven development. For every behavior change:
 2. **Green** — write the minimum code to make it pass, and run it to confirm.
 3. **Refactor** — clean up while keeping the test green.
 
-The suite must stay **offline and hermetic**: judge providers are mocked (the inference library's `MockProvider`), interactive prompts are injected functions, and trace/artifact fixtures live in `test/fixtures/`. A test that reaches the network or spawns a real agent CLI is a defect — the one exception is `test/integration/live.test.ts`, gated behind `TRACEVALS_LIVE=1` and skipped by default.
+The suite must stay **offline and hermetic**: judge providers are mocked (the inference library's `MockProvider`), interactive prompts are injected functions, and trace/artifact fixtures live in `test/fixtures/`. A test that reaches the network or spawns a real agent CLI is a defect — the one exception is `test/integration/live.test.ts`, gated behind `MOOSE_TRACEVALS_LIVE=1` and skipped by default.
 
 ## Architecture Decision Records (required)
 
@@ -94,11 +94,11 @@ Only the **first line** is parsed as the header.
 | `next` | `next` |
 | `feat/**` | per-branch prerelease channel (branch suffix slugified) |
 
-**The package name and the `bin` name are both plain `tracevals`, unscoped.** That is the point of the rename: the project was `@hawkeyexl/agentevals` because the unscoped `agentevals` on npm belongs to an unrelated project (LangChain's), which made `npx agentevals` a cold-start footgun — `npx` resolves by *package* name, so it fetched theirs. `tracevals` was free, so we own the name the CLI actually answers to and `npx tracevals` resolves here with or without a local install. See [ADR 01008](adrs/01008-rename-the-project-to-tracevals.md).
+**The package name and the `bin` name are both plain `moose-tracevals`, unscoped.** That is the point of the rename: the project was `@hawkeyexl/agentevals` because the unscoped `agentevals` on npm belongs to an unrelated project (LangChain's), which made `npx agentevals` a cold-start footgun — `npx` resolves by *package* name, so it fetched theirs. `moose-tracevals` was free, so we own the name the CLI actually answers to and `npx moose-tracevals` resolves here with or without a local install. See [ADR 01008](adrs/01008-rename-the-project-to-moose-tracevals.md).
 
 **Never reintroduce a scope/bin split.** [doc-detective.yml](.github/workflows/doc-detective.yml) still asserts the linked binary's version matches this package before running anything, so a broken `npm link` fails loudly instead of silently testing whatever else resolves.
 
-**Publishing is no longer blocked by a dependency**, only by one-time setup: configure npm trusted publishing for `tracevals` (OIDC, naming `release.yml`), then set the `RELEASE_ENABLED` repository variable.
+**Publishing is no longer blocked by a dependency**, only by one-time setup: configure npm trusted publishing for `moose-tracevals` (OIDC, naming `release.yml`), then set the `RELEASE_ENABLED` repository variable.
 
 ## Don't
 
@@ -127,14 +127,14 @@ mkdir -p .tmp && npm test > .tmp/output.txt 2>&1
 ## Commands
 
 - `npm test` — vitest (unit + integration; no network, no API keys)
-- `TRACEVALS_LIVE=1 npm test` — adds the live smoke test (real judge provider)
+- `MOOSE_TRACEVALS_LIVE=1 npm test` — adds the live smoke test (real judge provider)
 - `npm run typecheck` / `npm run build`
 - `node dist/cli.js run test/fixtures/traces/claude-session.jsonl --project test/fixtures/project --deterministic-only` — dogfood run against the fixture corpus
 - `node dist/cli.js fill test/fixtures/project --provider mock --dry-run` — dogfood the authoring path. **Always `--dry-run` against the fixtures**; CI asserts `git diff --quiet` on the corpus.
 - `npm run docs:validate` — dogfood `docmeta` against the docs' own frontmatter (gates the Pages deploy)
 - `npm run docs:check-strategy` — anchor integrity, orphans, CUJ route resolution, and link resolution across `docs/content_strategy/` and the pages
 - `npm run docs:build` / `npm run docs:dev` — build or serve the Starlight site (`docs/` is a nested npm project; run `npm install` inside it once)
-- `npx doc-detective` — run the inline tests embedded in the docs pages. Needs a built `dist/` and the `tracevals` bin on PATH.
+- `npx doc-detective` — run the inline tests embedded in the docs pages. Needs a built `dist/` and the `moose-tracevals` bin on PATH.
 
 ## Docs & content strategy
 
@@ -159,12 +159,12 @@ Before drafting or editing any page under `docs/src/content/docs/**`:
 
 Pipeline: **select trace → parse (adapter) → resolve artifacts → extract criteria → plan evals → deterministic graders → LLM judge → aggregate → report (+ history)**.
 
-- `src/trace/` — trace adapters behind a normalized `Trace` model. `claude.ts` parses both Claude Code session files (`~/.claude/projects/<slug>/*.jsonl`) and legacy `claude -p` stream-json. `discover.ts` scans the session store (`TRACEVALS_HOME` overrides the home dir for tests). The `TraceSource` union is the seam for future adapters (Codex is deferred, not rejected — see ADR 01003).
+- `src/trace/` — trace adapters behind a normalized `Trace` model. `claude.ts` parses both Claude Code session files (`~/.claude/projects/<slug>/*.jsonl`) and legacy `claude -p` stream-json. `discover.ts` scans the session store (`MOOSE_TRACEVALS_HOME` overrides the home dir for tests). The `TraceSource` union is the seam for future adapters (Codex is deferred, not rejected — see ADR 01003).
 - `src/artifacts/` — deterministic resolution of every skill/agent/project-rule artifact the trace used: `Skill` tool calls and `<command-name>` injections → `SKILL.md`; `Agent` spawns (`subagent_type`) → agent definitions; `CLAUDE.md`/`AGENTS.md` at the trace cwd, `.claude/`, and parent dirs up to the git root. Unresolved refs go to the report's coverage table, never crash the run.
 - `src/criteria/` — reads the `metadata.evals` frontmatter block from artifacts via docmeta `extractFrontmatter`, validated against `schemas/artifact-evals-0.2.json` (a **published artifact** — ships in the package, pinned by `test/unit/schema.test.ts`; 0.1 still ships for pinned consumers). Artifacts without declared criteria get one implicit whole-artifact adherence eval (ADR 01002).
 - `src/graders/` — deterministic `TraceGrader` registry: `tool-usage`, `skill-invoked`, `file-access`, `turn-count`, `cost`, `regex`, `json-output`. Each implements `validateOptions()` so options are ground-checked without a trace (ADR 01004).
 - `src/fill/` + `src/commands/fill.ts` — authoring: propose criteria for artifacts found by `src/artifacts/discover.ts` (the static inverse of `resolve.ts`), gate them on grader allowlist → option validation → target grounding → confidence, then append via `src/criteria/write.ts`. Project rules are proposed but never written (ADR 01005).
-- `src/judge/` — trace-adherence LLM judge built on `@hawkeyexl/inference` (`makeProvider`, `runEnsemble`, `computeConsensus`, `zoneFor`, `JsonCache`). What stays local is what is tracevals-specific: the prompts, the trace-worded verdict schema, the cache-key composition, the per-plan cost budget, and the `JudgedEval` shape. N-run ensemble at temperature 0, content-addressed cache under `.tracevals/cache`. `provider.ts` maps the config's provider section onto the library's `ProviderSpec` (ADR 01006).
+- `src/judge/` — trace-adherence LLM judge built on `@hawkeyexl/inference` (`makeProvider`, `runEnsemble`, `computeConsensus`, `zoneFor`, `JsonCache`). What stays local is what is moose-tracevals-specific: the prompts, the trace-worded verdict schema, the cache-key composition, the per-plan cost budget, and the `JudgedEval` shape. N-run ensemble at temperature 0, content-addressed cache under `.moose-tracevals/cache`. `provider.ts` maps the config's provider section onto the library's `ProviderSpec` (ADR 01006).
 - `src/core/engine.ts` — orchestration; the judge and graders are injected so the engine tests offline.
 - `src/reporters/` — human / json / markdown, each with an artifact-coverage section.
 
@@ -183,7 +183,7 @@ Pipeline: **select trace → parse (adapter) → resolve artifacts → extract c
 Every user-facing knob flows through the resolved config. CLI flags do **not** bypass it — they override it.
 
 ```text
-tracevals.config.yaml  →  Ajv validate (src/core/config-schema.json)  →  defaults applied  →  CLI override  →  runtime
+moose-tracevals.config.yaml  →  Ajv validate (src/core/config-schema.json)  →  defaults applied  →  CLI override  →  runtime
 ```
 
 - `parseConfig()` in `src/core/config.ts` validates and fills **every** default; downstream code receives a fully-populated config.
@@ -209,6 +209,6 @@ The husky hook installs via the `prepare` script on `npm install`. If commits st
 
 ### Still requiring one-time setup
 
-- **Claude review** workflows skip with a notice until `gh secret set CLAUDE_CODE_OAUTH_TOKEN --repo hawkeyexl/tracevals`. Note `claude-code-action` refuses to run when the workflow file differs from the default branch's copy (anti-tampering) — a green check is not proof a review ran; check the duration.
-- **Releases** are opt-in via `gh variable set RELEASE_ENABLED --body true`. Configure npm trusted publishing for `tracevals` (OIDC, naming `release.yml`) before enabling.
+- **Claude review** workflows skip with a notice until `gh secret set CLAUDE_CODE_OAUTH_TOKEN --repo hawkeyexl/moose-tracevals`. Note `claude-code-action` refuses to run when the workflow file differs from the default branch's copy (anti-tampering) — a green check is not proof a review ran; check the duration.
+- **Releases** are opt-in via `gh variable set RELEASE_ENABLED --body true`. Configure npm trusted publishing for `moose-tracevals` (OIDC, naming `release.yml`) before enabling.
 - **The docs site** needs GitHub Pages set to "GitHub Actions" as its source (Settings → Pages) before [docs.yml](.github/workflows/docs.yml)'s deploy job can publish. Until then the validate and build jobs still run and still gate — only the deploy step fails.

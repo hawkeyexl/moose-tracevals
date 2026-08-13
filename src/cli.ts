@@ -13,7 +13,7 @@ const { version } = require("../package.json") as { version: string };
 const program = new Command();
 
 program
-  .name("tracevals")
+  .name("moose-tracevals")
   .description(
     "Deterministic and LLM-as-judge adherence evals for AI agent session traces.",
   )
@@ -37,7 +37,7 @@ async function executeRun(trace: string | undefined, opts: RunFlags) {
     // The interactive picker needs a TTY; scripted callers must name a trace.
     if (!process.stdout.isTTY || !process.stdin.isTTY) {
       throw new TracevalsError(
-        "no trace given; pass a trace file or run `tracevals list`",
+        "no trace given; pass a trace file or run `moose-tracevals list`",
       );
     }
     const { pickTrace } = await import("./trace/picker.js");
@@ -184,7 +184,7 @@ try {
   await program.parseAsync(process.argv);
 } catch (err) {
   if (err instanceof TracevalsError) {
-    console.error(`tracevals: ${err.message}`);
+    console.error(`moose-tracevals: ${err.message}`);
     process.exitCode = 2;
   } else {
     throw err;

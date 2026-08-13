@@ -39,7 +39,7 @@ async function resolveFixtureSession() {
   const trace = await parseTraceFile(sessionFixture);
   return resolveArtifacts(trace, {
     projectDir: fixtureProject,
-    env: { TRACEVALS_HOME: fixtureHome },
+    env: { MOOSE_TRACEVALS_HOME: fixtureHome },
   });
 }
 
@@ -94,7 +94,7 @@ describe("resolveArtifacts", () => {
   it("finds project rules from a nested cwd by walking to the project root", async () => {
     const { artifacts } = await resolveArtifacts(emptyTrace({ cwd: nestedDir }), {
       projectRoot: fixtureProject,
-      env: { TRACEVALS_HOME: fixtureHome },
+      env: { MOOSE_TRACEVALS_HOME: fixtureHome },
     });
     const rules = artifacts.filter((a) => a.type === "project-rules");
     expect(rules.some((r) => r.name === "CLAUDE.md")).toBe(true);
@@ -105,7 +105,7 @@ describe("resolveArtifacts", () => {
       emptyTrace({
         skillInvocations: [{ name: "ghost-skill", via: "skill-tool" }],
       }),
-      { env: { TRACEVALS_HOME: fixtureHome } },
+      { env: { MOOSE_TRACEVALS_HOME: fixtureHome } },
     );
     expect(artifacts.some((a) => a.name === "ghost-skill")).toBe(false);
     const entry = coverage.find((c) => c.ref === "ghost-skill");
@@ -122,7 +122,7 @@ describe("resolveArtifacts", () => {
       ],
     });
     const { artifacts } = await resolveArtifacts(trace, {
-      env: { TRACEVALS_HOME: fixtureHome },
+      env: { MOOSE_TRACEVALS_HOME: fixtureHome },
     });
     expect(artifacts.filter((a) => a.name === "fix-bug")).toHaveLength(1);
   });

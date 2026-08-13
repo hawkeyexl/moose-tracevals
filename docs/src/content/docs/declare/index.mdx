@@ -8,8 +8,8 @@ sidebar:
 import { Steps, Aside, LinkCard, CardGrid } from '@astrojs/starlight/components';
 
 **Scope:** authoring one criterion by hand, deliberately. Proposing many at once is
-[Fill in criteria](/tracevals/declare/fill/); tuning how judged criteria are decided is
-[Trust the judge](/tracevals/judge/).
+[Fill in criteria](/moose-tracevals/declare/fill/); tuning how judged criteria are decided is
+[Trust the judge](/moose-tracevals/judge/).
 
 ## The implicit eval
 
@@ -73,7 +73,7 @@ Two forms, and the difference matters more than it looks:
   track, reference, or decide deterministically.
 
 The full block shape, including every optional field, is in the
-[criteria schema reference](/tracevals/reference/criteria-schema/).
+[criteria schema reference](/moose-tracevals/reference/criteria-schema/).
 
 ## Judged or deterministic?
 
@@ -95,7 +95,7 @@ certain answer for a probabilistic one, and you pay for it.
 | **reasoning, sequence, judgement, or intent** | judged | `llm` |
 
 Every deterministic grader, its options, and its exact failure messages are in the
-[grader reference](/tracevals/reference/graders/).
+[grader reference](/moose-tracevals/reference/graders/).
 
 ### The third answer: not testable at all
 
@@ -105,7 +105,7 @@ tells you nothing.
 
 When that happens, **sharpen the instruction** instead of softening the criterion. A rule no session
 could violate is a defect in the artifact. `fill` names these for you explicitly; see
-[instructions that cannot be tested](/tracevals/declare/fill/#instructions-that-cannot-be-tested).
+[instructions that cannot be tested](/moose-tracevals/declare/fill/#instructions-that-cannot-be-tested).
 
 <Aside type="tip" title="Write the assertion so a stranger could adjudicate it">
 The test for a good judged assertion is whether someone who has never seen your project could read
@@ -136,7 +136,7 @@ A criterion you have not seen fail is a criterion you should not trust yet. Run 
 you know violated the rule:
 
 ```bash
-npx tracevals run <trace-file> --deterministic-only
+npx moose-tracevals run <trace-file> --deterministic-only
 ```
 
 ```
@@ -158,7 +158,7 @@ grading so that a typo surfaces loudly:
 <Aside type="caution" title="A malformed block is never ignored">
 If the `metadata.evals` block itself is invalid, you get an `evals-block-valid` eval with an
 `error` outcome and a source line number; the artifact is never silently skipped. See
-[Read a failing eval](/tracevals/triage/#error-means-the-check-broke).
+[Read a failing eval](/moose-tracevals/triage/#error-means-the-check-broke).
 </Aside>
 
 ## Where to go next
@@ -167,11 +167,11 @@ If the `metadata.evals` block itself is invalid, you get an `evals-block-valid` 
   <LinkCard
     title="Do this for every artifact at once"
     description="fill proposes criteria across a whole project, gates them mechanically, and writes only what survives into a diff you review."
-    href="/tracevals/declare/fill/"
+    href="/moose-tracevals/declare/fill/"
   />
   <LinkCard
     title="Pick the right grader"
     description="All seven deterministic kinds: options, validation rules, and the exact message each one emits when it fails."
-    href="/tracevals/reference/graders/"
+    href="/moose-tracevals/reference/graders/"
   />
 </CardGrid>

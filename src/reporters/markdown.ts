@@ -13,7 +13,7 @@ const cell = (value: string): string => value.replace(/\|/g, "\\|");
 export function renderMarkdown(report: RunReport): string {
   const lines: string[] = [];
   const t = report.trace;
-  lines.push(`# tracevals report`);
+  lines.push(`# moose-tracevals report`);
   lines.push("");
   lines.push(`- **Trace**: \`${t.file}\``);
   lines.push(`- **Source**: ${t.source} (${t.model ?? "unknown model"})`);

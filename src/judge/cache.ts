@@ -1,6 +1,6 @@
 /**
  * Judge cache key composition. The cache itself is the inference library's
- * `JsonCache`; what stays here is the part only tracevals can decide — what
+ * `JsonCache`; what stays here is the part only moose-tracevals can decide — what
  * invalidates an entry: provider, model, prompt version, run count,
  * temperature, the rendered trace, and the plan.
  */

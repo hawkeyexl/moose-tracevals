@@ -8,10 +8,10 @@ describe("parseConfig", () => {
     expect(config.judge.ensembleRuns).toBe(3);
     expect(config.judge.temperature).toBe(0);
     expect(config.judge.zones).toEqual({ autoPass: 0.8, autoFail: 0.8 });
-    expect(config.judge.cacheDir).toBe(".tracevals/cache");
+    expect(config.judge.cacheDir).toBe(".moose-tracevals/cache");
     expect(config.render.maxBlockChars).toBe(2000);
     expect(config.render.maxTotalChars).toBe(150000);
-    expect(config.history.file).toBe(".tracevals/history.jsonl");
+    expect(config.history.file).toBe(".moose-tracevals/history.jsonl");
     expect(config.failOnNeedsReview).toBe(true);
   });
 
@@ -32,7 +32,7 @@ describe("parseConfig", () => {
     expect(config.fill.confidenceThreshold).toBe(0.7);
     expect(config.fill.maxCriteriaPerArtifact).toBe(8);
     expect(config.fill.temperature).toBe(0);
-    expect(config.fill.cacheDir).toBe(".tracevals/cache/fill");
+    expect(config.fill.cacheDir).toBe(".moose-tracevals/cache/fill");
     expect(config.fill.maxCostUsd).toBeUndefined();
 
     const explicit = parseConfig({ fill: { confidenceThreshold: 0.5, maxCostUsd: 2 } });

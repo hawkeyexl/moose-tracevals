@@ -1,4 +1,4 @@
-/** Programmatic API for tracevals. */
+/** Programmatic API for moose-tracevals. */
 export * from "./types.js";
 export * from "./trace/types.js";
 export { detectFormat, detectContentFormat } from "./trace/detect.js";

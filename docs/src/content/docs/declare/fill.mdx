@@ -7,8 +7,8 @@ sidebar:
 
 import { Steps, Aside, LinkCard, CardGrid } from '@astrojs/starlight/components';
 
-**Scope:** bulk authoring with `fill`, the one command in tracevals that writes. This page assumes
-the vocabulary from [Declare what to check](/tracevals/declare/) and is about volume and trust.
+**Scope:** bulk authoring with `fill`, the one command in moose-tracevals that writes. This page assumes
+the vocabulary from [Declare what to check](/moose-tracevals/declare/) and is about volume and trust.
 
 ## What `fill` does
 
@@ -30,7 +30,7 @@ This is the only command that touches your files, so here is exactly what it ref
 Always. This is the fastest way to see what the tool thinks of your artifacts with no consequence:
 
 ```bash
-npx tracevals fill --dry-run
+npx moose-tracevals fill --dry-run
 ```
 
 ```
@@ -50,9 +50,9 @@ Threshold 0.7 · 4 criteria proposed, none written (dry run)
     committed fixture project. --dry-run is load-bearing here: CI separately
     asserts the fixture corpus is byte-identical afterwards. */}
 {/* test {"testId":"fill-dry-run","description":"A dry-run fill proposes criteria and writes nothing."} */}
-{/* step {"description":"The dry run succeeds and reports the confidence threshold.","runShell":{"command":"tracevals fill test/fixtures/project --provider mock --dry-run --no-cache","exitCodes":[0],"stdio":"none written (dry run)"}} */}
-{/* step {"description":"Project rules are proposed but never written.","runShell":{"command":"tracevals fill test/fixtures/project --provider mock --dry-run --no-cache","exitCodes":[0],"stdio":"project rules are never written"}} */}
-{/* step {"description":"A below-threshold proposal is reported rather than silently dropped.","runShell":{"command":"tracevals fill test/fixtures/project --provider mock --dry-run --no-cache","exitCodes":[0],"stdio":"below 0.7"}} */}
+{/* step {"description":"The dry run succeeds and reports the confidence threshold.","runShell":{"command":"moose-tracevals fill test/fixtures/project --provider mock --dry-run --no-cache","exitCodes":[0],"stdio":"none written (dry run)"}} */}
+{/* step {"description":"Project rules are proposed but never written.","runShell":{"command":"moose-tracevals fill test/fixtures/project --provider mock --dry-run --no-cache","exitCodes":[0],"stdio":"project rules are never written"}} */}
+{/* step {"description":"A below-threshold proposal is reported rather than silently dropped.","runShell":{"command":"moose-tracevals fill test/fixtures/project --provider mock --dry-run --no-cache","exitCodes":[0],"stdio":"below 0.7"}} */}
 {/* test end */}
 
 ## Read the proposals
@@ -134,7 +134,7 @@ instruction does no work.
 Drop `--dry-run` to write:
 
 ```bash
-npx tracevals fill
+npx moose-tracevals fill
 ```
 
 Everything lands in a reviewable diff. Read it before you commit it. The confidence score is the
@@ -143,12 +143,12 @@ model's opinion of its own proposal; you are the last gate.
 Useful knobs:
 
 ```bash
-npx tracevals fill --confidence 0.85 --max-criteria 4 --dry-run
+npx moose-tracevals fill --confidence 0.85 --max-criteria 4 --dry-run
 ```
 
 Confidence and rationale are **report-only**: shown to you, never written into the artifact. Newly
 written criteria are always `type: regression`, the conservative default; see
-[capability vs regression](/tracevals/reference/criteria-schema/).
+[capability vs regression](/moose-tracevals/reference/criteria-schema/).
 
 ## Project rules are never written
 
@@ -160,7 +160,7 @@ tell the agent exactly what it is about to be measured on, which is teaching to 
 measurement stops meaning anything the moment the subject can read it.
 
 So the proposals are printed, and you decide which ones to carry over by hand. The reasoning is
-recorded in [ADR 01005](https://github.com/hawkeyexl/tracevals/blob/main/adrs/01005-fill-proposes-criteria-at-authoring-time.md).
+recorded in [ADR 01005](https://github.com/hawkeyexl/moose-tracevals/blob/main/adrs/01005-fill-proposes-criteria-at-authoring-time.md).
 
 ## Where to go next
 
@@ -168,11 +168,11 @@ recorded in [ADR 01005](https://github.com/hawkeyexl/tracevals/blob/main/adrs/01
   <LinkCard
     title="Check your new criteria fire"
     description="Run against a session you know violated the rule, and confirm the failure names what actually happened."
-    href="/tracevals/get-started/"
+    href="/moose-tracevals/get-started/"
   />
   <LinkCard
     title="Every fill flag"
     description="--confidence, --max-criteria, --max-cost-usd, --no-cache, --provider, and the JSON report shape."
-    href="/tracevals/reference/cli/"
+    href="/moose-tracevals/reference/cli/"
   />
 </CardGrid>

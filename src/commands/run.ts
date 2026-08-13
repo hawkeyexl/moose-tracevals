@@ -1,4 +1,4 @@
-/** `tracevals run <trace>` — evaluate one trace end to end. */
+/** `moose-tracevals run <trace>` — evaluate one trace end to end. */
 import { writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { loadConfig } from "../core/config.js";
@@ -30,7 +30,7 @@ export interface RunCommandOptions {
   output?: string;
   /** Append this run to history and compare against the previous run. */
   history?: boolean;
-  /** Directory holding tracevals.config.yaml; defaults to cwd. */
+  /** Directory holding moose-tracevals.config.yaml; defaults to cwd. */
   configDir?: string;
   env?: Record<string, string | undefined>;
   /** Test seam: overrides judge construction entirely. */

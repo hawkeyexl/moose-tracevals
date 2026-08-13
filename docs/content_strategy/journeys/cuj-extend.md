@@ -1,26 +1,26 @@
 ---
 id: cuj-extend
 type: cuj
-title: Build on tracevals instead of around it
+title: Build on moose-tracevals instead of around it
 personas: [persona-toolsmith]
 trigger: "A check is needed that no built-in grader performs, or results must be consumed as typed data, or a trace format other than Claude Code's needs reading."
-entry_point: /tracevals/extend/
+entry_point: /moose-tracevals/extend/
 success_criteria: "A custom grader is registered and passing in the reader's own offline test suite, and they can name which exports are the intended entry points."
 steps:
-  - { stage: "Find the front door in the export surface", doc: /tracevals/extend/, exists: true }
-  - { stage: "Understand the grader contract", doc: /tracevals/extend/custom-graders/, exists: true }
-  - { stage: "See why option validation is not optional", doc: "/tracevals/extend/custom-graders/#the-contract-has-two-halves", exists: true }
-  - { stage: "Study a built-in grader as the reference implementation", doc: /tracevals/reference/graders/, exists: true }
-  - { stage: "Register the grader and plan against it", doc: "/tracevals/extend/custom-graders/#a-worked-example", exists: true }
-  - { stage: "Keep your own suite offline", doc: "/tracevals/extend/#injection-seams", exists: true }
-  - { stage: "Consume the typed report", doc: /tracevals/reference/report-and-exit-codes/, exists: true }
-  - { stage: "Look up an export", doc: /tracevals/reference/api/, exists: true }
-  - { stage: "Read a trace format that is not supported yet", doc: /tracevals/reference/traces/, exists: true }
+  - { stage: "Find the front door in the export surface", doc: /moose-tracevals/extend/, exists: true }
+  - { stage: "Understand the grader contract", doc: /moose-tracevals/extend/custom-graders/, exists: true }
+  - { stage: "See why option validation is not optional", doc: "/moose-tracevals/extend/custom-graders/#the-contract-has-two-halves", exists: true }
+  - { stage: "Study a built-in grader as the reference implementation", doc: /moose-tracevals/reference/graders/, exists: true }
+  - { stage: "Register the grader and plan against it", doc: "/moose-tracevals/extend/custom-graders/#a-worked-example", exists: true }
+  - { stage: "Keep your own suite offline", doc: "/moose-tracevals/extend/#injection-seams", exists: true }
+  - { stage: "Consume the typed report", doc: /moose-tracevals/reference/report-and-exit-codes/, exists: true }
+  - { stage: "Look up an export", doc: /moose-tracevals/reference/api/, exists: true }
+  - { stage: "Read a trace format that is not supported yet", doc: /moose-tracevals/reference/traces/, exists: true }
 ---
 
-# CUJ: Build on tracevals instead of around it
+# CUJ: Build on moose-tracevals instead of around it
 
-**Scope:** consuming tracevals as a library: custom graders, the typed report, and the trace
+**Scope:** consuming moose-tracevals as a library: custom graders, the typed report, and the trace
 adapter seam. Using the CLI is covered better by every other journey.
 
 **Trigger.** Rin needs a check no built-in grader performs, wants results as typed data instead of

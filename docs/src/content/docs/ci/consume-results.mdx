@@ -1,6 +1,6 @@
 ---
 title: Consume results programmatically
-description: Feed tracevals output into your own tooling with the JSON report, --output, and the history file, and detect a regression between two runs of the same session.
+description: Feed moose-tracevals output into your own tooling with the JSON report, --output, and the history file, and detect a regression between two runs of the same session.
 sidebar:
   order: 3
 ---
@@ -8,23 +8,23 @@ sidebar:
 import { Aside, LinkCard, CardGrid } from '@astrojs/starlight/components';
 
 **Scope:** everything downstream of a passing gate — structured output, run history, and regression
-detection. Installing the gate is [Add tracevals to CI](/tracevals/ci/); the field-by-field
-structure is in the [reference](/tracevals/reference/report-and-exit-codes/).
+detection. Installing the gate is [Add moose-tracevals to CI](/moose-tracevals/ci/); the field-by-field
+structure is in the [reference](/moose-tracevals/reference/report-and-exit-codes/).
 
 The gate answers *did it pass?* This page is about answering *is it getting worse?*
 
 ## Emit machine-readable output
 
 ```bash
-npx tracevals run <trace> --deterministic-only --format json
+npx moose-tracevals run <trace> --deterministic-only --format json
 ```
 
 `--output` additionally writes the rendered report to a file, in whichever format `--format`
 selected. Both together give you one artifact to keep and one stream to pipe:
 
 ```bash
-npx tracevals run <trace> --deterministic-only \
-  --format json --output tracevals-report.json
+npx moose-tracevals run <trace> --deterministic-only \
+  --format json --output moose-tracevals-report.json
 ```
 
 <Aside type="caution" title="JSON goes to stdout with everything else">
@@ -35,15 +35,15 @@ stream — use `--output` and read the file when a step also prints diagnostics.
 {/* Doc Detective inline tests: prove the JSON report really carries the keys the
     queries below depend on, against the committed fixture corpus. */}
 {/* test {"testId":"json-report-keys","description":"The JSON report exposes the fields this page queries."} */}
-{/* step {"description":"The report carries a summary object.","runShell":{"command":"tracevals run test/fixtures/traces/claude-session.jsonl --project test/fixtures/project --deterministic-only --format json","exitCodes":[1],"stdio":"\"summary\""}} */}
-{/* step {"description":"The report carries the coverage list.","runShell":{"command":"tracevals run test/fixtures/traces/claude-session.jsonl --project test/fixtures/project --deterministic-only --format json","exitCodes":[1],"stdio":"\"coverage\""}} */}
-{/* step {"description":"Every location tried is recorded, which is what diagnoses an unresolved reference.","runShell":{"command":"tracevals run test/fixtures/traces/claude-session.jsonl --project test/fixtures/project --deterministic-only --format json","exitCodes":[1],"stdio":"\"tried\""}} */}
+{/* step {"description":"The report carries a summary object.","runShell":{"command":"moose-tracevals run test/fixtures/traces/claude-session.jsonl --project test/fixtures/project --deterministic-only --format json","exitCodes":[1],"stdio":"\"summary\""}} */}
+{/* step {"description":"The report carries the coverage list.","runShell":{"command":"moose-tracevals run test/fixtures/traces/claude-session.jsonl --project test/fixtures/project --deterministic-only --format json","exitCodes":[1],"stdio":"\"coverage\""}} */}
+{/* step {"description":"Every location tried is recorded, which is what diagnoses an unresolved reference.","runShell":{"command":"moose-tracevals run test/fixtures/traces/claude-session.jsonl --project test/fixtures/project --deterministic-only --format json","exitCodes":[1],"stdio":"\"tried\""}} */}
 {/* test end */}
 
 ## Query it
 
 The report is one object, so `jq` gets you most things in a line. Every field is documented in
-[Reports & exit codes](/tracevals/reference/report-and-exit-codes/).
+[Reports & exit codes](/moose-tracevals/reference/report-and-exit-codes/).
 
 Which evals failed, and why:
 
@@ -51,25 +51,25 @@ Which evals failed, and why:
 jq -r '.evalResults[]
        | select(.outcome == "fail")
        | "\(.artifactName) › \(.evalName): \((.findings // [])[].message)"' \
-  tracevals-report.json
+  moose-tracevals-report.json
 ```
 
 Anything a human needs to look at:
 
 ```bash
-jq -r '.evalResults[] | select(.outcome == "needs-review") | .evalName' tracevals-report.json
+jq -r '.evalResults[] | select(.outcome == "needs-review") | .evalName' moose-tracevals-report.json
 ```
 
 Artifacts the session referenced but could not be found:
 
 ```bash
-jq -r '.coverage[] | select(.resolved == false) | "\(.kind) \(.ref)"' tracevals-report.json
+jq -r '.coverage[] | select(.resolved == false) | "\(.kind) \(.ref)"' moose-tracevals-report.json
 ```
 
 Summary counts for a dashboard:
 
 ```bash
-jq '.summary' tracevals-report.json
+jq '.summary' moose-tracevals-report.json
 ```
 
 ```json
@@ -87,14 +87,14 @@ a PR comment. Neither is a contract. `--format json` is.
 one **for the same session**:
 
 ```bash
-npx tracevals run <trace> --deterministic-only --history
+npx moose-tracevals run <trace> --deterministic-only --history
 ```
 
-The file defaults to `.tracevals/history.jsonl` and is configurable:
+The file defaults to `.moose-tracevals/history.jsonl` and is configurable:
 
-```yaml title="tracevals.config.yaml"
+```yaml title="moose-tracevals.config.yaml"
 history:
-  file: .tracevals/history.jsonl
+  file: .moose-tracevals/history.jsonl
 ```
 
 Each line is a `HistoryEntry` — timestamp, trace file, session id, project, the summary counts, exit
@@ -152,17 +152,17 @@ For a human-readable artifact next to the machine-readable one, run the markdown
 ```yaml
       - name: Evaluate and keep both formats
         run: |
-          npx tracevals run traces/session.jsonl --deterministic-only \
-            --format markdown --output tracevals-report.md
-          npx tracevals run traces/session.jsonl --deterministic-only \
-            --format json --output tracevals-report.json
+          npx moose-tracevals run traces/session.jsonl --deterministic-only \
+            --format markdown --output moose-tracevals-report.md
+          npx moose-tracevals run traces/session.jsonl --deterministic-only \
+            --format json --output moose-tracevals-report.json
 
       - name: Publish
         if: always()
         uses: actions/upload-artifact@v5
         with:
-          name: tracevals-report
-          path: tracevals-report.*
+          name: moose-tracevals-report
+          path: moose-tracevals-report.*
 ```
 
 The second run is free: judged verdicts are cached, and under `--deterministic-only` there is no
@@ -179,11 +179,11 @@ gives you the typed report directly, plus seams for keeping your own suite offli
   <LinkCard
     title="Every report field"
     description="The full RunReport, EvalResult, consensus, and CoverageEntry shapes, and the history file format."
-    href="/tracevals/reference/report-and-exit-codes/"
+    href="/moose-tracevals/reference/report-and-exit-codes/"
   />
   <LinkCard
     title="Build on the library"
     description="The export map, the injection seams, and how to register a grader the built-ins do not cover."
-    href="/tracevals/extend/"
+    href="/moose-tracevals/extend/"
   />
 </CardGrid>

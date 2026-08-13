@@ -9,7 +9,7 @@ describe("pickTrace", () => {
   it("prompts with discovered traces and returns the selection", async () => {
     let seenChoices: { name: string; value: string }[] = [];
     const picked = await pickTrace(
-      { allProjects: true, env: { TRACEVALS_HOME: fixtureHome } },
+      { allProjects: true, env: { MOOSE_TRACEVALS_HOME: fixtureHome } },
       async ({ choices }) => {
         seenChoices = choices;
         return choices[0]!.value;
@@ -23,7 +23,7 @@ describe("pickTrace", () => {
     const picked = await pickTrace(
       {
         project: "C:\\work\\nonexistent",
-        env: { TRACEVALS_HOME: fixtureHome },
+        env: { MOOSE_TRACEVALS_HOME: fixtureHome },
       },
       async ({ choices }) => choices[0]!.value,
     );
@@ -35,7 +35,7 @@ describe("pickTrace", () => {
       pickTrace(
         {
           allProjects: true,
-          env: { TRACEVALS_HOME: "C:\\definitely\\missing" },
+          env: { MOOSE_TRACEVALS_HOME: "C:\\definitely\\missing" },
         },
         async ({ choices }) => choices[0]!.value,
       ),

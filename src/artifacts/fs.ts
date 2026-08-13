@@ -17,7 +17,7 @@ export const PRUNED_DIRS = new Set([
   "dist",
   "build",
   "coverage",
-  ".tracevals",
+  ".moose-tracevals",
   ".tmp",
   ".next",
   ".venv",

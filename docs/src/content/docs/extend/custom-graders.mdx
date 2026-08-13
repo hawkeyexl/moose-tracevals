@@ -8,7 +8,7 @@ sidebar:
 import { Aside, LinkCard, CardGrid } from '@astrojs/starlight/components';
 
 **Scope:** adding a deterministic grader kind. The seven built-ins and their options are in the
-[grader reference](/tracevals/reference/graders/) — read one of those first, since they are the
+[grader reference](/moose-tracevals/reference/graders/) — read one of those first, since they are the
 reference implementations.
 
 ## The contract has two halves
@@ -44,7 +44,7 @@ import {
   registerGrader,
   type TraceGrader,
   type GradeResult,
-} from "tracevals";
+} from "moose-tracevals";
 
 const stayedInScope: TraceGrader = {
   kind: "stayed-in-scope",
@@ -136,7 +136,7 @@ rather than throwing, because that path produces a cleaner message and runs duri
 at all:
 
 ```ts
-import { loadConfig, registerGrader, runEvals } from "tracevals";
+import { loadConfig, registerGrader, runEvals } from "moose-tracevals";
 
 registerGrader(stayedInScope);
 
@@ -145,7 +145,7 @@ const report = await runEvals({
   projectDir: "test/fixtures/project",
   config: await loadConfig(),
   deterministicOnly: true,
-  env: { TRACEVALS_HOME: "test/fixtures/home" },
+  env: { MOOSE_TRACEVALS_HOME: "test/fixtures/home" },
 });
 
 const result = report.evalResults.find((r) => r.evalName === "stayed-in-scope");
@@ -160,11 +160,11 @@ Test `validateOptions` directly too — it is a pure function, and it is the hal
   <LinkCard
     title="Study the built-ins"
     description="Seven working implementations of this contract, with their options, validation rules, and exact failure messages."
-    href="/tracevals/reference/graders/"
+    href="/moose-tracevals/reference/graders/"
   />
   <LinkCard
     title="How fill gates a proposal"
     description="The order the checks run in, and why a grader that cannot validate its options is refused."
-    href="/tracevals/declare/fill/"
+    href="/moose-tracevals/declare/fill/"
   />
 </CardGrid>

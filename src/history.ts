@@ -60,7 +60,7 @@ export async function appendHistory(
     await appendFile(file, `${JSON.stringify(entryFor(report))}\n`, "utf-8");
   } catch (err) {
     console.warn(
-      `tracevals: could not write history at ${file} (${(err as Error).message}). Continuing.`,
+      `moose-tracevals: could not write history at ${file} (${(err as Error).message}). Continuing.`,
     );
   }
 }

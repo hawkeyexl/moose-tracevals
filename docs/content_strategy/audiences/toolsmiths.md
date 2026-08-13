@@ -1,9 +1,9 @@
 ---
 id: aud-toolsmiths
 type: audience
-segment: Toolsmiths building on tracevals
+segment: Toolsmiths building on moose-tracevals
 maturity: cross-cutting
-docs_owner: they own code that imports tracevals
+docs_owner: they own code that imports moose-tracevals
 firmographics: [platform-team, oss-framework-maintainer, internal-tooling]
 relationship_stages: [prospect, customer]
 personas: [persona-toolsmith]
@@ -17,9 +17,9 @@ features_emphasized:
 cross_cutting: true
 ---
 
-# Audience: Toolsmiths building on tracevals
+# Audience: Toolsmiths building on moose-tracevals
 
-**Scope:** people writing code that imports tracevals, beyond invoking its CLI: custom graders,
+**Scope:** people writing code that imports moose-tracevals, beyond invoking its CLI: custom graders,
 wrappers, dashboards, and eventually trace adapters for formats other than Claude Code's. This is a
 **cross-cutting lens** rather than a fifth point on the ownership axis. It does not cover CLI usage,
 which every other audience covers better.
@@ -47,7 +47,7 @@ an invitation.
 
 ## What they're trying to do
 
-Extend tracevals instead of reimplementing it: add a check the built-ins do not cover, consume
+Extend moose-tracevals instead of reimplementing it: add a check the built-ins do not cover, consume
 results structurally, or teach it to read a trace format it does not know yet.
 
 ## Defining pains

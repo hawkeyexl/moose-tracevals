@@ -1,4 +1,4 @@
-/** `tracevals list` — enumerate discoverable traces. */
+/** `moose-tracevals list` — enumerate discoverable traces. */
 import pc from "picocolors";
 import {
   discoverTraces,
