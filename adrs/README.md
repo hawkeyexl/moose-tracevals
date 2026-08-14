@@ -22,3 +22,4 @@ Every **behavior change** in moose-tracevals ships with an ADR here. The ADR rec
 | [01006](01006-take-inference-from-the-shared-library-not-docevals.md) | Take the inference layer from `@hawkeyexl/inference`, not from docevals | accepted |
 | [01007](01007-ship-a-cuj-first-documentation-site.md) | Ship a CUJ-first documentation site, with a committed content strategy and mechanical drift gates | accepted |
 | [01008](01008-rename-the-project-to-moose-tracevals.md) | Rename the project to `moose-tracevals` and publish it unscoped | accepted |
+| [01009](01009-share-one-moose-config-file-across-the-family.md) | Read settings from a `tracevals:` section of a shared `moose.config.yaml` | accepted |

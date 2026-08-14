@@ -1,6 +1,6 @@
 ---
 title: Configuration reference
-description: Every moose-tracevals.config.yaml key with its type, default, and CLI override, including the knobs that have no flag at all.
+description: Every moose.config.yaml key under tracevals with its type, default, and CLI override, including the knobs that have no flag at all.
 sidebar:
   order: 3
 ---
@@ -10,65 +10,86 @@ import { Aside } from '@astrojs/starlight/components';
 **Scope:** every configuration key. Source of truth: `src/core/config-schema.json` and
 `src/core/config.ts`.
 
-Configuration lives in **`moose-tracevals.config.yaml`** in the working directory. Every key is optional;
-an absent file means every default applies.
+Configuration lives under the **`tracevals:`** key of **`moose.config.yaml`** in the working
+directory. One file serves the whole moose family — sibling tools read their own top-level keys out
+of it — so everything documented on this page is nested one level deep:
+
+```yaml title="moose.config.yaml"
+docmeta:            # another tool's section; never validated here
+  schemas: […]
+tracevals:          # ours — every key on this page lives under here
+  judge:
+    ensembleRuns: 3
+```
+
+Every key is optional; an absent file, or one carrying only other tools' sections, means every
+default applies.
 
 ## How a value is resolved
 
 ```
-moose-tracevals.config.yaml  →  schema validation  →  defaults applied  →  CLI override  →  runtime
+moose.config.yaml  →  `tracevals:` section  →  schema validation  →  defaults applied  →  CLI override  →  runtime
 ```
 
-Two properties follow from this, and you can rely on both:
+Three properties follow from this, and you can rely on all three:
 
 - **CLI flags override the config; they do not bypass it.** The resolved config is fully populated
   before anything reads it, so a flag replaces a known value instead of filling a hole.
-- **Unknown keys are hard errors.** The schema forbids additional properties at every level, so a
-  misspelled key fails loudly:
+- **Unknown keys are hard errors — inside the section.** The schema forbids additional properties at
+  every level below `tracevals:`, so a misspelled key fails loudly:
 
   ```
   moose-tracevals: invalid config: /judge must NOT have additional properties
   ```
 
-  An unparseable file fails the same way: `moose-tracevals: could not parse moose-tracevals.config.yaml: …`
+  Top-level keys *beside* `tracevals:` are another tool's business and are never validated here.
+  An unparseable file fails the same way: `moose-tracevals: could not parse moose.config.yaml: …`
+- **A section left un-nested or miscased is an error, not a shrug.** Writing `judge:` at the top
+  level — or spelling the wrapper `Tracevals:` — would otherwise discard your whole config
+  silently, so it is reported instead:
+
+  ```
+  moose-tracevals: invalid config: moose.config.yaml has no `tracevals:` section, but `judge` sits at the top level — nest it under `tracevals:`
+  ```
 
 ## Complete example
 
 Every key below is shown with its default. You would never write all of this.
 
-```yaml title="moose-tracevals.config.yaml"
-provider:
-  default: claude-cli          # anthropic | openai | claude-cli | mock
-  anthropic:
-    model: claude-sonnet-4-5
-    apiKeyEnv: ANTHROPIC_API_KEY
-  openai:
-    baseUrl: https://api.openai.com/v1
-    model: gpt-4o-mini
-    apiKeyEnv: OPENAI_API_KEY
-  claude-cli:
-    model: claude-sonnet-4-5
-    command: claude
-judge:
-  ensembleRuns: 3
-  temperature: 0
-  zones:
-    autoPass: 0.8
-    autoFail: 0.8
-  cacheDir: .moose-tracevals/cache
-  # maxCostUsd has no default; set it to impose a ceiling
-render:
-  maxBlockChars: 2000
-  maxTotalChars: 150000
-history:
-  file: .moose-tracevals/history.jsonl
-fill:
-  confidenceThreshold: 0.7
-  maxCriteriaPerArtifact: 8
-  temperature: 0
-  cacheDir: .moose-tracevals/cache/fill
-  # maxCostUsd has no default
-failOnNeedsReview: true
+```yaml title="moose.config.yaml"
+tracevals:
+  provider:
+    default: claude-cli          # anthropic | openai | claude-cli | mock
+    anthropic:
+      model: claude-sonnet-4-5
+      apiKeyEnv: ANTHROPIC_API_KEY
+    openai:
+      baseUrl: https://api.openai.com/v1
+      model: gpt-4o-mini
+      apiKeyEnv: OPENAI_API_KEY
+    claude-cli:
+      model: claude-sonnet-4-5
+      command: claude
+  judge:
+    ensembleRuns: 3
+    temperature: 0
+    zones:
+      autoPass: 0.8
+      autoFail: 0.8
+    cacheDir: .moose-tracevals/cache
+    # maxCostUsd has no default; set it to impose a ceiling
+  render:
+    maxBlockChars: 2000
+    maxTotalChars: 150000
+  history:
+    file: .moose-tracevals/history.jsonl
+  fill:
+    confidenceThreshold: 0.7
+    maxCriteriaPerArtifact: 8
+    temperature: 0
+    cacheDir: .moose-tracevals/cache/fill
+    # maxCostUsd has no default
+  failOnNeedsReview: true
 ```
 
 ## `provider`
@@ -130,12 +151,13 @@ price table for that model.
 | `outputPerMTok` | number ≥ 0 | yes |
 
 ```yaml
-provider:
-  openai:
-    model: my-self-hosted-model
-    pricing:
-      inputPerMTok: 0.15
-      outputPerMTok: 0.60
+tracevals:
+  provider:
+    openai:
+      model: my-self-hosted-model
+      pricing:
+        inputPerMTok: 0.15
+        outputPerMTok: 0.60
 ```
 
 <Aside type="caution" title="Set this for any model the price table does not know">

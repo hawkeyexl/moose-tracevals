@@ -92,9 +92,10 @@ npx moose-tracevals run <trace> --deterministic-only --history
 
 The file defaults to `.moose-tracevals/history.jsonl` and is configurable:
 
-```yaml title="moose-tracevals.config.yaml"
-history:
-  file: .moose-tracevals/history.jsonl
+```yaml title="moose.config.yaml"
+tracevals:
+  history:
+    file: .moose-tracevals/history.jsonl
 ```
 
 Each line is a `HistoryEntry` — timestamp, trace file, session id, project, the summary counts, exit

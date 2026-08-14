@@ -30,7 +30,7 @@ export interface RunCommandOptions {
   output?: string;
   /** Append this run to history and compare against the previous run. */
   history?: boolean;
-  /** Directory holding moose-tracevals.config.yaml; defaults to cwd. */
+  /** Directory holding moose.config.yaml; defaults to cwd. */
   configDir?: string;
   env?: Record<string, string | undefined>;
   /** Test seam: overrides judge construction entirely. */

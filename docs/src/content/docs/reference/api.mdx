@@ -109,9 +109,10 @@ offline-able. You rarely need `makeTraceJudge` unless you want the real ensemble
 
 | Export | Notes |
 |---|---|
-| ★ `loadConfig(dir?)` | Read, validate, and fully populate defaults. |
-| `parseConfig(raw)` | The same from an object. |
-| `DEFAULT_CONFIG_FILENAME` | `"moose-tracevals.config.yaml"`. |
+| ★ `loadConfig(dir?)` | Read `moose.config.yaml` from `dir`, take its `tracevals` section, validate, and fully populate defaults. |
+| `parseConfig(raw)` | The same from an object. `raw` is the **section**, not the whole file — pass what sits under `tracevals:`. |
+| `DEFAULT_CONFIG_FILENAME` | `"moose.config.yaml"` — the config file shared by the moose family. |
+| `CONFIG_SECTION_KEY` | `"tracevals"` — the top-level key in that file holding this tool's settings. |
 | `TracevalsConfig`, `ProviderConfig`, `Pricing` | |
 
 Downstream code always receives a fully-populated config, so there is no need to re-apply defaults.

@@ -1,7 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "moose-tracevals:config:0.1",
-  "title": "moose-tracevals.config.yaml",
+  "title": "tracevals section of moose.config.yaml",
+  "description": "Settings for moose-tracevals, held under the `tracevals` key of the config file shared by the moose family of tools. Sibling keys belong to other tools and are not validated here.",
   "type": "object",
   "additionalProperties": false,
   "properties": {

@@ -65,6 +65,7 @@ export {
   type MockResponse,
 } from "./judge/provider.js";
 export {
+  CONFIG_SECTION_KEY,
   DEFAULT_CONFIG_FILENAME,
   loadConfig,
   parseConfig,
