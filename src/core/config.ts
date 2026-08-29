@@ -13,6 +13,7 @@ import { Ajv2020 } from "ajv/dist/2020.js";
 import { parse as parseYaml } from "yaml";
 import configSchemaJson from "./config-schema.json" with { type: "json" };
 import { compileRedactPatterns } from "../judge/redact.js";
+import { DEFAULT_CAPTURE_DIR } from "../capture/types.js";
 import { DEFAULT_LABELS_FILE } from "../calibrate/labels.js";
 import { TracevalsError } from "../types.js";
 
@@ -90,6 +91,14 @@ export interface TracevalsConfig {
   };
   history: {
     file: string;
+  };
+  /**
+   * Session manifests (ADR 01024). `capture` writes one here; `run` looks here
+   * for the trace's own, and reports a `skipped` hash check when there is none.
+   */
+  capture: {
+    /** Resolved against the project root, not the working directory. */
+    dir: string;
   };
   fill: {
     /** Minimum self-reported confidence a proposal needs to be written. */
@@ -186,6 +195,12 @@ export function parseConfig(raw: unknown): TracevalsConfig {
     },
     history: {
       file: r.history?.file ?? ".moose-tracevals/history.jsonl",
+    },
+    capture: {
+      // Beside the judge cache, under the state directory that already travels
+      // with the project — which is what puts a manifest next to its trace in
+      // the CI patterns the docs describe.
+      dir: r.capture?.dir ?? DEFAULT_CAPTURE_DIR,
     },
     fill: {
       // 0.7 matches the manuscript's calibration bar for judged agreement.
