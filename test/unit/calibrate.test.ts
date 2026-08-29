@@ -141,6 +141,104 @@ labels:
     );
   });
 
+  /**
+   * A calibration run's whole product is a measurement. When every label joins
+   * to a `skipped` result — `--deterministic-only` over ai-graded labels, or a
+   * budget exhausted on trace 1 — `scored` is 0, `agreement` is null, and each
+   * `--max-*` threshold reads "0 of at most N, not exceeded". Exit 0 would
+   * then certify a corpus nobody measured, which is the same silent green
+   * `resolveBatchTraces` refuses for an empty selector.
+   */
+  describe("a measurement that measured nothing", () => {
+    /** Every label names an `ai` eval, so `--deterministic-only` skips them all. */
+    async function unscorable(): Promise<string> {
+      const file = join(tmpDir, "all-skipped.yaml");
+      await writeFile(
+        file,
+        `version: 1
+labels:
+  - trace: ${JSON.stringify(traceA)}
+    artifact: AGENTS.md
+    eval: eval-1
+    expected: fail
+  - trace: ${JSON.stringify(traceB)}
+    artifact: AGENTS.md
+    eval: eval-1
+    expected: pass
+`,
+        "utf-8",
+      );
+      return file;
+    }
+
+    it("never exits 0, threshold or no threshold", async () => {
+      const labelsFile = await unscorable();
+      const { report } = await calibrate({
+        labels: labelsFile,
+        deterministicOnly: true,
+      });
+      expect(report.counts.labels).toBe(2);
+      expect(report.counts.scored).toBe(0);
+      expect(report.counts.agreement).toBeNull();
+      expect(report.exitCode).toBe(1);
+    });
+
+    it("keeps the thresholds honest and says why the run is red", async () => {
+      const labelsFile = await unscorable();
+      const { report } = await calibrate({
+        labels: labelsFile,
+        deterministicOnly: true,
+        maxFalsePass: 0,
+      });
+      // The gate itself did not trip — 0 false passes is 0 false passes. What
+      // is wrong is the denominator behind it, and the report has to say so
+      // rather than let a vacuous "not exceeded" stand in for a clean run.
+      expect(report.gates).toEqual([
+        { name: "falsePass", limit: 0, actual: 0, exceeded: false },
+      ]);
+      expect(report.exitCode).toBe(1);
+      expect(
+        report.warnings.some((w) => /no labelled eval produced evidence/.test(w)),
+      ).toBe(true);
+    });
+
+    it("still exits 0 when at least one label was scored", async () => {
+      const { report } = await calibrate();
+      expect(report.counts.scored).toBeGreaterThan(0);
+      expect(report.exitCode).toBe(0);
+    });
+  });
+
+  /**
+   * The corpus was judged in part. `calibrate` wraps `runBatch`, which shares
+   * one budget across every trace (ADR 01018), so a budget that runs out on
+   * trace 2 of 50 leaves the remaining labels `unscored`. Some labels still
+   * scored, so the `scored === 0` floor above does not catch it — but the
+   * number is computed over the corpus the run stopped measuring, which is the
+   * same incompleteness that already makes a lost trace exit 1.
+   */
+  it("fails when the shared judge budget cut the corpus short", async () => {
+    const priced = () => ({
+      ...mockVerdict("pass", 0.95),
+      usage: { inputTokens: 1_000_000, outputTokens: 0 },
+    });
+    const { report } = await calibrate({
+      judge: makeTraceJudge({
+        provider: new MockProvider(Array.from({ length: 40 }, priced)),
+        runs: 1,
+        noCache: true,
+        // Enough for exactly one judged eval at $1 apiece.
+        maxCostUsd: 1,
+        pricing: { inputPerMTok: 1, outputPerMTok: 0 },
+      }),
+    });
+    // Deterministic labels still scored, so this is not the empty-denominator
+    // case — the corpus was measured, just not all of it.
+    expect(report.counts.scored).toBeGreaterThan(0);
+    expect(report.exitCode).toBe(1);
+    expect(report.warnings.some((w) => /never judged/.test(w))).toBe(true);
+  });
+
   it("fails the run when a trace in the corpus could not be evaluated", async () => {
     const broken = join(tmpDir, "not-a-trace.jsonl");
     await writeFile(broken, "not a trace\n", "utf-8");
