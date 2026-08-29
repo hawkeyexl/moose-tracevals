@@ -26,6 +26,7 @@ function emptyTrace(overrides: Partial<Trace> = {}): Trace {
     toolCalls: [],
     skillInvocations: [],
     agentSpawns: [],
+    subagentBranches: [],
     fileAccesses: [],
     userMessages: [],
     assistantTexts: [],
@@ -103,7 +104,9 @@ describe("resolveArtifacts", () => {
   it("degrades unresolved refs to coverage entries and warnings", async () => {
     const { artifacts, coverage, warnings } = await resolveArtifacts(
       emptyTrace({
-        skillInvocations: [{ name: "ghost-skill", via: "skill-tool" }],
+        skillInvocations: [
+          { name: "ghost-skill", via: "skill-tool", index: 0 },
+        ],
       }),
       { env: { MOOSE_TRACEVALS_HOME: fixtureHome } },
     );
@@ -117,8 +120,8 @@ describe("resolveArtifacts", () => {
   it("dedupes artifacts resolved through multiple refs", async () => {
     const trace = emptyTrace({
       skillInvocations: [
-        { name: "fix-bug", via: "skill-tool" },
-        { name: "fix-bug", via: "command-injection" },
+        { name: "fix-bug", via: "skill-tool", index: 0 },
+        { name: "fix-bug", via: "command-injection", index: 1 },
       ],
     });
     const { artifacts } = await resolveArtifacts(trace, {

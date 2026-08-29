@@ -7,6 +7,8 @@ import {
   optionsError,
   pass,
   requiredString,
+  skippedWindow,
+  windowFor,
   type Options,
 } from "./util.js";
 
@@ -26,7 +28,9 @@ export const skillInvokedGrader: TraceGrader = {
     if (invalid !== undefined) return optionsError("skill-invoked", invalid);
     const skill = options.skill as string;
     const expect = (options.expect as string | undefined) ?? "used";
-    const used = trace.skillInvocations.some((s) => s.name === skill);
+    const window = windowFor(trace, plan);
+    if (window.empty) return skippedWindow(window);
+    const used = window.skillInvocations.some((s) => s.name === skill);
 
     if (expect === "used" && !used) {
       return fail(plan, `skill ${skill} was never invoked`);

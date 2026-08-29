@@ -51,6 +51,44 @@ Validation happens twice: at run time, and again when `fill` proposes an eval. T
 why a grader that cannot validate its options can never be proposed — which is exactly how `command`
 is kept out of `fill`.
 
+**Every eval grades the window its artifact governed.** A skill's eval is not a statement about the
+whole session — it is a statement about the turns that ran under that skill. The window is derived
+from the artifact's **type**; there is nothing to declare and no option to set.
+
+| Artifact type | Window |
+|---|---|
+| skill | From that skill's invocation until the next skill is invoked, or to the end of the session |
+| agent | Only that `subagent_type`'s own branch, and anything it delegated inside it |
+| project rules | The whole session — `CLAUDE.md` governs everything |
+
+So a `Bash` call that happened *before* a skill was invoked does not count against that skill's
+`expect: not-used`, and an `Edit` the main session made does not count against an agent that only
+read. Nothing outside the window is evidence about the artifact.
+
+`tool-usage`, `file-access`, `skill-invoked`, `regex`, and `turn-count` are windowed, and so is the
+transcript sent to the judge for an `ai` eval — which also makes a judged skill eval markedly
+cheaper than judging the whole session. `cost` and `json-output` are session-level by nature; see
+their sections.
+
+**An empty window is skipped, never passed.** A skill that resolved but was never invoked, or an
+agent that was spawned but recorded no turns, governed nothing — so there is no evidence either way,
+and every eval on it reports `skipped` with the reason spelled out:
+
+```
+  SKIP   doc-writer › doc-writer-wrote-docs
+         agent "doc-writer" was spawned but recorded no subagent turns (no inline
+         sidechain records and no sidecar transcript), so it governed no turns
+```
+
+That applies to judged and `human` evals too: an empty window never reaches the judge, because a
+judge shown the parent session would answer about work the artifact had no part in.
+
+| Skip reason | Cause |
+|---|---|
+| `skill "<name>" was never invoked in this trace, so it governed no turns` | the skill resolved but the session never invoked it |
+| `agent "<name>" was spawned but recorded no subagent turns (…), so it governed no turns` | the spawn is in the trace but its transcript is not |
+| `agent "<name>" was never spawned in this trace, so it governed no turns` | no spawn for that `subagent_type` |
+
 **Only `error` severity fails an eval.** A finding at `warning` or `info` is reported and the eval
 passes. Severity is set per eval; see the
 [evals schema](/moose-tracevals/reference/evals-schema/).
@@ -89,9 +127,11 @@ Whether a tool was used, avoided, or used within count bounds.
   options: { tool: Bash, expect: not-used }
 ```
 
-**Sidechains.** By default only the main session's tool calls are counted. A subagent's calls are
-sidechain calls, so an eval on an *agent definition* usually wants `includeSidechains: true`.
-`fill` sets it automatically when proposing a `tool-usage` eval on an agent.
+**Sidechains.** By default only main-chain tool calls are counted. An agent definition's window is
+its branch, and every call inside a branch is a sidechain call, so an eval on an *agent definition*
+needs `includeSidechains: true` — without it the count is always zero. `fill` sets it automatically
+when proposing a `tool-usage` eval on an agent. Inside an agent window the option additionally
+decides whether a **nested** subagent's calls count toward the parent agent.
 
 **Failure messages**
 
@@ -130,7 +170,8 @@ Whether a named skill was invoked. Detects both `Skill` tool calls and `/command
 <Aside title="Not available on skills or agents">
 `fill` never proposes `skill-invoked` on a skill or an agent definition: a skill asserting it was
 itself invoked is permanently green. It is allowed on project rules, where "this workflow must go
-through the review skill" is a real assertion.
+through the review skill" is a real assertion — and project rules are also the one artifact type
+whose window is the whole session, which is what makes the question answerable.
 </Aside>
 
 ---
@@ -186,17 +227,26 @@ At least one of `min` or `max` is required.
 | `<n> turn(s); at most <max> allowed` |
 | `<n> turn(s); at least <min> required` |
 
-<Aside title="A whole-session grader">
-`turn-count`, `cost`, and `json-output` measure the **entire session** rather than one artifact's
-slice of it. A limit declared inside one skill silently constrains everything the session did, which
-is why `fill` never proposes them. Declare them on purpose, and preferably in one place.
+`turn-count` is windowed like the other counting graders, so a bound declared on a skill measures
+the prompts that arrived while that skill was governing, and one declared on an agent measures that
+agent's own brief and follow-ups rather than the nested subagents it spawned.
+
+<Aside title="Still not proposed by fill">
+`fill` proposes none of `turn-count`, `cost`, or `json-output`. For `cost` and `json-output` that is
+inherent: they measure the session as a whole (see their sections). `turn-count` is windowed and no
+longer constrains a whole session from inside one artifact, but widening the `fill` allowlist is a
+separate decision that has not been taken. Declare it by hand.
 </Aside>
 
 ---
 
 ## `cost`
 
-Whether the session stayed within a spending or token budget.
+Whether the session stayed within a spending or token budget. **Session-level by nature, and
+deliberately not windowed:** usage is reported per assistant message for the whole context, so
+charging a slice of it to whichever artifact happened to be governing would be an invented number.
+A `cost` eval therefore grades the session no matter which artifact declared it — including one
+whose window is empty, where a session that blew its budget still fails rather than skipping.
 
 | Option | Type | Default | Description |
 |---|---|---|---|
@@ -286,14 +336,17 @@ Whether the session's final assistant message is JSON matching a schema.
 (`options.schema is required and must be a JSON Schema object`), and the schema is compiled at grade
 time. A schema that fails to compile becomes an options error instead of a crash.
 
-Also a whole-session grader: it looks at the last assistant message of the entire session, so a
-eval declared on one of several artifacts still measures the same final output.
+Also session-level, and not windowed: it looks at the last assistant message of the entire session,
+so an eval declared on one of several artifacts still measures the same final output.
 
 ---
 
 ## `ai`
 
 The default. The assertion goes to the ensemble judge, which reads the rendered trace and votes.
+The transcript it reads is the artifact's **window**, not the whole session (see
+[Shared behavior](#shared-behavior)); the digest names the scope it was cut to, and an artifact that
+governed nothing is skipped before any request is made.
 Takes no `options`; it is steered by `assertion`, `evidence`, and `examples` instead. An eval may
 name `provider:` to be judged by a specific configured provider rather than the run's default — a
 provider name the run cannot construct is that eval's own `error`, never a silent fall back to the
@@ -303,7 +356,9 @@ Skipped entirely under `--deterministic-only`.
 
 ## `human`
 
-Queues the eval for a person. It always reports `needs-review`, never `pass` or `fail`.
+Queues the eval for a person. It always reports `needs-review`, never `pass` or `fail` — unless the
+artifact governed no turn in this trace, in which case there is nothing to review and the eval is
+`skipped` with the reason given.
 
 Unlike the page-side vocabulary this shares its shape with, a `human` verdict is **judged per
 session and never cached**: every trace is new, so there is nothing a previous verdict could still

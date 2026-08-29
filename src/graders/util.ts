@@ -1,5 +1,12 @@
 /** Shared helpers for deterministic graders. */
 import type { EvalPlan } from "../core/plan.js";
+import type {
+  FileAccess,
+  SkillInvocation,
+  ToolCall,
+  Trace,
+  TraceEvent,
+} from "../trace/types.js";
 import type { Finding, GradeResult } from "./types.js";
 
 export function finding(plan: EvalPlan, message: string): Finding {
@@ -100,4 +107,204 @@ export function orderedBounds(
 export function requireOneOf(options: Options, keys: string[]): OptionCheck {
   if (keys.some((key) => options[key] !== undefined)) return undefined;
   return `at least one of ${keys.map((k) => `options.${k}`).join(" or ")} is required`;
+}
+
+// ── Scoped grading ───────────────────────────────────────────────
+
+/**
+ * The slice of a trace an artifact was actually governing (ADR 01015). The
+ * window is derived from the artifact's *type*, never declared: a skill governs
+ * from its invocation until the next skill takes over, an agent governs its own
+ * branch, and project rules govern the whole session.
+ */
+export interface TraceWindow {
+  /** Which rule produced this window. */
+  scope: "session" | "skill" | "agent";
+  /** Names the window in reasons and in the judge digest. */
+  label: string;
+  /**
+   * True when the artifact governed no turn at all. Graders must report
+   * `skipped` on an empty window — never a pass, which would be a verdict
+   * about turns the artifact had no part in.
+   */
+  empty: boolean;
+  /** Why the window is empty; set only when `empty`. */
+  reason?: string;
+  events: TraceEvent[];
+  toolCalls: ToolCall[];
+  fileAccesses: FileAccess[];
+  skillInvocations: SkillInvocation[];
+  /** Prompts on the window's own chain; nested subagent turns are excluded. */
+  userMessages: string[];
+  assistantTexts: string[];
+  turnCount: number;
+}
+
+/** Half-open ordinal range over `trace.events`; `end` may be Infinity. */
+interface Span {
+  start: number;
+  end: number;
+}
+
+export function windowFor(trace: Trace, plan: EvalPlan): TraceWindow {
+  const { name, type } = plan.artifact;
+  if (type === "skill") return skillWindow(trace, name);
+  if (type === "agent") return agentWindow(trace, name);
+  // Project rules govern everything, so the window is the trace itself —
+  // handed back by reference, so a session-scoped eval grades exactly what it
+  // graded before scoping existed.
+  return {
+    scope: "session",
+    label: "whole session",
+    empty: false,
+    events: trace.events,
+    toolCalls: trace.toolCalls,
+    fileAccesses: trace.fileAccesses,
+    skillInvocations: trace.skillInvocations,
+    userMessages: trace.userMessages,
+    assistantTexts: trace.assistantTexts,
+    turnCount: trace.turnCount,
+  };
+}
+
+/** A grader's response to an empty window: a stated skip, never a verdict. */
+export function skippedWindow(window: TraceWindow): GradeResult {
+  return { findings: [], skipped: window.reason ?? "the artifact governed no turns" };
+}
+
+function skillWindow(trace: Trace, name: string): TraceWindow {
+  const label = `skill "${name}"`;
+  const opens = trace.skillInvocations
+    .filter((s) => s.name === name)
+    .map((s) => s.index);
+  if (opens.length === 0) {
+    return emptyWindow(
+      "skill",
+      label,
+      `${label} was never invoked in this trace, so it governed no turns`,
+    );
+  }
+  // A skill governs until another skill takes over — including another
+  // invocation of itself, which simply reopens the window.
+  const boundaries = [...trace.skillInvocations.map((s) => s.index)].sort(
+    (a, b) => a - b,
+  );
+  const spans = opens.map((start) => ({
+    start,
+    end: boundaries.find((b) => b > start) ?? Number.POSITIVE_INFINITY,
+  }));
+  // A skill invoked inside a subagent branch governs that branch's chain; one
+  // invoked on the main chain governs the main chain.
+  const own = new Set<string | undefined>(
+    opens.map((index) => trace.events[index]?.branchId),
+  );
+  return materialize(trace, "skill", label, spans, undefined, own);
+}
+
+function agentWindow(trace: Trace, name: string): TraceWindow {
+  const label = `agent "${name}"`;
+  const mine = trace.subagentBranches.filter((b) => b.agentType === name);
+  if (mine.length === 0) {
+    const spawned = trace.agentSpawns.some((a) => a.subagentType === name);
+    return emptyWindow(
+      "agent",
+      label,
+      spawned
+        ? `${label} was spawned but recorded no subagent turns (no inline ` +
+            `sidechain records and no sidecar transcript), so it governed no turns`
+        : `${label} was never spawned in this trace, so it governed no turns`,
+    );
+  }
+  // A branch's span already covers everything nested under it (ADR 01014), so
+  // one containment pass reaches subagents at any depth.
+  const branchIds = new Set(mine.map((b) => b.branchId));
+  for (const branch of trace.subagentBranches) {
+    if (branchIds.has(branch.branchId)) continue;
+    const nested = mine.some(
+      (m) => m.startIndex <= branch.startIndex && branch.endIndex <= m.endIndex,
+    );
+    if (nested) branchIds.add(branch.branchId);
+  }
+  const spans = mine.map((b) => ({ start: b.startIndex, end: b.endIndex }));
+  return materialize(
+    trace,
+    "agent",
+    label,
+    spans,
+    branchIds,
+    new Set<string | undefined>(mine.map((b) => b.branchId)),
+  );
+}
+
+function emptyWindow(
+  scope: TraceWindow["scope"],
+  label: string,
+  reason: string,
+): TraceWindow {
+  return {
+    scope,
+    label,
+    empty: true,
+    reason,
+    events: [],
+    toolCalls: [],
+    fileAccesses: [],
+    skillInvocations: [],
+    userMessages: [],
+    assistantTexts: [],
+    turnCount: 0,
+  };
+}
+
+/**
+ * Cut every derived list to the spans. `branchIds`, when given, additionally
+ * drops events that fall inside an *inline* branch's bounding range without
+ * belonging to it — a sidecar branch is contiguous and loses nothing here, but
+ * an inline one can enclose interleaved main-chain turns (ADR 01014).
+ *
+ * `own` names the chain the window is anchored to. Prompts and assistant text
+ * are taken from that chain alone, so a subagent spawned inside the window
+ * contributes tool calls and file accesses but not turns.
+ */
+function materialize(
+  trace: Trace,
+  scope: TraceWindow["scope"],
+  label: string,
+  spans: Span[],
+  branchIds: Set<string> | undefined,
+  own: Set<string | undefined>,
+): TraceWindow {
+  const inSpan = (index: number): boolean =>
+    spans.some((s) => index >= s.start && index < s.end);
+  const excluded = new Set<number>();
+  if (branchIds !== undefined) {
+    for (const event of trace.events) {
+      if (!inSpan(event.index)) continue;
+      if (event.branchId === undefined || !branchIds.has(event.branchId)) {
+        excluded.add(event.index);
+      }
+    }
+  }
+  const inWindow = (index: number): boolean =>
+    inSpan(index) && !excluded.has(index);
+
+  const events = trace.events.filter((e) => inWindow(e.index));
+  const textOf = (kind: TraceEvent["kind"]): string[] =>
+    events
+      .filter((e) => e.kind === kind && own.has(e.branchId) && e.text)
+      .map((e) => e.text as string);
+  const userMessages = textOf("user");
+
+  return {
+    scope,
+    label,
+    empty: false,
+    events,
+    toolCalls: trace.toolCalls.filter((c) => inWindow(c.index)),
+    fileAccesses: trace.fileAccesses.filter((a) => inWindow(a.index)),
+    skillInvocations: trace.skillInvocations.filter((s) => inWindow(s.index)),
+    userMessages,
+    assistantTexts: textOf("assistant"),
+    turnCount: userMessages.length,
+  };
 }

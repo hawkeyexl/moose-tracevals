@@ -72,9 +72,15 @@ export interface JudgedEval {
   durationMs: number;
 }
 
+/**
+ * The digest is requested per plan rather than handed over once: each eval is
+ * judged against the window its artifact was governing (ADR 01015), so the
+ * transcript differs from eval to eval. Keeping the whole batch inside one call
+ * is what keeps `maxCostUsd` a budget for the run instead of per group.
+ */
 export type TraceJudge = (
   plans: EvalPlan[],
-  renderedTrace: string,
+  renderFor: (plan: EvalPlan) => string,
 ) => Promise<JudgedEval[]>;
 
 export function makeTraceJudge(options: TraceJudgeOptions): TraceJudge {
@@ -89,7 +95,7 @@ export function makeTraceJudge(options: TraceJudgeOptions): TraceJudge {
   );
   const pricing = pricingFor(provider.modelName(), options.pricing);
 
-  return async (plans, renderedTrace) => {
+  return async (plans, renderFor) => {
     let spentUsd = 0;
     const results: JudgedEval[] = [];
 
@@ -150,6 +156,7 @@ export function makeTraceJudge(options: TraceJudgeOptions): TraceJudge {
         continue;
       }
 
+      const renderedTrace = renderFor(plan);
       const runs = await runEnsemble({
         provider: evalProvider,
         system: JUDGE_SYSTEM_PROMPT,

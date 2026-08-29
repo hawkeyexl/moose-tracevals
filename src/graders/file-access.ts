@@ -7,6 +7,8 @@ import {
   optionsError,
   pass,
   requiredString,
+  skippedWindow,
+  windowFor,
   type Options,
 } from "./util.js";
 
@@ -38,7 +40,9 @@ export const fileAccessGrader: TraceGrader = {
     const op = options.op as string | undefined;
     const expect = (options.expect as string | undefined) ?? "accessed";
 
-    const accessed = trace.fileAccesses.some(
+    const window = windowFor(trace, plan);
+    if (window.empty) return skippedWindow(window);
+    const accessed = window.fileAccesses.some(
       (a) => matches(a.path, path) && (op === undefined || a.op === op),
     );
 

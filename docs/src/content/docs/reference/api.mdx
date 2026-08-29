@@ -86,6 +86,9 @@ The CLI's three commands, callable directly. Each pairs a runner with a renderer
 | `graderFor(kind)`, `listGraderKinds()` | |
 | `EvalPlan` | |
 | *(all of `graders/types`)* | `TraceGrader`, `GradeResult`, `Finding`, `TraceGraderContext`. |
+| `windowFor(trace, plan)` | The slice of the trace that plan's artifact governed. A custom grader that counts events should read this rather than the trace. |
+| `skippedWindow(window)` | The `GradeResult` for an empty window: a skip carrying its reason, never a pass. |
+| `TraceWindow` | |
 
 ## Judge
 
@@ -93,7 +96,7 @@ The CLI's three commands, callable directly. Each pairs a runner with a renderer
 |---|---|
 | `makeTraceJudge(options)` | Build the ensemble judge. |
 | `makeJudgeProvider(...)`, `providerSpecFor(...)` | Provider construction. `providerSpecFor` resolves identity without constructing, so a fully cached run needs no API key. |
-| `renderTrace(trace, options?)` | The transcript as the judge sees it. |
+| `renderTrace(trace, options?, plan?)` | The transcript as the judge sees it. With a `plan`, only that artifact's window. |
 | `JUDGE_SYSTEM_PROMPT`, `buildUserContent(plan, rendered)` | The prompts. |
 | `PROMPT_VERSION` | Cache-key component. Bump on any prompt change. |
 | `cacheKey(...)`, `sha256(...)` | |

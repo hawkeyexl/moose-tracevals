@@ -7,6 +7,8 @@ import {
   optionsError,
   pass,
   requiredString,
+  skippedWindow,
+  windowFor,
   type Options,
 } from "./util.js";
 
@@ -60,12 +62,14 @@ export const regexGrader: TraceGrader = {
     const on = (options.on as string | undefined) ?? "assistant";
     const expect = (options.expect as string | undefined) ?? "match";
 
+    const window = windowFor(trace, plan);
+    if (window.empty) return skippedWindow(window);
     const corpus =
       on === "user"
-        ? trace.userMessages
+        ? window.userMessages
         : on === "all"
-          ? [...trace.userMessages, ...trace.assistantTexts]
-          : trace.assistantTexts;
+          ? [...window.userMessages, ...window.assistantTexts]
+          : window.assistantTexts;
     const matched = corpus.some((text) => re.test(text));
 
     if (expect === "match" && !matched) {

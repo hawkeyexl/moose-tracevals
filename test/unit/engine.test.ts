@@ -118,4 +118,39 @@ describe("runEvals", () => {
     // must not force failure — check summary accounting instead.
     expect(lax.summary.needsReview).toBeGreaterThan(0);
   });
+  it("never hands the judge an eval whose window is empty", async () => {
+    // `doc-writer` is spawned by the fixture trace but records no branch, so
+    // the agent governed nothing. A passing judge would otherwise turn that
+    // into a confident pass over the parent session's work.
+    const report = await run();
+    const docWriter = report.evalResults.filter((r) =>
+      r.artifactName === "doc-writer",
+    );
+    expect(docWriter.length).toBeGreaterThan(0);
+    for (const result of docWriter) {
+      expect(result.outcome).toBe("skipped");
+      expect(result.skipReason).toContain("no subagent turns");
+    }
+  });
+
+  it("grades an agent artifact against its own branch", async () => {
+    const report = await run();
+    const byName = Object.fromEntries(
+      report.evalResults.map((r) => [r.evalName, r]),
+    );
+    // The parent session ran Edit; the reviewer branch only read. Without
+    // windowing this is a fail.
+    expect(byName["reviewer-is-read-only"]?.outcome).toBe("pass");
+    expect(byName["reviewer-read-something"]?.outcome).toBe("pass");
+  });
+
+  it("counts only in-window tool calls against a skill's eval", async () => {
+    const report = await run();
+    const forbidden = report.evalResults.find(
+      (r) => r.evalName === "forbidden-tool",
+    );
+    // Two Bash calls in the session; one before the skill was invoked.
+    expect(forbidden?.outcome).toBe("fail");
+    expect(forbidden?.findings?.[0]?.message).toContain("used 1 time(s)");
+  });
 });

@@ -21,6 +21,7 @@ describe("discoverArtifacts", () => {
 
     expect(ids(result.artifacts)).toEqual([
       "agent:doc-writer.md",
+      "agent:reviewer.md",
       "project-rules:AGENTS.md",
       "project-rules:CLAUDE.md",
       "skill:SKILL.md",

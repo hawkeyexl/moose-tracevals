@@ -49,8 +49,8 @@ The complete `RunReport`:
   "coverage": [ /* CoverageEntry[] */ ],
   "evalResults": [ /* EvalResult[] */ ],
   "summary": {
-    "total": 7, "pass": 1, "fail": 1,
-    "error": 0, "needsReview": 0, "skipped": 5
+    "total": 12, "pass": 4, "fail": 1,
+    "error": 0, "needsReview": 1, "skipped": 6
   },
   "exitCode": 1,
   "costUsd": 0,
@@ -146,18 +146,28 @@ claude-code · claude-opus-4-8 · 2 turn(s) · /work/demo-project
   PASS   fix-bug › no-force-push
   REVIEW fix-bug › refactor-preserved-intent
          awaiting human review
+  PASS   reviewer › reviewer-is-read-only
+  SKIP   doc-writer › doc-writer-wrote-docs
+         agent "doc-writer" was spawned but recorded no subagent turns (no inline
+         sidechain records and no sidecar transcript), so it governed no turns
   SKIP   CLAUDE.md › adheres-to-artifact (implicit)
          ai evals skipped (deterministic-only run)
 
 Artifact coverage
   ✓ skill: fix-bug   /work/demo-project/.claude/skills/fix-bug/SKILL.md
   ○ agent: Explore   built-in agent (no definition file)
+  ✓ agent: reviewer  /work/demo-project/.claude/agents/reviewer.md
 
 Warnings
   ! 1 unparseable JSONL line(s) were skipped
 
-9 eval(s): 2 pass, 1 fail, 0 error, 1 needs-review, 5 skipped
+12 eval(s): 4 pass, 1 fail, 0 error, 1 needs-review, 6 skipped
 ```
+
+`forbidden-tool` forbids `Bash`, and this session ran it twice — but only once after the `fix-bug`
+skill was invoked, and only that one is the skill's business. `doc-writer` was spawned and recorded
+no turns, so its evals report `skipped` rather than a verdict about work it had no part in. Both are
+[eval windowing](/moose-tracevals/reference/graders/#shared-behavior).
 
 Outcome labels are `PASS`, `FAIL`, `ERROR`, `REVIEW`, `SKIP`. For a **non-passing judged** eval, two
 extra lines appear: the vote split and the first `observed`.
