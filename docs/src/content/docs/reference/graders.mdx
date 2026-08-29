@@ -159,6 +159,7 @@ Whether a named skill was invoked. Detects both `Skill` tool calls and `/command
 |---|---|---|---|
 | `skill` | string | **required** | Skill name as it appears in the trace, including any `plugin:skill` prefix. |
 | `expect` | `used` \| `not-used` | `used` | Direction of the assertion. |
+| `when` | object | — | Arm the check only for sessions that match. See [Conditional triggers](#conditional-triggers). |
 
 **Failure messages**
 
@@ -172,6 +173,86 @@ Whether a named skill was invoked. Detects both `Skill` tool calls and `/command
 itself invoked is permanently green. It is allowed on project rules, where "this workflow must go
 through the review skill" is a real assertion — and project rules are also the one artifact type
 whose window is the whole session, which is what makes the question answerable.
+</Aside>
+
+### Conditional triggers
+
+`when` makes an eval **arm only for the sessions it is about**. That is what lets you check the
+artifact that *should* have been used and wasn't.
+
+The structural trick: you cannot hang an eval on a skill that never loaded — nothing resolves it, so
+nothing plans it. But `CLAUDE.md` resolves for **every** session, and `skill-invoked` is allowed
+there. Declare the check on the rules file, and let `when` keep it quiet the rest of the time.
+
+```yaml
+# in CLAUDE.md
+metadata:
+  evals:
+    - id: docs-work-uses-the-writing-skill
+      assertion: A session that edits documentation invokes the writing skill.
+      grader: skill-invoked
+      options:
+        skill: writing-toolkit:technical-writer
+        expect: used
+        when:
+          file-access: "docs/**"
+```
+
+**Three outcomes, and the first one is the point.**
+
+| Trigger | Skill invoked | Outcome |
+|---|---|---|
+| not matched | — | `skipped`, with the unmet condition named |
+| matched | no | `fail` |
+| matched | yes | `pass` |
+
+An unmatched trigger is **never a pass**. A check that never armed has not been satisfied, and
+calling it one would manufacture green from an eval that did not run:
+
+```
+  SKIP   CLAUDE.md › docs-work-uses-the-writing-skill
+         trigger not met (whole session): no file matching "docs/**" was accessed
+```
+
+{/* Doc Detective inline test: the skip wording above is produced by running the
+    CLI against this repository's committed fixtures, whose CLAUDE.md declares
+    exactly this eval. A regression that let an unarmed trigger pass fails here. */}
+{/* test {"testId":"unarmed-trigger-skips","description":"An unmatched trigger reports skipped, never pass."} */}
+{/* step {"description":"An unmatched trigger is skipped with its reason.","runShell":{"command":"moose-tracevals run test/fixtures/traces/claude-session.jsonl --project test/fixtures/project --deterministic-only","exitCodes":[1],"stdio":"trigger not met"}} */}
+{/* test end */}
+
+**Conditions**
+
+Every one is a pure trace fact, evaluated over [the artifact's window](#shared-behavior). All listed
+conditions must hold.
+
+| Condition | Type | Matches when |
+|---|---|---|
+| `file-access` | glob | Any file the window touched matches the glob. |
+| `tool-used` | string | That tool was called in the window. |
+| `prompt-matches` | regex | Any user prompt in the window matches. |
+| `turn-count-above` | integer | The window's turn count is **strictly** greater. |
+
+The glob understands `**` (spans directories, and matches the directory itself), `*` (within one
+path segment), and `?` (one character). It anchors at a path-segment boundary, so `docs/**` matches
+`/anywhere/docs/guide.md` but not `/anywhere/docsite/guide.md` — you write the path as it reads in
+the repository, not as it reads on the machine that recorded the trace.
+
+**An unknown condition is an error, not a typo you get away with.** A silently ignored `file-acess`
+would leave the eval armed on every session, which is the exact failure `when` exists to prevent:
+
+```
+  ERROR  CLAUDE.md › docs-work-uses-the-writing-skill
+         skill-invoked: options.when.file-acess is not a known condition; expected
+         one of: file-access, tool-used, prompt-matches, turn-count-above
+```
+
+A `when: {}` with no conditions is rejected for the same reason — it arms always while reading as a
+scoped check.
+
+<Aside title="An empty window still wins">
+If the artifact governed no turns at all, that reason is reported instead of the trigger's. No
+evidence outranks "the trigger did not fire".
 </Aside>
 
 ---

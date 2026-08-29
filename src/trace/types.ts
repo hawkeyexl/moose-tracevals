@@ -13,6 +13,11 @@
  * `isSidechain: true` records in the session file, and sidecar transcripts in
  * `<session>/subagents/agent-<id>.jsonl`. Both land in `subagentBranches` and
  * are indistinguishable to every consumer downstream.
+ *
+ * `availability` is the roster the session was *offered* (ADR 01016) — the
+ * negative space around what it used. It is reconstructed from the transcript's
+ * own `attachment` listing records, so it works retroactively on any session
+ * already on disk.
  */
 
 export type TraceSource = "claude-code";
@@ -94,6 +99,56 @@ export interface FileAccess {
   index: number;
 }
 
+/** What kind of thing the session was offered. */
+export type AvailabilityKind = "skill" | "agent" | "tool" | "mcp-server";
+
+/** MCP servers are offered in states other than "working". */
+export type McpServerStatus = "pending" | "needs-auth" | "failed";
+
+/**
+ * One stretch of availability for one name (ADR 01016). A name that is
+ * withdrawn and later re-offered produces two entries rather than one entry
+ * with a hole, so `offeredAt`/`withdrawnAt` always describe a single interval.
+ */
+export interface AvailabilityEntry {
+  kind: AvailabilityKind;
+  /** Identity, exactly as an invocation would name it (`plugin:skill` intact). */
+  name: string;
+  /**
+   * The description the roster carried, when it carried one. Claude Code
+   * budget-truncates the listing text, so a large roster names its later
+   * entries alone: absent means *not recorded*, never "has no description".
+   */
+  description?: string;
+  /** Ordinal in `trace.events` of the listing record that offered it. */
+  offeredAt: number;
+  /** Ordinal of the record that withdrew it; absent while still offered. */
+  withdrawnAt?: number;
+  /** MCP servers only: the state the roster reported. */
+  status?: McpServerStatus;
+  /** Subagent branch whose own roster offered it; absent for the main chain. */
+  branchId?: string;
+}
+
+/**
+ * The availability roster: what the session could have used, whether or not it
+ * did. Reconstructed from `attachment` listing records, which every recent
+ * Claude Code session carries.
+ */
+export interface TraceAvailability {
+  /**
+   * True when the trace carried at least one listing record. **False means
+   * unknown, never "nothing was offered"** — older sessions and stream
+   * transcripts have no roster at all, and a confident zero would be a wrong
+   * answer rather than a missing one (ADR 01003).
+   */
+  recorded: boolean;
+  skills: AvailabilityEntry[];
+  agents: AvailabilityEntry[];
+  tools: AvailabilityEntry[];
+  mcpServers: AvailabilityEntry[];
+}
+
 export interface TraceUsage {
   inputTokens: number;
   outputTokens: number;
@@ -130,6 +185,8 @@ export interface Trace {
   agentSpawns: AgentSpawn[];
   /** Every subagent branch the session recorded, inline or sidecar. */
   subagentBranches: SubagentBranch[];
+  /** What the session was offered, used or not (ADR 01016). */
+  availability: TraceAvailability;
   fileAccesses: FileAccess[];
   /** Non-sidechain user prompts (tool results excluded). */
   userMessages: string[];

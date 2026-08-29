@@ -40,6 +40,7 @@ export async function runEvals(options: EngineOptions): Promise<RunReport> {
       ? { projectDir: options.projectDir, projectRoot: options.projectDir }
       : {}),
     ...(options.env !== undefined ? { env: options.env } : {}),
+    reportUnusedArtifacts: config.reportUnusedArtifacts,
   });
   const plans = await planEvals(resolved.artifacts);
 
@@ -237,6 +238,9 @@ export async function runEvals(options: EngineOptions): Promise<RunReport> {
       ...resolved.warnings,
     ],
     coverage: resolved.coverage,
+    // An observation about the session's configuration, never a verdict: it is
+    // deliberately not part of `summary` and never moves `exitCode`.
+    availability: resolved.availability,
     evalResults: results,
     summary,
     exitCode: failing ? 1 : 0,

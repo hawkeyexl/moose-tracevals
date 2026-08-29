@@ -4,6 +4,12 @@ export * from "./trace/types.js";
 export { detectFormat, detectContentFormat } from "./trace/detect.js";
 export { parseTraceFile, parseTraceContent } from "./trace/claude.js";
 export {
+  availableAt,
+  joinDescriptions,
+  newAvailability,
+  offeredNames,
+} from "./trace/availability.js";
+export {
   discoverTraces,
   homeDir,
   slugFor,
@@ -17,6 +23,11 @@ export {
   resolveArtifacts,
   type ResolveOptions,
 } from "./artifacts/resolve.js";
+export {
+  coverAvailability,
+  type AvailabilityCoverage,
+  type AvailabilityOptions,
+} from "./artifacts/availability.js";
 export {
   discoverArtifacts,
   type DiscoverOptions as DiscoverArtifactsOptions,
@@ -60,6 +71,14 @@ export {
   type LoadedGraderPlugins,
 } from "./graders/plugins.js";
 export { skippedWindow, windowFor, type TraceWindow } from "./graders/util.js";
+export { globToRegExp, matchesGlob } from "./graders/glob.js";
+export {
+  WHEN_CONDITIONS,
+  evaluateWhen,
+  validateWhen,
+  type TriggerResult,
+  type WhenCondition,
+} from "./graders/when.js";
 export { renderTrace, type RenderOptions } from "./judge/render.js";
 export {
   JUDGE_SYSTEM_PROMPT,

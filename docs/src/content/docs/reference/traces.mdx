@@ -48,6 +48,7 @@ All exit `2`:
 | `turnCount` | non-sidechain user prompts. The stream format overrides this with `result.num_turns` |
 | `usage` | **stream-json only** — `result.total_cost_usd` and token counts |
 | `assistantTexts`, `userMessages` | message text, used by the `regex` and `json-output` graders |
+| `availability` | the roster the session was **offered**: skills, agents, tools, and MCP servers. See [The availability roster](#the-availability-roster) |
 
 <Aside type="caution" title="Session files carry no cost data">
 `usage.totalCostUsd` comes only from a stream-json `result` record. Claude Code session files do not
@@ -62,8 +63,62 @@ Warnings
   ! 1 unparseable JSONL line(s) were skipped
 ```
 
-Session bookkeeping records are ignored outright: `queue-operation`, `attachment`, `last-prompt`,
-`custom-title`, `summary`, `mode`, and `pr-link`.
+Session bookkeeping records become `meta` events and contribute nothing to the conversation:
+`queue-operation`, `attachment`, `last-prompt`, `custom-title`, `summary`, `mode`, and `pr-link`.
+Three kinds of `attachment` are the exception — they are read for the availability roster below.
+
+## The availability roster
+
+Everything above describes what the session **used**. The roster describes what it was **offered**,
+which is the only way to notice the skill that should have fired and didn't.
+
+Claude Code records it as structured `attachment` records, so it is recoverable exactly and
+**retroactively — every session already on your disk has it**:
+
+| `attachment.type` | Becomes |
+|---|---|
+| `skill_listing` | `availability.skills` — names, and descriptions parsed from the listing text |
+| `agent_listing_delta` | `availability.agents` — `subagent_type`s, with descriptions and tool grants |
+| `deferred_tools_delta` | `availability.tools`, plus `availability.mcpServers` with a `pending`, `needs-auth`, or `failed` status |
+
+Each entry is one **stretch** of availability:
+
+```jsonc
+{
+  "kind": "skill",
+  "name": "writing-toolkit:technical-writer",
+  "description": "Use when creating clear, accurate, user-focused documentation.",
+  "offeredAt": 7,        // ordinal in trace.events where it appeared
+  "withdrawnAt": 412     // absent while still offered
+}
+```
+
+A name withdrawn and later re-offered produces **two** entries rather than one with a hole, so
+`availableAt(entries, index)` is a plain filter. Availability really is time-varying: a
+directory-scoped skill appears mid-session when work moves into its tree, and the exported helper
+answers "what was on the menu at this point" rather than only "at some point".
+
+<Aside type="caution" title="No roster is *unknown*, not *empty*">
+`availability.recorded` is `false` for traces that carry no listing records — older sessions and
+every `claude-stream` transcript. Reporting "0 skills offered" there would turn a missing answer into
+a wrong one, so the report says the roster is unknown instead.
+</Aside>
+
+### What the roster does not carry
+
+- **Descriptions are best-effort.** The listing text is budget-truncated near 30,000 characters; past
+  that, Claude Code lists skills by name alone. One real session offers 527 skills and describes 42
+  of them. An absent description means *not recorded*, never "has none".
+- **Tools have no descriptions at all** — the tool listing repeats each tool's own name.
+- **Artifact bodies and their hashes are not in the trace.** The roster settles what was *available*,
+  not what a `SKILL.md` said at the time.
+
+### Subagents have their own roster
+
+A sidecar transcript carries its own listing records, and its set is usually a subset of the
+parent's. Only names the session never saw elsewhere are folded in, tagged with the branch that saw
+them — replaying a sidecar's listing as the session's would withdraw the parent's whole roster
+mid-session, and dropping it would report a subagent-only skill as never offered.
 
 ## Discovery
 

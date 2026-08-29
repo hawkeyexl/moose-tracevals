@@ -14,6 +14,22 @@ export interface ResolvedArtifact {
   origin: ArtifactOrigin;
 }
 
+/**
+ * Whether the session was *offered* an artifact, and whether it used it
+ * (ADR 01016). The three states are kept apart deliberately: "offered and not
+ * used" is a judgement call, while "not offered" is a configuration bug and
+ * collapsing them sends a reader looking in the wrong place.
+ *
+ * `unknown` is not a fourth shade of the same thing — it means the trace
+ * carried no roster at all, which older sessions and stream transcripts never
+ * do (ADR 01003).
+ */
+export type ArtifactAvailability =
+  | "offered-and-used"
+  | "offered-not-used"
+  | "not-offered"
+  | "unknown";
+
 /** One row of the report's artifact-coverage table. */
 export interface CoverageEntry {
   ref: string;
@@ -23,10 +39,37 @@ export interface CoverageEntry {
   /** Paths that were checked, for unresolved refs. */
   tried: string[];
   note?: string;
+  /**
+   * Roster state. Absent for `project-rules`, which is not something a session
+   * is offered — it is always in force. Never affects an eval outcome or the
+   * exit code: this is an observation.
+   */
+  availability?: ArtifactAvailability;
+}
+
+/** Roster tallies for one artifact kind. */
+export interface AvailabilityCounts {
+  offered: number;
+  used: number;
+  unused: number;
+}
+
+/**
+ * The offered-versus-used summary that accompanies the coverage table. Counts
+ * by default; `listed` says whether the offered-but-unused rows were included
+ * in `coverage` as well, which `--report-unused-artifacts` turns on.
+ */
+export interface AvailabilityReport {
+  /** False means unknown — never "nothing was offered". */
+  recorded: boolean;
+  skills: AvailabilityCounts;
+  agents: AvailabilityCounts;
+  listed: boolean;
 }
 
 export interface ResolvedArtifacts {
   artifacts: ResolvedArtifact[];
   coverage: CoverageEntry[];
+  availability: AvailabilityReport;
   warnings: string[];
 }
