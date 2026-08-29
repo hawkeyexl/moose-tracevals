@@ -755,6 +755,146 @@ jobs:
             echo "missing the empty-selection message:"; cat moose-tracevals-batch-empty.txt; exit 1
           }
 
+
+      # Calibration (ADR 01022). The fixture labels are engineered to carry one
+      # false pass, one false fail, one missed review, and two labels whose
+      # evals never armed — so the gate proves the join distinguishes them
+      # rather than proving the command exits.
+      - name: Dogfood calibrate (labels, sweep, thresholds)
+        shell: bash
+        env:
+          MOOSE_TRACEVALS_HOME: test/fixtures/home
+        run: |
+          a=test/fixtures/traces/claude-session.jsonl
+          b=test/fixtures/traces/claude-session-sidecar.jsonl
+          labels=test/fixtures/project/tracevals/labels.yaml
+          common="--project test/fixtures/project --labels $labels --provider mock"
+
+          # 1. Disagreement is a finding, not a failure: exit 0.
+          set +e
+          node dist/cli.js calibrate "$a" "$b" $common --no-cache --format json > moose-tracevals-cal.json
+          code=$?
+          set -e
+          if [ "$code" -ne 0 ]; then
+            echo "A calibration run is a measurement; expected exit 0, got $code"
+            cat moose-tracevals-cal.json
+            exit 1
+          fi
+
+          # 2. The same corpus with a threshold asked for.
+          set +e
+          node dist/cli.js calibrate "$a" "$b" $common --max-false-pass 0 --format json > moose-tracevals-cal-gate.json
+          code=$?
+          set -e
+          if [ "$code" -ne 1 ]; then
+            echo "Expected exit 1 when --max-false-pass 0 is exceeded, got $code"; exit 1
+          fi
+
+          # 3. The sweep, re-scored from the verdicts run 2 already cached.
+          node dist/cli.js calibrate "$a" "$b" $common --sweep --format json > moose-tracevals-cal-sweep.json
+
+          node -e '
+            const fs = require("fs");
+            const read = (f) => {
+              let raw = fs.readFileSync(f, "utf8");
+              if (raw.charCodeAt(0) === 0xfeff) raw = raw.slice(1);
+              return JSON.parse(raw);
+            };
+            const check = (label, actual, expected) => {
+              if (actual !== expected) {
+                console.error(`${label}: expected ${expected}, got ${actual}`);
+                process.exitCode = 1;
+              }
+            };
+
+            const cal = read("moose-tracevals-cal.json");
+            // The three numbers the manual procedure asked people to count.
+            check("false passes", cal.counts.falsePass, 1);
+            check("false fails", cal.counts.falseFail, 1);
+            check("review volume", cal.counts.reviewVolume, 1);
+            // A labelled eval that never armed is not evidence, so it stays
+            // out of the denominator. Counting it would let a corpus nobody
+            // exercised report perfect agreement.
+            check("labels", cal.counts.labels, 10);
+            check("scored", cal.counts.scored, 8);
+            check("skipped", cal.counts.skipped, 2);
+            check("agreement", cal.counts.agreement, 0.625);
+            // Which eval disagreed, not just how many — and the note, which is
+            // the only thing that makes a disagreement actionable.
+            const fp = cal.disagreements.find((d) => d.kind === "false-pass");
+            check("false pass artifact", fp?.artifactName, "AGENTS.md");
+            check("false pass eval", fp?.evalName, "eval-1");
+            if (!/four packages/.test(fp?.note ?? "")) {
+              console.error("a disagreement must carry its note:", JSON.stringify(fp));
+              process.exitCode = 1;
+            }
+            // A deterministic grader is calibrated too: a blunt option produces
+            // a false fail exactly as a hesitant judge does.
+            const ff = cal.disagreements.find((d) => d.kind === "false-fail");
+            check("false fail grader", ff?.grader, "tool-usage");
+            // The calibration report is its own shape, tellable apart from a
+            // verdict report without inspecting the contents.
+            if (cal.evalResults !== undefined || cal.evals !== undefined) {
+              console.error("a calibration report must not masquerade as a run report");
+              process.exitCode = 1;
+            }
+            check("embedded batch traces", cal.batch.summary.traces, 2);
+
+            // A threshold is the only thing that turns a measurement red.
+            const gated = read("moose-tracevals-cal-gate.json");
+            check("gate exitCode", gated.exitCode, 1);
+            check("gate name", gated.gates[0]?.name, "falsePass");
+            check("gate exceeded", gated.gates[0]?.exceeded, true);
+
+            const sweep = read("moose-tracevals-cal-sweep.json").sweep;
+            check("sweep leads with the baseline", sweep[0]?.axis, "baseline");
+            // Raising the auto-pass floor above the model confidence converts
+            // the false pass into a deferral. This row is the whole reason a
+            // sweep exists, and it costs no inference to produce.
+            const strict = sweep.find((c) => c.axis === "zones.autoPass" && c.value === 0.95);
+            check("strict false passes", strict?.counts.falsePass, 0);
+            check("strict review volume", strict?.counts.reviewVolume, 4);
+            // Nothing was scored against an ensemble the cache could not
+            // supply: a silently under-sampled cell is a wrong number.
+            if (sweep.some((c) => c.counts.insufficient !== 0)) {
+              console.error("a sweep cell must never score from too few cached runs");
+              process.exitCode = 1;
+            }
+          '
+
+          # 4. A label naming a trace outside the corpus is operational, and is
+          #    caught before the corpus is judged.
+          set +e
+          node dist/cli.js calibrate "$a" $common --deterministic-only > /dev/null 2> moose-tracevals-cal-corpus.txt
+          code=$?
+          set -e
+          if [ "$code" -ne 2 ]; then
+            echo "Expected exit 2 for a label off the corpus, got $code"
+            cat moose-tracevals-cal-corpus.txt
+            exit 1
+          fi
+          grep -q "not in the corpus" moose-tracevals-cal-corpus.txt || {
+            echo "missing the off-corpus message:"; cat moose-tracevals-cal-corpus.txt; exit 1
+          }
+
+          # 5. A label that matched no eval result is exit 2 too — never a
+          #    quietly smaller report.
+          mkdir -p .tmp
+          printf 'version: 1\nlabels:\n  - trace: ../../traces/claude-session.jsonl\n    artifact: fix-bug\n    eval: forbiden-tool\n    expected: fail\n' > test/fixtures/project/tracevals/.typo-labels.yaml
+          set +e
+          node dist/cli.js calibrate "$a" --project test/fixtures/project --labels test/fixtures/project/tracevals/.typo-labels.yaml --deterministic-only > /dev/null 2> moose-tracevals-cal-typo.txt
+          code=$?
+          set -e
+          rm -f test/fixtures/project/tracevals/.typo-labels.yaml
+          if [ "$code" -ne 2 ]; then
+            echo "Expected exit 2 for a label matching no eval, got $code"
+            cat moose-tracevals-cal-typo.txt
+            exit 1
+          fi
+          grep -q "forbiden-tool" moose-tracevals-cal-typo.txt || {
+            echo "the message must name the label that matched nothing:"; cat moose-tracevals-cal-typo.txt; exit 1
+          }
+
       - name: Dogfood list (fixture session store)
         shell: bash
         env:

@@ -13,16 +13,21 @@ import { Aside } from '@astrojs/starlight/components';
 moose-tracevals [options] [command]
 
 Commands:
-  run [options] [traces...]  Evaluate one or more traces against the skills and
-                             instructions they used
-  fill [options] [paths...]  Propose eval evals for skills, agent definitions, and
-                             project rules, and write those above the confidence threshold
-  list [options]             List discoverable traces (Claude Code session files)
-  help [command]             display help for command
+  run [options] [traces...]        Evaluate one or more traces against the
+                                   skills and instructions they used
+  calibrate [options] [traces...]  Measure judged and graded verdicts against a
+                                   labels file: false passes, false fails, and
+                                   review volume
+  fill [options] [paths...]        Propose evals for skills, agent definitions,
+                                   and project rules, and write those above the
+                                   confidence threshold
+  list [options]                   List discoverable traces (Claude Code session
+                                   files)
+  help [command]                   display help for command
 
 Options:
-  -V, --version              output the version number
-  -h, --help                 display help for command
+  -V, --version                    output the version number
+  -h, --help                       display help for command
 ```
 
 `run` is the **default command**: `moose-tracevals <trace>` and `moose-tracevals run <trace>` are equivalent.
@@ -40,6 +45,10 @@ Options:
 {/* step {"description":"fill exposes the documented flags.","runShell":{"command":"moose-tracevals fill --help","exitCodes":[0],"stdio":"--confidence <n>"}} */}
 {/* step {"description":"fill exposes the grader-plugin flag too.","runShell":{"command":"moose-tracevals fill --help","exitCodes":[0],"stdio":"--require <module>"}} */}
 {/* step {"description":"list exposes the documented flags.","runShell":{"command":"moose-tracevals list --help","exitCodes":[0],"stdio":"--all-projects"}} */}
+{/* step {"description":"calibrate is a command in its own right.","runShell":{"command":"moose-tracevals --help","exitCodes":[0],"stdio":"calibrate [options] [traces...]"}} */}
+{/* step {"description":"calibrate exposes the labels flag.","runShell":{"command":"moose-tracevals calibrate --help","exitCodes":[0],"stdio":"--labels <file>"}} */}
+{/* step {"description":"calibrate exposes the sweep flag.","runShell":{"command":"moose-tracevals calibrate --help","exitCodes":[0],"stdio":"--sweep"}} */}
+{/* step {"description":"calibrate exposes the threshold flags.","runShell":{"command":"moose-tracevals calibrate --help","exitCodes":[0],"stdio":"--max-false-pass <n>"}} */}
 {/* test end */}
 
 <Aside type="tip" title="Invoking the binary">
@@ -127,6 +136,47 @@ moose-tracevals: no traces matched (--all-projects, --since 7d); run `moose-trac
 Naming one bad trace on its own is exit 2. Naming it alongside good ones is different: it becomes a
 report entry carrying its error, the other traces keep their verdicts, and the run exits 1. One
 unreadable file in a corpus of fifty must not cost the other forty-nine.
+</Aside>
+
+## `calibrate`
+
+```
+moose-tracevals calibrate [options] [traces...]
+```
+
+Runs the same batch `run` does, then joins the results against a
+[labels sidecar](/moose-tracevals/judge/calibrate/#write-down-what-you-decided) and reports how often
+the tool agreed with you. **Read-only**: labels, traces, and artifacts are never written.
+
+Every `run` flag applies except `--history`, which is deliberately absent — calibration measures a
+corpus, not a point in one session's timeline.
+
+### Options beyond `run`'s
+
+| Flag | Argument | Default | Description |
+|---|---|---|---|
+| `--labels` | `<file>` | [`calibrate.labels`](/moose-tracevals/reference/configuration/#calibrate) (`tracevals/labels.yaml`) | The ground-truth sidecar. A path here resolves against the working directory; the config default resolves against the config file. |
+| `--sweep` | — | off | Re-score the corpus across the configured grid, from cached verdicts. |
+| `--max-false-pass` | `<n>` | `calibrate.maxFalsePass` *(unset)* | Exit `1` above this many false passes. |
+| `--max-false-fail` | `<n>` | `calibrate.maxFalseFail` *(unset)* | Exit `1` above this many false fails. |
+| `--max-review` | `<n>` | `calibrate.maxReview` *(unset)* | Exit `1` above this many `needs-review` outcomes across the corpus. |
+
+### Exit codes
+
+| Code | Meaning |
+|---|---|
+| `0` | the corpus was measured — **including when it disagreed**. Disagreement is the finding, not a failure |
+| `1` | a threshold above was asked for and exceeded, or a trace in the corpus could not be evaluated (the measurement is incomplete) |
+| `2` | operational: no labels file, an invalid one, a label naming a trace outside the corpus, a label matching no eval result, or any `run` operational error |
+
+<Aside title="A label that matches nothing is exit 2, not a warning">
+A misspelled eval id contributes to no count, so the report would come out looking like a cleaner
+corpus than it is. The message names what that trace *did* evaluate for that artifact:
+
+```
+moose-tracevals: …/labels.yaml: label(s) matched no eval result:
+  fix-bug › forbiden-tool on claude-session.jsonl (that trace evaluated eval-5, forbidden-tool, no-force-push, refactor-preserved-intent, used-read for "fix-bug")
+```
 </Aside>
 
 ## `fill`

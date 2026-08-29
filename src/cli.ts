@@ -105,8 +105,14 @@ async function executeRun(traces: string[], opts: RunFlags) {
   process.exitCode = report.exitCode;
 }
 
-function addRunFlags(cmd: Command): Command {
-  return cmd
+/**
+ * Flags shared by `run` and `calibrate`. `--history` is run-only: calibration
+ * is a measurement of a corpus, not a point in one session's timeline, and an
+ * accepted flag that quietly does nothing is worse than an absent one.
+ */
+function addRunFlags(cmd: Command, options: { history?: boolean } = {}): Command {
+  const withHistory = options.history !== false;
+  const base = cmd
     .option(
       "--project <dir>",
       "artifact-lookup root (overrides the trace's recorded cwd)",
@@ -119,7 +125,6 @@ function addRunFlags(cmd: Command): Command {
     .option("--max-cost-usd <usd>", "judge cost budget", (v) => parseFloat(v))
     .option("-f, --format <format>", "human | json | markdown", "human")
     .option("-o, --output <file>", "also write the report to a file")
-    .option("--history", "append to history and compare with the previous run")
     .option(
       "--report-unused-artifacts",
       "list every skill and agent the session was offered and never used",
@@ -138,6 +143,12 @@ function addRunFlags(cmd: Command): Command {
     .option("--all-projects", "evaluate every project's traces in the session store")
     .option("--since <duration>", "only traces newer than e.g. 30m, 24h, 7d, 2w")
     .option("--limit <n>", "maximum traces to evaluate", (v) => parseInt(v, 10));
+  return withHistory
+    ? base.option(
+        "--history",
+        "append to history and compare with the previous run",
+      )
+    : base;
 }
 
 addRunFlags(
@@ -147,6 +158,93 @@ addRunFlags(
       "Evaluate one or more traces against the skills and instructions they used",
     ),
 ).action(executeRun);
+
+// `calibrate` shares `run`'s flags because it *is* a run — plus the labels it
+// is measured against. Kept a separate command rather than a flag on `run`:
+// the report answers a different question and carries a different shape, and
+// a script must be able to tell which it is asking for (ADR 01022).
+addRunFlags(
+  program
+    .command("calibrate [traces...]")
+    .description(
+      "Measure judged and graded verdicts against a labels file: false passes, false fails, and review volume",
+    )
+    .option(
+      "--labels <file>",
+      "calibration labels sidecar (default: calibrate.labels)",
+    )
+    .option(
+      "--sweep",
+      "re-score the corpus across the configured grid of zones and ensemble sizes, from cached verdicts",
+    )
+    .option("--max-false-pass <n>", "exit 1 above this many false passes", (v) =>
+      parseInt(v, 10),
+    )
+    .option("--max-false-fail <n>", "exit 1 above this many false fails", (v) =>
+      parseInt(v, 10),
+    )
+    .option(
+      "--max-review <n>",
+      "exit 1 above this many needs-review outcomes",
+      (v) => parseInt(v, 10),
+    ),
+  { history: false },
+).action(
+  async (
+    traces: string[],
+    opts: RunFlags & {
+      labels?: string;
+      sweep?: boolean;
+      maxFalsePass?: number;
+      maxFalseFail?: number;
+      maxReview?: number;
+    },
+  ) => {
+    for (const [name, value] of [
+      ["--max-false-pass", opts.maxFalsePass],
+      ["--max-false-fail", opts.maxFalseFail],
+      ["--max-review", opts.maxReview],
+    ] as const) {
+      // parseInt("abc") is NaN, and every comparison against NaN is false, so
+      // a threshold that never trips would look like a threshold that held.
+      if (value !== undefined && (!Number.isInteger(value) || value < 0)) {
+        throw new TracevalsError(
+          `${name} must be a non-negative whole number, got ${value}`,
+        );
+      }
+    }
+    const { runCalibrate } = await import("./commands/calibrate.js");
+    const { report, rendered } = await runCalibrate({
+      ...(traces.length > 0 ? { traces } : {}),
+      project: opts.project,
+      provider: opts.provider,
+      model: opts.model,
+      runs: opts.runs,
+      deterministicOnly: opts.deterministicOnly,
+      noCache: opts.cache === false,
+      maxCostUsd: opts.maxCostUsd,
+      format: (opts.format as ReportFormat | undefined) ?? "human",
+      output: opts.output,
+      failOnNeedsReview: opts.failOnNeedsReview,
+      reportUnusedArtifacts: opts.reportUnusedArtifacts,
+      ...(opts.require !== undefined ? { require: opts.require } : {}),
+      ...(opts.allProjects !== undefined ? { allProjects: opts.allProjects } : {}),
+      ...(opts.since !== undefined ? { since: opts.since } : {}),
+      ...(opts.limit !== undefined ? { limit: opts.limit } : {}),
+      ...(opts.labels !== undefined ? { labels: opts.labels } : {}),
+      ...(opts.sweep !== undefined ? { sweep: opts.sweep } : {}),
+      ...(opts.maxFalsePass !== undefined
+        ? { maxFalsePass: opts.maxFalsePass }
+        : {}),
+      ...(opts.maxFalseFail !== undefined
+        ? { maxFalseFail: opts.maxFalseFail }
+        : {}),
+      ...(opts.maxReview !== undefined ? { maxReview: opts.maxReview } : {}),
+    });
+    console.log(rendered);
+    process.exitCode = report.exitCode;
+  },
+);
 
 program
   .command("fill [paths...]")

@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { render, renderBatch } from "../../src/reporters/index.js";
+import {
+  render,
+  renderBatch,
+  renderCalibration,
+} from "../../src/reporters/index.js";
 import { aggregate } from "../../src/aggregate.js";
 import type { BatchReport, RunReport } from "../../src/types.js";
+import type { CalibrationReport } from "../../src/calibrate/types.js";
 
 const report: RunReport = {
   trace: {
@@ -450,5 +455,180 @@ describe("batch reporters", () => {
     const row = out.split("\n").find((l) => l.includes("weird"))!;
     const cells = (line: string) => line.split(/(?<!\\)\|/).length - 2;
     expect(cells(row)).toBe(cells(header));
+  });
+});
+
+/* -------------------------------------------------------------------------- *
+ * Calibration rendering (ADR 01022)
+ *
+ * A calibration report answers a different question from a verdict report, so
+ * the assertions are about *that* question: the two mistakes lead, every count
+ * has the rows behind it, and a sweep says out loud that it cost nothing.
+ * -------------------------------------------------------------------------- */
+
+const emptyBatch: BatchReport = {
+  traces: [],
+  artifacts: [],
+  evals: [],
+  summary: {
+    total: 0,
+    pass: 0,
+    fail: 0,
+    error: 0,
+    needsReview: 0,
+    skipped: 0,
+    traces: 2,
+    tracesPassed: 2,
+    tracesFailed: 0,
+    tracesErrored: 0,
+  },
+  warnings: [],
+  exitCode: 0,
+  costUsd: 0.02,
+  durationMs: 10,
+};
+
+const calibrationCounts = (
+  overrides: Partial<CalibrationReport["counts"]> = {},
+): CalibrationReport["counts"] => ({
+  labels: 6,
+  scored: 5,
+  agree: 3,
+  falsePass: 1,
+  falseFail: 1,
+  review: 0,
+  missedReview: 0,
+  errored: 0,
+  skipped: 1,
+  reviewVolume: 2,
+  insufficient: 0,
+  agreement: 0.6,
+  ...overrides,
+});
+
+const calibration: CalibrationReport = {
+  labelsFile: "C:\\work\\demo\\tracevals\\labels.yaml",
+  corpus: ["C:\\traces\\a.jsonl", "C:\\traces\\b.jsonl"],
+  setting: { ensembleRuns: 3, zones: { autoPass: 0.8, autoFail: 0.8 } },
+  counts: calibrationCounts(),
+  disagreements: [
+    {
+      trace: "C:\\traces\\a.jsonl",
+      artifactType: "project-rules",
+      artifactName: "AGENTS.md",
+      evalName: "eval-1",
+      grader: "ai",
+      expected: "fail",
+      actual: "pass",
+      kind: "false-pass",
+      note: "Sprawled across four | packages",
+      consensus: {
+        votes: { pass: 3, fail: 0, partial: 0, error: 0 },
+        agreement: 1,
+        meanConfidence: 0.95,
+        runs: 3,
+      },
+    },
+    {
+      trace: "C:\\traces\\a.jsonl",
+      artifactType: "skill",
+      artifactName: "fix-bug",
+      evalName: "forbidden-tool",
+      grader: "tool-usage",
+      expected: "pass",
+      actual: "fail",
+      kind: "false-fail",
+    },
+  ],
+  unscored: [
+    {
+      trace: "C:\\traces\\b.jsonl",
+      artifactType: "project-rules",
+      artifactName: "CLAUDE.md",
+      evalName: "docs-work",
+      grader: "skill-invoked",
+      expected: "pass",
+      actual: "skipped",
+      kind: "skipped",
+      skipReason: "trigger not met",
+    },
+  ],
+  sweep: [
+    {
+      axis: "baseline",
+      value: 3,
+      setting: { ensembleRuns: 3, zones: { autoPass: 0.8, autoFail: 0.8 } },
+      counts: calibrationCounts(),
+    },
+    {
+      axis: "zones.autoPass",
+      value: 0.95,
+      setting: { ensembleRuns: 3, zones: { autoPass: 0.95, autoFail: 0.8 } },
+      counts: calibrationCounts({ falsePass: 0, review: 1, reviewVolume: 4 }),
+    },
+  ],
+  gates: [{ name: "falsePass", limit: 0, actual: 1, exceeded: true }],
+  batch: emptyBatch,
+  warnings: ["1 unparseable JSONL line(s) were skipped"],
+  exitCode: 1,
+  costUsd: 0.02,
+  durationMs: 12,
+};
+
+describe("calibration reporters", () => {
+  it("leads with the two mistakes and the review volume, not a pass rate", () => {
+    const text = renderCalibration(calibration, "human");
+    expect(text).toContain("Agreement 3/5 (60%)");
+    expect(text).toMatch(/1\s+false passes/);
+    expect(text).toMatch(/1\s+false fails/);
+    expect(text).toMatch(/2\s+needs-review/);
+  });
+
+  it("names the eval behind each count and carries its note", () => {
+    const text = renderCalibration(calibration, "human");
+    expect(text).toContain("AGENTS.md › eval-1");
+    expect(text).toContain("Sprawled across four | packages");
+    // The arithmetic travels with a judged disagreement.
+    expect(text).toContain("3p/0f/0?/0e over 3 run(s), confidence 0.95");
+    // A deterministic one has none to show, and does not invent any.
+    expect(text).toContain("fix-bug › forbidden-tool");
+  });
+
+  it("keeps the unscored rows visible and apart from disagreement", () => {
+    const text = renderCalibration(calibration, "human");
+    expect(text).toContain("Unscored (no evidence either way)");
+    expect(text).toContain("trigger not met");
+  });
+
+  it("says a sweep cost nothing extra, and shows every cell", () => {
+    const text = renderCalibration(calibration, "human");
+    expect(text).toContain("no further model calls");
+    expect(text).toContain("runs=3 autoPass=0.95 autoFail=0.8");
+  });
+
+  it("reports a threshold that was exceeded", () => {
+    expect(renderCalibration(calibration, "human")).toContain(
+      "falsePass: 1 of at most 0",
+    );
+  });
+
+  it("escapes pipes so a markdown row keeps its column count", () => {
+    const md = renderCalibration(calibration, "markdown");
+    const header = md
+      .split("\n")
+      .find((l) => l.startsWith("| Kind | Trace"))!;
+    const row = md.split("\n").find((l) => l.startsWith("| FALSE-PASS"))!;
+    const cells = (line: string) => line.split(/(?<!\\)\|/).length - 2;
+    expect(cells(row)).toBe(cells(header));
+    expect(md).toContain("Sprawled across four \\| packages");
+  });
+
+  it("renders every format, and json is a faithful round-trip", () => {
+    expect(JSON.parse(renderCalibration(calibration, "json"))).toEqual(
+      JSON.parse(JSON.stringify(calibration)),
+    );
+    expect(renderCalibration(calibration, "markdown")).toContain(
+      "# moose-tracevals calibration report",
+    );
   });
 });
