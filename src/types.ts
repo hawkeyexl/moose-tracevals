@@ -5,6 +5,7 @@ import type {
   CoverageEntry,
 } from "./artifacts/types.js";
 import type { ArtifactType } from "./artifacts/types.js";
+import type { ManifestReport } from "./capture/types.js";
 import type { Finding } from "./graders/types.js";
 
 /** Operational error: bad usage, unreadable input, unknown format. Exits 2. */
@@ -62,6 +63,14 @@ export interface RunReport {
    * configuration; it never contributes to `summary` or `exitCode`.
    */
   availability: AvailabilityReport;
+  /**
+   * The session manifest this run consulted (ADR 01024), when one was found.
+   * Absent means no manifest existed, which is the ordinary case — every hash
+   * check then reports `skipped` and staleness stays the mtime heuristic.
+   * Like `availability`, an observation: never in `summary`, never in
+   * `exitCode`.
+   */
+  manifest?: ManifestReport;
   evalResults: EvalResult[];
   summary: RunSummary;
   /** 0 pass, 1 any fail/error (and needs-review when failOnNeedsReview). */
