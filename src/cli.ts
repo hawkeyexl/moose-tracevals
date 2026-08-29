@@ -32,6 +32,7 @@ interface RunFlags {
   history?: boolean;
   failOnNeedsReview?: boolean;
   require?: string[];
+  reportUnusedArtifacts?: boolean;
 }
 
 /** Repeatable option collector — commander keeps only the last value otherwise. */
@@ -65,6 +66,7 @@ async function executeRun(trace: string | undefined, opts: RunFlags) {
     // Left undefined when neither flag is passed, so the config still decides.
     failOnNeedsReview: opts.failOnNeedsReview,
     ...(opts.require !== undefined ? { require: opts.require } : {}),
+    reportUnusedArtifacts: opts.reportUnusedArtifacts,
   });
   console.log(rendered);
   process.exitCode = report.exitCode;
@@ -85,6 +87,10 @@ function addRunFlags(cmd: Command): Command {
     .option("-f, --format <format>", "human | json | markdown", "human")
     .option("-o, --output <file>", "also write the report to a file")
     .option("--history", "append to history and compare with the previous run")
+    .option(
+      "--report-unused-artifacts",
+      "list every skill and agent the session was offered and never used",
+    )
     .option("--fail-on-needs-review", "treat needs-review as a failure")
     .option("--no-fail-on-needs-review", "do not fail the run on needs-review")
     .option(

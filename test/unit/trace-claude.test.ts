@@ -510,4 +510,106 @@ describe("sidecar subagent transcripts", () => {
       trace.subagentBranches.some((b) => b.branchId === "toolu_008"),
     ).toBe(false);
   });
+
+  // The availability roster on the committed corpus (ADR 01016): an initial
+  // listing before the first prompt, plus a mid-session delta.
+  describe("availability roster", () => {
+    it("reads the initial roster off the session fixture", async () => {
+      const trace = await parseTraceFile(sessionFixture);
+      expect(trace.availability.recorded).toBe(true);
+      expect(trace.availability.skills.map((s) => s.name)).toEqual([
+        "fix-bug",
+        "writing-toolkit:identify-ai-tells",
+        "deep-research",
+        "bare-listing",
+        "tdd-coverage",
+      ]);
+      expect(trace.availability.agents.map((a) => a.name)).toEqual([
+        "Explore",
+        "reviewer",
+        "researcher",
+      ]);
+      expect(trace.availability.tools.map((t) => t.name)).toEqual([
+        "WebSearch",
+        "WebFetch",
+      ]);
+      expect(
+        trace.availability.mcpServers.map((s) => `${s.name}:${s.status}`),
+      ).toEqual(["git:pending", "demo-server:needs-auth"]);
+    });
+
+    it("adds the mid-session delta after the initial listing, not before", async () => {
+      const trace = await parseTraceFile(sessionFixture);
+      const initial = trace.availability.skills.find((s) => s.name === "fix-bug");
+      const late = trace.availability.skills.find((s) => s.name === "tdd-coverage");
+      expect(late?.offeredAt).toBeGreaterThan(initial?.offeredAt as number);
+      // A non-initial delta adds; it must not withdraw the initial set.
+      expect(initial?.withdrawnAt).toBeUndefined();
+    });
+
+    it("keeps descriptions, including the multi-line and absent cases", async () => {
+      const trace = await parseTraceFile(sessionFixture);
+      const byName = new Map(
+        trace.availability.skills.map((s) => [s.name, s.description]),
+      );
+      expect(byName.get("fix-bug")).toContain("reproducing it with a failing test");
+      // The plugin skill's description wraps onto a continuation line.
+      expect(byName.get("writing-toolkit:identify-ai-tells")).toContain(
+        "Flags rather than rewrites.",
+      );
+      // A truncated listing names a skill with no description at all.
+      expect(byName.get("bare-listing")).toBeUndefined();
+    });
+
+    it("records nothing for a trace with no listing records", async () => {
+      // The stream transcript predates the roster entirely.
+      const trace = await parseTraceFile(streamFixture);
+      expect(trace.availability.recorded).toBe(false);
+      expect(trace.availability.skills).toEqual([]);
+    });
+
+    it("keeps roster ordinals valid across the sidecar splice", async () => {
+      // ADR 01014 renumbers `index` over the merged list, so an ordinal
+      // captured at parse time would point at the wrong event afterwards.
+      const trace = await parseTraceFile(sidecarFixture);
+      const listings = trace.events.filter(
+        (e) => (e.raw as { attachment?: { type?: string } }).attachment !== undefined,
+      );
+      expect(listings.length).toBeGreaterThan(1);
+      for (const entry of [
+        ...trace.availability.skills,
+        ...trace.availability.agents,
+      ]) {
+        if (entry.branchId !== undefined) continue;
+        expect(trace.events[entry.offeredAt]?.kind).toBe("meta");
+        expect(
+          (trace.events[entry.offeredAt]?.raw as { attachment?: unknown })
+            .attachment,
+        ).toBeDefined();
+      }
+      // The late agent listing sits after the spliced branches, so its parse-
+      // time ordinal (4) would be wrong without the remap.
+      const explore = trace.availability.agents.find((a) => a.name === "Explore");
+      expect(explore?.offeredAt).toBeGreaterThan(4);
+    });
+
+    it("folds a branch-only skill in without churning the main chain", async () => {
+      // A subagent is offered its own roster. Replaying it as the session's
+      // would withdraw everything the parent had, because a sidecar listing is
+      // `isInitial: true` for that branch.
+      const trace = await parseTraceFile(sidecarFixture);
+      const byName = new Map(
+        trace.availability.skills.map((s) => [s.name, s]),
+      );
+      expect(byName.get("branch-only-skill")?.branchId).toBe("toolu_lead");
+      expect(byName.get("branch-only-skill")?.withdrawnAt).toBeUndefined();
+      // A name the main chain already carried is not duplicated, and its own
+      // interval is untouched.
+      expect(
+        trace.availability.skills.filter((s) => s.name === "fix-bug"),
+      ).toHaveLength(1);
+      expect(byName.get("fix-bug")?.branchId).toBeUndefined();
+      expect(byName.get("fix-bug")?.withdrawnAt).toBeUndefined();
+    });
+  });
 });

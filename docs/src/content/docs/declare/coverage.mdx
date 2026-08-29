@@ -19,7 +19,13 @@ Artifact coverage
   ✓ skill: fix-bug        /work/demo-project/.claude/skills/fix-bug/SKILL.md
   ○ agent: Explore        built-in agent (no definition file)
   ○ skill: my-plugin:foo  not found (3 location(s) tried)
+  ✓ agent: doc-writer [not offered]  /work/demo-project/.claude/agents/doc-writer.md
   ✓ project-rules: project rules
+
+Availability
+  5 skill(s) offered, 2 used, 3 never used
+  3 agent(s) offered, 2 used, 1 never used
+  pass --report-unused-artifacts to list them
 ```
 
 {/* Doc Detective inline tests: the coverage states below are produced by running
@@ -44,6 +50,76 @@ An unresolved reference is **not** a failing eval. It becomes a coverage row plu
 missing plugin never crashes a run or turns a build red on its own. That is deliberate: a skill file
 you do not have is not an adherence violation. It does mean that artifact went unchecked, which is
 exactly what the table is telling you.
+
+## Offered, used, and never on the menu
+
+The list above answers *what did the session reference*. The **Availability** block answers a
+different question — *what could it have referenced* — and keeps three states apart:
+
+| State | Meaning | What to do |
+|---|---|---|
+| **offered and used** | On the roster, and the session used it. | Nothing. |
+| **offered and not used** | On the roster, never invoked. | A judgement call. Read the description and decide whether it should have fired. |
+| **not offered** | The session referenced it, but it was never on the roster. | Fix the **configuration**. This is not an adherence failure. |
+
+That third state is the one that wastes an afternoon. A skill or agent someone expected but which
+was never on the menu produces evals that fail — or, worse, skip — for a reason that has nothing to
+do with the session's behaviour. It is labelled inline:
+
+```
+  ✓ agent: doc-writer [not offered]  /work/demo-project/.claude/agents/doc-writer.md
+```
+
+The definition file exists on disk and resolved fine; it was simply never offered to that session.
+Look at plugin installation, agent scope, and whether the name was renamed after the session ran.
+
+**None of this is an eval outcome.** Availability never appears in the summary counts and never moves
+the exit code — it is an observation about the session's configuration, not a verdict on its
+behaviour.
+
+### Listing what went unused
+
+Offered-and-unused artifacts are **counted, not listed** by default: a real roster runs to a couple
+of hundred skills and would bury the evals above it. To see them with the descriptions that Claude
+Code itself uses to decide whether to invoke:
+
+```bash
+npx moose-tracevals run <trace> --deterministic-only --report-unused-artifacts
+```
+
+```
+  · skill: deep-research [offered, unused] offered, never used — Fan-out web searches, fetch sources, verify claims, synthesise a cited report.
+  · skill: bare-listing [offered, unused] offered, never used
+  · agent: researcher [offered, unused] offered, never used — Gathers background before a change is designed. (Tools: Read, WebFetch)
+```
+
+{/* Doc Detective inline test: the three availability states are produced by
+    running the CLI against this repository's committed fixtures, whose roster
+    deliberately omits doc-writer while the session spawns it anyway. */}
+{/* test {"testId":"availability-states","description":"The three availability states appear against the fixture corpus."} */}
+{/* step {"description":"A referenced artifact that was never on the roster is labelled.","runShell":{"command":"moose-tracevals run test/fixtures/traces/claude-session.jsonl --project test/fixtures/project --deterministic-only","exitCodes":[1],"stdio":"[not offered]"}} */}
+{/* step {"description":"Offered-but-unused artifacts are listed on request.","runShell":{"command":"moose-tracevals run test/fixtures/traces/claude-session.jsonl --project test/fixtures/project --deterministic-only --report-unused-artifacts","exitCodes":[1],"stdio":"offered, never used"}} */}
+{/* test end */}
+
+A row like `bare-listing` above shows nothing after the dash because the roster carried no
+description for it — Claude Code truncates its listing text, and past that cap it names skills alone.
+Absent means *not recorded*, never "has none".
+
+An unused row is marked `·` rather than `○`, and reports `n/a` under **Resolved** in markdown, because
+nothing was ever looked for on disk. Saying "not found" would be a claim about a search that never ran.
+
+<Aside title="Where the roster comes from">
+Not a filesystem scan — the transcript itself. Claude Code records what it offered as structured
+attachment records, so the evidence travels inside the trace and the answer is the same on any
+machine. Full detail in [the traces reference](/moose-tracevals/reference/traces/#the-availability-roster).
+
+A trace with **no** roster reports it as unknown rather than as zero. Older sessions and
+`claude-stream` transcripts carry no listing records at all.
+</Aside>
+
+To act on an unused artifact rather than just look at it, hang a
+[conditionally-triggered eval](/moose-tracevals/reference/graders/#conditional-triggers) on
+`CLAUDE.md` — the one artifact that resolves for every session.
 
 ## How an artifact is resolved
 

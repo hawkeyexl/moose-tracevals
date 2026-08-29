@@ -78,6 +78,7 @@ moose-tracevals: no trace given; pass a trace file or run `moose-tracevals list`
 | `-f, --format` | `<format>` | `human` | `human`, `json`, or `markdown`. |
 | `-o, --output` | `<file>` | — | Also write the rendered report to a file. |
 | `--history` | — | off | Append this run to the history file and compare it with the previous run for the same session. |
+| `--report-unused-artifacts` | — | `reportUnusedArtifacts` (`false`) | List every skill and agent the session was [offered and never used](/moose-tracevals/declare/coverage/#offered-used-and-never-on-the-menu), instead of only counting them. Never changes the exit code. |
 | `--fail-on-needs-review` / `--no-fail-on-needs-review` | — | config | Override [`failOnNeedsReview`](/moose-tracevals/reference/configuration/). Pass neither and the config value stands. |
 | `--require` | `<module>` | — | Load a grader plugin. **Repeatable**, and **added to** [`plugins`](/moose-tracevals/reference/configuration/#plugins) rather than replacing it. |
 

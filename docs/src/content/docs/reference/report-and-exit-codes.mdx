@@ -47,6 +47,12 @@ The complete `RunReport`:
   },
   "warnings": ["1 unparseable JSONL line(s) were skipped"],
   "coverage": [ /* CoverageEntry[] */ ],
+  "availability": {
+    "recorded": true,
+    "skills": { "offered": 5, "used": 2, "unused": 3 },
+    "agents": { "offered": 3, "used": 2, "unused": 1 },
+    "listed": false
+  },
   "evalResults": [ /* EvalResult[] */ ],
   "summary": {
     "total": 12, "pass": 4, "fail": 1,
@@ -115,6 +121,7 @@ One entry per artifact reference found in the trace, resolved or not.
 | `path` | string? | The resolved file. Absent for an aggregated `project-rules` entry covering several files. |
 | `tried` | string[] | Every location searched, in order. Usually enough to diagnose a miss. |
 | `note` | string? | Why it will never resolve, e.g. `built-in agent (no definition file)`. |
+| `availability` | string? | `offered-and-used`, `offered-not-used`, `not-offered`, or `unknown`. Absent for `project-rules`, which is always in force. |
 
 An unresolved reference is **not** a failing eval. It is a coverage note plus a warning, so a missing
 plugin never crashes a run or turns a build red on its own.
@@ -131,6 +138,22 @@ The third case is real rather than theoretical: project rules resolve as **one a
 covering several files (`CLAUDE.md` *and* `AGENTS.md`), so the entry is `resolved: true` with no
 `path`. Its locations are all in `tried`. An unresolved entry falls back to
 `not found (<n> location(s) tried)`.
+
+### `availability`
+
+What the session was **offered**, next to what it used. `recorded: false` means the trace carried no
+availability roster at all — *unknown*, not *nothing offered* — and every `CoverageEntry` then reads
+`unknown`.
+
+| Field | Type | Notes |
+|---|---|---|
+| `recorded` | boolean | Whether the trace carried a roster. |
+| `skills`, `agents` | object | `{ offered, used, unused }` counts of distinct names. |
+| `listed` | boolean | Whether the offered-but-unused rows were included in `coverage` too. `--report-unused-artifacts` turns this on. |
+
+**It is never a verdict.** Availability contributes nothing to `summary` and nothing to `exitCode`;
+the report is identical in both with and without `--report-unused-artifacts`. Reading the three
+states is covered in [Account for every artifact](/moose-tracevals/declare/coverage/#offered-used-and-never-on-the-menu).
 
 ## `--format human`
 
@@ -158,6 +181,11 @@ Artifact coverage
   ○ agent: Explore   built-in agent (no definition file)
   ✓ agent: reviewer  /work/demo-project/.claude/agents/reviewer.md
 
+Availability
+  5 skill(s) offered, 2 used, 3 never used
+  3 agent(s) offered, 2 used, 1 never used
+  pass --report-unused-artifacts to list them
+
 Warnings
   ! 1 unparseable JSONL line(s) were skipped
 
@@ -178,14 +206,16 @@ extra lines appear: the vote split and the first `observed`.
          The session edited src/app.ts at turn 2 without a preceding test run.
 ```
 
-Coverage marks: `✓` resolved, `○` not. The location follows the rule
-[above](#the-location-shown-for-an-entry).
+Coverage marks: `✓` resolved, `○` referenced but not found, `·` offered and never used. The location
+follows the rule [above](#the-location-shown-for-an-entry) — except for a `·` row, which reports
+`offered, never used` plus the roster's own description, because nothing was ever looked for on disk.
 
 ## `--format markdown`
 
 The same run as tables: `# moose-tracevals report`, bullet metadata, then `## Evals`
 (`| Outcome | Artifact | Eval | Grader | Detail |`), `## Artifact coverage`
-(`| Resolved | Kind | Ref | Where |`), `## Warnings`, and a bold summary sentence. Pipe characters
+(`| Resolved | Kind | Ref | Availability | Where |`), `## Availability`, `## Warnings`, and a bold
+summary sentence. An offered-but-unused row reads `n/a` under **Resolved**, never `no`. Pipe characters
 in messages are escaped. Suited to a build summary or a PR comment.
 
 ## `--output`
