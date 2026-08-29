@@ -390,7 +390,16 @@ describe.skipIf(!built)("built CLI", () => {
           c.axis === "zones.autoPass" && c.value === 0.95,
       );
       expect(strict.counts.falsePass).toBe(0);
-      expect(strict.counts.reviewVolume).toBe(4);
+      // The claim is the conversion, not the count: a stricter auto-pass floor
+      // turns the false pass into a deferral, so review volume rises above the
+      // baseline row. An absolute number here breaks whenever the fixture
+      // corpus gains a judged eval.
+      const baseline = report.sweep.find(
+        (c: { axis: string }) => c.axis === "baseline",
+      );
+      expect(strict.counts.reviewVolume).toBeGreaterThan(
+        baseline.counts.reviewVolume,
+      );
     });
 
     it("exits 2 with the corpus listed when a label names a foreign trace", async () => {
