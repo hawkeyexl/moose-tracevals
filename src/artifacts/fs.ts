@@ -3,7 +3,7 @@
  * artifact discovery. Every function degrades to null/empty rather than
  * throwing: a missing or unreadable path is a coverage note, never a crash.
  */
-import { access, readdir, readFile } from "node:fs/promises";
+import { access, readdir, readFile, stat } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 
 /**
@@ -43,6 +43,21 @@ export async function findGitRoot(start: string): Promise<string | null> {
 export async function safeRead(path: string): Promise<string | null> {
   try {
     return await readFile(path, "utf-8");
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Last-modified time of `path` as an ISO-8601 string, or null when it cannot
+ * be read. Used for the staleness heuristic (ADR 01021); like everything else
+ * here it degrades rather than throwing — an artifact whose mtime is
+ * unreadable is simply one the report says nothing about.
+ */
+export async function safeMtime(path: string): Promise<string | null> {
+  try {
+    const info = await stat(path);
+    return info.mtime.toISOString();
   } catch {
     return null;
   }

@@ -1,5 +1,7 @@
+import { mkdir, mkdtemp, rm, utimes, writeFile } from "node:fs/promises";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { resolveArtifacts } from "../../src/artifacts/resolve.js";
 import { parseTraceFile } from "../../src/trace/claude.js";
 import type { Trace } from "../../src/trace/types.js";
@@ -135,5 +137,87 @@ describe("resolveArtifacts", () => {
       env: { MOOSE_TRACEVALS_HOME: fixtureHome },
     });
     expect(artifacts.filter((a) => a.name === "fix-bug")).toHaveLength(1);
+  });
+});
+
+describe("artifact staleness", () => {
+  let dir: string;
+
+  beforeEach(async () => {
+    // .tmp/ is gitignored, so a fresh checkout won't have it yet.
+    await mkdir(".tmp", { recursive: true });
+    dir = await mkdtemp(join(".tmp", "stale-"));
+    await writeFile(join(dir, "CLAUDE.md"), "# Rules\n", "utf-8");
+  });
+
+  afterEach(async () => {
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  /** Pin the rules file's mtime so the comparison has a fixed ground. */
+  async function touchRules(iso: string): Promise<void> {
+    const when = new Date(iso);
+    await utimes(join(dir, "CLAUDE.md"), when, when);
+  }
+
+  function traceEnding(endedAt?: string) {
+    return emptyTrace({
+      cwd: dir,
+      ...(endedAt !== undefined ? { endedAt } : {}),
+    });
+  }
+
+  it("flags an artifact edited after the session ended", async () => {
+    await touchRules("2026-07-01T00:00:00.000Z");
+    const { coverage, warnings } = await resolveArtifacts(
+      traceEnding("2026-06-01T00:00:00.000Z"),
+      { projectDir: dir, projectRoot: dir, env: {} },
+    );
+    const rules = coverage.find((c) => c.kind === "project-rules");
+    expect(rules?.stale).toBe(true);
+    expect(rules?.modifiedAt).toBe("2026-07-01T00:00:00.000Z");
+    expect(
+      warnings.some((w) => /modified after the session ended/.test(w)),
+    ).toBe(true);
+  });
+
+  it("leaves an artifact older than the session alone", async () => {
+    await touchRules("2026-05-01T00:00:00.000Z");
+    const { coverage, warnings } = await resolveArtifacts(
+      traceEnding("2026-06-01T00:00:00.000Z"),
+      { projectDir: dir, projectRoot: dir, env: {} },
+    );
+    expect(coverage.find((c) => c.kind === "project-rules")?.stale).toBe(false);
+    expect(warnings).toHaveLength(0);
+  });
+
+  it("says nothing when the trace has no end timestamp", async () => {
+    await touchRules("2099-01-01T00:00:00.000Z");
+    const { coverage, warnings } = await resolveArtifacts(traceEnding(), {
+      projectDir: dir,
+      projectRoot: dir,
+      env: {},
+    });
+    // Without a session end there is nothing to compare against, and guessing
+    // would manufacture a warning out of no evidence.
+    expect(coverage.find((c) => c.kind === "project-rules")?.stale).toBe(
+      undefined,
+    );
+    expect(warnings).toHaveLength(0);
+  });
+
+  it("is a warning only — it never becomes an eval outcome or an exit code", async () => {
+    await touchRules("2099-01-01T00:00:00.000Z");
+    const resolved = await resolveArtifacts(
+      traceEnding("2026-06-01T00:00:00.000Z"),
+      { projectDir: dir, projectRoot: dir, env: {} },
+    );
+    // The artifact still resolves and still carries its content: staleness
+    // changes what the report says, never what gets graded.
+    expect(resolved.artifacts).toHaveLength(1);
+    expect(resolved.artifacts[0]?.content).toContain("# Rules");
+    expect(resolved.coverage.find((c) => c.kind === "project-rules")?.resolved).toBe(
+      true,
+    );
   });
 });

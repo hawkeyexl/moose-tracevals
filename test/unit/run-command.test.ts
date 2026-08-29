@@ -199,3 +199,45 @@ describe("runRun availability reporting", () => {
     expect(unarmed?.skipReason).toContain("trigger not met");
   });
 });
+
+describe("runRun command opt-out", () => {
+  const fixtureProject = fileURLToPath(
+    new URL("../fixtures/project", import.meta.url),
+  );
+  const fixtureHome = fileURLToPath(new URL("../fixtures/home", import.meta.url));
+  // A config that disables commands, so the flagless path can be checked too.
+  const noCommandsProject = fileURLToPath(
+    new URL("../fixtures/no-commands", import.meta.url),
+  );
+
+  function runCommands(overrides: Record<string, unknown> = {}) {
+    return runRun({
+      tracePath: sessionFixture,
+      project: fixtureProject,
+      deterministicOnly: true,
+      env: { MOOSE_TRACEVALS_HOME: fixtureHome },
+      ...overrides,
+    });
+  }
+
+  const cmd = (report: RunReport) =>
+    report.evalResults.find((r) => r.evalName === "no-force-push");
+
+  it("runs the declared command when no flag is passed", async () => {
+    const { report } = await runCommands();
+    expect(cmd(report)?.outcome).toBe("pass");
+  });
+
+  it("reaches the engine from `--no-commands`", async () => {
+    const { report } = await runCommands({ commands: false });
+    expect(cmd(report)?.outcome).toBe("skipped");
+    expect(cmd(report)?.skipReason).toMatch(/command execution is disabled/);
+  });
+
+  it("leaves the config value in force when the flag is absent", async () => {
+    // configDir points at a fixture whose config disables commands; without an
+    // overlay bug the flagless run must honour it.
+    const { report } = await runCommands({ configDir: noCommandsProject });
+    expect(cmd(report)?.outcome).toBe("skipped");
+  });
+});

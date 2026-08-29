@@ -77,7 +77,11 @@ tracevals:
       autoPass: 0.8
       autoFail: 0.8
     cacheDir: .moose-tracevals/cache
+    redact: []                   # extra patterns scrubbed from the digest
     # maxCostUsd has no default; set it to impose a ceiling
+  graders:
+    command:
+      enabled: true              # false, or --no-commands, skips them instead
   render:
     maxBlockChars: 2000
     maxTotalChars: 150000
@@ -176,6 +180,7 @@ Cost is computed from a built-in per-model table. A model the table does not rec
 | `zones.autoPass` | number 0–1 | `0.8` | — |
 | `zones.autoFail` | number 0–1 | `0.8` | — |
 | `cacheDir` | string | `.moose-tracevals/cache` | `--no-cache` disables |
+| `redact` | array of strings | `[]` | — |
 | `maxCostUsd` | number ≥ 0 | *(unset)* | `--max-cost-usd` |
 
 - **`ensembleRuns`**: more runs cost proportionally more and make an auto-resolved verdict harder
@@ -187,8 +192,59 @@ Cost is computed from a built-in per-model table. A model the table does not rec
   reviews into passes.
 - **`maxCostUsd`**: checked before each judged eval. Once exhausted, remaining evals are reported
   as `skipped` with the budget named.
+- **`redact`**: extra regular expressions scrubbed from the session digest before it is sent.
 
 See [How the judge decides](/moose-tracevals/judge/) for what these do to an outcome.
+
+### `judge.redact`
+
+Patterns applied to the transcript before it leaves the machine. Each source is compiled with the
+`g` flag; a match becomes `[redacted]`.
+
+```yaml
+tracevals:
+  judge:
+    redact:
+      - "ACME-[0-9]{4}"           # an internal ticket id
+      - "https://internal\\.example\\.com/[^\\s\"]+"
+```
+
+Three things to know:
+
+- **These add to the built-in shapes; they never replace them.** Vendor API-key prefixes, bearer
+  tokens, private-key blocks, `AWS_*`, and secret-named assignments are always redacted, with the
+  list empty or not.
+- **A pattern that will not compile is an error at load**, not a silent skip — a dropped pattern
+  would be a silent leak.
+- **It is best-effort, not a guarantee.** `--deterministic-only` is the only setting under which
+  nothing leaves the machine at all.
+
+See [What leaves the machine](/moose-tracevals/judge/#what-leaves-the-machine) for the full list of
+what a judged run sends, redacted or not.
+
+## `graders`
+
+Per-grader settings. Only graders with a knob outside the eval that names them appear here.
+
+| Key | Type | Default | CLI |
+|---|---|---|---|
+| `graders.command.enabled` | boolean | `true` | `--no-commands` |
+
+`command`-graded evals run a program named in an artifact, and artifacts come from the **trace's**
+project — so evaluating someone else's trace can execute that repository's code. That is the
+documented default and it is not changing; this is the switch for when you do not want to take it.
+
+```yaml
+tracevals:
+  graders:
+    command:
+      enabled: false
+```
+
+Disabled, a command eval reports **`skipped`** with the reason stated — never `pass`. An unrun check
+has not been satisfied, so the report says so rather than quietly counting it as clean. Nothing else
+about the run changes, including the exit code. See
+[the `command` grader](/moose-tracevals/reference/graders/#command).
 
 ## `render`
 
@@ -291,5 +347,13 @@ what it *decides* — the summary counts and the exit code are identical either 
 Worth knowing, because they can only be changed in the config file:
 
 `judge.temperature` · `judge.zones.autoPass` · `judge.zones.autoFail` · `judge.cacheDir` ·
-`render.maxBlockChars` · `render.maxTotalChars` · `history.file` · `fill.temperature` ·
-`fill.cacheDir` · every `provider.*` key except `model`
+`judge.redact` · `render.maxBlockChars` · `render.maxTotalChars` · `history.file` ·
+`fill.temperature` · `fill.cacheDir` · every `provider.*` key except `model`
+
+## Behavior with no key at all
+
+**Artifact staleness** has no knob. Every resolved artifact is stat'd and compared with the
+session's end time; one that is newer is flagged in the coverage table and named in a warning. It is
+always on because it costs one `stat` and can only ever add information — it never becomes an eval
+outcome and never changes the exit code. See
+[Artifact coverage](/moose-tracevals/declare/coverage/#staleness).
