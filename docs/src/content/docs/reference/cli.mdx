@@ -13,7 +13,8 @@ import { Aside } from '@astrojs/starlight/components';
 moose-tracevals [options] [command]
 
 Commands:
-  run [options] [trace]      Evaluate a trace against the skills and instructions it used
+  run [options] [traces...]  Evaluate one or more traces against the skills and
+                             instructions they used
   fill [options] [paths...]  Propose eval evals for skills, agent definitions, and
                              project rules, and write those above the confidence threshold
   list [options]             List discoverable traces (Claude Code session files)
@@ -29,10 +30,12 @@ Options:
 {/* Doc Detective inline tests: assert the documented command surface against the
     built CLI, so a flag rename fails CI instead of silently drifting. */}
 {/* test {"testId":"cli-surface","description":"Every documented command and flag is present in the built CLI."} */}
-{/* step {"description":"The top-level help lists all three commands.","runShell":{"command":"moose-tracevals --help","exitCodes":[0],"stdio":"run [options] [trace]"}} */}
+{/* step {"description":"The top-level help lists all three commands.","runShell":{"command":"moose-tracevals --help","exitCodes":[0],"stdio":"run [options] [traces...]"}} */}
 {/* step {"description":"run exposes the documented flags.","runShell":{"command":"moose-tracevals run --help","exitCodes":[0],"stdio":"--deterministic-only"}} */}
 {/* step {"description":"run's format flag defaults to human.","runShell":{"command":"moose-tracevals run --help","exitCodes":[0],"stdio":"human | json | markdown (default: \"human\")"}} */}
 {/* step {"description":"run exposes the grader-plugin flag.","runShell":{"command":"moose-tracevals run --help","exitCodes":[0],"stdio":"--require <module>"}} */}
+{/* step {"description":"run accepts many traces.","runShell":{"command":"moose-tracevals run --help","exitCodes":[0],"stdio":"run [options] [traces...]"}} */}
+{/* step {"description":"run exposes the trace-selection flags.","runShell":{"command":"moose-tracevals run --help","exitCodes":[0],"stdio":"--since <duration>"}} */}
 {/* step {"description":"fill exposes the documented flags.","runShell":{"command":"moose-tracevals fill --help","exitCodes":[0],"stdio":"--confidence <n>"}} */}
 {/* step {"description":"fill exposes the grader-plugin flag too.","runShell":{"command":"moose-tracevals fill --help","exitCodes":[0],"stdio":"--require <module>"}} */}
 {/* step {"description":"list exposes the documented flags.","runShell":{"command":"moose-tracevals list --help","exitCodes":[0],"stdio":"--all-projects"}} */}
@@ -46,38 +49,66 @@ written as the bare `moose-tracevals`; prefix it with `npx` if the CLI is not on
 ## `run`
 
 ```
-moose-tracevals run [options] [trace]
+moose-tracevals run [options] [traces...]
 ```
 
-Evaluates a trace against the skills, agent definitions, and project-rules files the session used.
-**Read-only**: it never modifies the trace or the artifacts it evaluates.
+Evaluates one or more traces against the skills, agent definitions, and project-rules files each
+session used. **Read-only**: it never modifies the traces or the artifacts it evaluates.
 
-### Argument
+### Arguments
 
 | Argument | Required | Description |
 |---|---|---|
-| `trace` | no | Path to a trace file. Omit it in an interactive terminal to get a picker. |
+| `traces...` | no | Paths to trace files, evaluated in the order given. Omit them in an interactive terminal to get a picker, or select them with the flags below. |
 
-Omitting `trace` **without** a TTY produces an error instead of a prompt:
+Omitting `traces` **without** a TTY and without a selector produces an error instead of a prompt:
 
 ```
 moose-tracevals: no trace given; pass a trace file or run `moose-tracevals list`
+```
+
+### Which report you get
+
+One command, two report shapes. What decides is **how the traces were selected**, not how many came
+back — so a script can be written against the shape before it runs:
+
+| Invocation | Report |
+|---|---|
+| `run <trace>` | [`RunReport`](/moose-tracevals/reference/report-and-exit-codes/#--format-json) — one session |
+| `run <a> <b> …` | [`BatchReport`](/moose-tracevals/reference/report-and-exit-codes/#batch-runs) — rates across sessions |
+| `run --all-projects` / `--since` / `--limit` | `BatchReport`, **even when the selector matches exactly one trace** |
+
+Naming traces *and* passing a selector is an error rather than a precedence rule — either answer
+would silently discard something you asked for:
+
+```
+moose-tracevals: name traces or select them with --all-projects/--since/--limit, not both
+```
+
+A selector that matches nothing is **exit 2**, not a green run. An empty corpus and a clean corpus
+are indistinguishable downstream, so the gate says so instead of passing:
+
+```
+moose-tracevals: no traces matched (--all-projects, --since 7d); run `moose-tracevals list` to see what the session store holds
 ```
 
 ### Options
 
 | Flag | Argument | Default | Description |
 |---|---|---|---|
-| `--project` | `<dir>` | the trace's recorded `cwd` | Artifact-lookup root. Use it when the session ran somewhere the artifacts no longer live. |
+| `--project` | `<dir>` | the trace's recorded `cwd` | Artifact-lookup root, **and** the discovery scope when a selector is used without `--all-projects`. |
+| `--all-projects` | — | off | Evaluate traces from every project in the session store. |
+| `--since` | `<duration>` | — | Keep only traces modified within the window: `30m`, `24h`, `7d`, `2w`. Anything else is exit 2. |
+| `--limit` | `<n>` | unlimited | Maximum traces to evaluate, applied after newest-first sorting. |
 | `--provider` | `<name>` | `provider.default` (`claude-cli`) | Judge provider: `claude-cli`, `anthropic`, `openai`, `mock`. |
 | `--model` | `<model>` | the selected provider's configured model | Judge model override. |
 | `--runs` | `<n>` | `judge.ensembleRuns` (`3`) | Ensemble runs per judged eval. |
 | `--deterministic-only` | — | off | Skip judged evals entirely. They are reported as `skipped`, not failed. No model call is made. |
 | `--no-cache` | — | cache on | Bypass the judge cache. |
-| `--max-cost-usd` | `<usd>` | `judge.maxCostUsd` (unset) | Judge cost budget for this run. |
+| `--max-cost-usd` | `<usd>` | `judge.maxCostUsd` (unset) | Judge cost budget for the whole invocation, **shared across every trace in a batch** — not applied per trace. |
 | `-f, --format` | `<format>` | `human` | `human`, `json`, or `markdown`. |
 | `-o, --output` | `<file>` | — | Also write the rendered report to a file. |
-| `--history` | — | off | Append this run to the history file and compare it with the previous run for the same session. |
+| `--history` | — | off | Append to the history file and compare with the previous run for the same session. In a batch this is **one entry per trace**, since history is matched per session. |
 | `--report-unused-artifacts` | — | `reportUnusedArtifacts` (`false`) | List every skill and agent the session was [offered and never used](/moose-tracevals/declare/coverage/#offered-used-and-never-on-the-menu), instead of only counting them. Never changes the exit code. |
 | `--fail-on-needs-review` / `--no-fail-on-needs-review` | — | config | Override [`failOnNeedsReview`](/moose-tracevals/reference/configuration/). Pass neither and the config value stands. |
 | `--require` | `<module>` | — | Load a grader plugin. **Repeatable**, and **added to** [`plugins`](/moose-tracevals/reference/configuration/#plugins) rather than replacing it. |
@@ -86,9 +117,15 @@ moose-tracevals: no trace given; pass a trace file or run `moose-tracevals list`
 
 | Code | Meaning |
 |---|---|
-| `0` | every eval passed or was skipped |
-| `1` | any `fail` or `error` — and `needs-review`, unless `failOnNeedsReview: false` |
-| `2` | operational error: bad usage, unreadable trace, unknown format, a grader plugin that will not load |
+| `0` | every eval passed or was skipped — in a batch, on **every** trace |
+| `1` | any `fail` or `error` — and `needs-review`, unless `failOnNeedsReview: false`. In a batch, also any trace that could not be parsed |
+| `2` | operational error: bad usage, an unreadable trace named on its own, unknown format, a selector that matched nothing, a bad `--since`, a grader plugin that will not load |
+
+<Aside title="An unreadable trace inside a batch is an entry, not an abort">
+Naming one bad trace on its own is exit 2. Naming it alongside good ones is different: it becomes a
+report entry carrying its error, the other traces keep their verdicts, and the run exits 1. One
+unreadable file in a corpus of fifty must not cost the other forty-nine.
+</Aside>
 
 ## `fill`
 
