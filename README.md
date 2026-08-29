@@ -63,7 +63,8 @@ report (human / json / markdown) + artifact coverage + history
 - **Declared evals.** Artifacts declare checks in a `metadata.evals` frontmatter block implementing [`docmeta:artifact-evals`](schemas/artifact-evals-1.0.0-proposal.1.json) — a common vocabulary published by [docmeta](https://github.com/hawkeyexl/docmeta), not by this tool. An eval is either a string (AI-judged) or an object naming a grader: the ensemble judge, a human review queue, a script run over the trace, or one of seven deterministic checks.
 - **Implicit eval.** Artifacts with no declared evals still get one judged eval — *"the session adhered to the instructions in this artifact"* — so every used artifact is evaluated with zero configuration.
 - **Trustworthy judging.** N independent runs at temperature 0, consensus where errored runs can never produce a silent pass, and confidence zones that route anything non-unanimous to `needs-review`.
-- **Read-only.** `run` never modifies a trace or the artifacts it evaluates. `fill` is the one write path, and it never writes project rules.
+- **Measurable judging.** `calibrate` joins a run against a labels sidecar of verdicts you decided by hand and reports false passes, false fails, and review volume — plus which eval disagreed. `--sweep` re-scores cached verdicts at other zone thresholds and ensemble sizes, so asking "what would `autoPass: 0.9` have done?" costs no inference.
+- **Read-only.** `run` and `calibrate` never modify a trace or the artifacts they evaluate. `fill` is the one write path, and it never writes project rules.
 
 ## Documentation
 
@@ -76,7 +77,7 @@ Full guides, recipes, and reference live on the documentation site:
 | [Get started](https://hawkeyexl.github.io/moose-tracevals/get-started/) | Install, find a session, and read your first result. |
 | [Declare what to check](https://hawkeyexl.github.io/moose-tracevals/declare/) | Turn an instruction into an eval; propose evals across a project with `fill`. |
 | [Run it in CI](https://hawkeyexl.github.io/moose-tracevals/ci/) | An offline GitHub Actions recipe, the exit-code contract, and report formats. |
-| [Trust the judge](https://hawkeyexl.github.io/moose-tracevals/judge/) | Ensembles, consensus, and confidence zones — with the arithmetic. |
+| [Trust the judge](https://hawkeyexl.github.io/moose-tracevals/judge/) | Ensembles, consensus, and confidence zones — with the arithmetic, and `calibrate` to check it against your own answers. |
 | [Read a failing eval](https://hawkeyexl.github.io/moose-tracevals/triage/) | One page: what failed, whether the verdict holds, and what to do. |
 | [Reference](https://hawkeyexl.github.io/moose-tracevals/reference/) | Every CLI flag, config key, grader option, eval field, and report field. |
 

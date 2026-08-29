@@ -1,45 +1,235 @@
 ---
 title: Calibrate the judge
-description: Tune ensemble runs, confidence zones, and temperature against a corpus you already know the answers to, cap spend, and avoid the two failure modes that are silent.
+description: Write down the verdicts you already know, run calibrate to count false passes, false fails, and review volume, then sweep zones and ensemble size for free against cached verdicts.
 sidebar:
   order: 2
 ---
 
 import { Steps, Aside, LinkCard, CardGrid } from '@astrojs/starlight/components';
 
-**Scope:** the knobs, what each one trades, and the two ways calibration goes wrong without telling
-you. It assumes [How the judge decides](/moose-tracevals/judge/) — you cannot tune a zone threshold
-before you know what consensus is.
+**Scope:** measuring whether the tool agrees with you, and turning the knobs once you know. It
+assumes [How the judge decides](/moose-tracevals/judge/) — you cannot tune a zone threshold before
+you know what consensus is.
 
-## Tune against known answers
+The tool can always tell you what it decided. Calibration is how you find out whether it was
+**right**, and there is a command for it:
 
-Calibration means checking whether the tool agrees with **you**, so it needs a corpus where you
-already know the verdict.
+```bash
+moose-tracevals calibrate <traces...> --labels tracevals/labels.yaml
+```
 
-<Steps>
+It runs the corpus, joins the results against the answers you wrote down, and counts the three
+things that matter — [false passes, false fails, and review volume](#the-three-numbers).
 
-1. **Collect a handful of sessions you have judged by hand.** A dozen is plenty. Include some you
-   consider clear passes, some clear failures, and at least two you found genuinely ambiguous —
-   those are the ones that tell you whether the review band is set sensibly.
+## Write down what you decided
 
-2. **Run them and compare.** Cache the verdicts so re-tuning is free:
+Ground truth lives in a **sidecar file**, not in the artifacts. A label belongs to a corpus and to
+the person who reviewed it: two teams calibrating the same skill against different sessions hold
+different answers, and neither belongs in the `SKILL.md`.
 
-   ```bash
-   npx moose-tracevals run <trace> --format json --output baseline.json
-   ```
+```yaml title="tracevals/labels.yaml"
+version: 1
+labels:
+  - trace: ../../traces/claude-session.jsonl
+    artifact: fix-bug
+    eval: forbidden-tool
+    expected: pass
+    note: The only in-window Bash call was a read-only `git status`.
 
-3. **Count three things**, not one:
-   - **False passes** — anything `pass` you would have failed. The expensive error.
-   - **False fails** — anything `fail` you would have passed. Erodes trust fastest.
-   - **Review volume** — how many landed in `needs-review`. Too many and nobody reads them; too few
-     and the band is not doing its job.
+  - trace: ../../traces/claude-session.jsonl
+    artifact: reviewer
+    type: agent
+    eval: reviewer-is-read-only
+    expected: pass
+```
 
-4. **Move one knob, re-run, recount.** Re-running against cached verdicts costs nothing as long as
-   you change only the zones (see [what invalidates the cache](#what-invalidates-a-cached-verdict)).
+| Field | Required | Meaning |
+|---|---|---|
+| `trace` | yes | Path to the trace, resolved **against this file's own directory** — not your working directory, so a committed labels file means the same thing from anywhere. |
+| `artifact` | yes | The name the report shows: a skill name, a `subagent_type`, or a project-rules filename such as `CLAUDE.md`. |
+| `type` | no | `skill`, `agent`, or `project-rules`. Needed only to disambiguate a name two artifact kinds share. |
+| `eval` | yes | The eval's `id`. |
+| `expected` | yes | `pass`, `fail`, or `needs-review`. |
+| `note` | no | Why you decided that. It travels into the disagreement report, where it is the thing that makes a disagreement actionable. |
 
-</Steps>
+`expected: needs-review` is a real answer, not a hedge. Label the two or three sessions you found
+genuinely ambiguous and the report will tell you whether the review band caught them.
 
-## The knobs
+<Aside type="caution" title="Label by `id`, and give your evals one">
+An eval declared with the [string shorthand](/moose-tracevals/reference/evals-schema/) has no `id`,
+so it gets a **positional** one — `eval-1`, `eval-2`. Reordering the block silently re-points every
+label at a different assertion. Declaring an explicit `id` costs one line and removes the problem.
+</Aside>
+
+### What the file refuses
+
+All four refusals are the same refusal: a labels file that quietly means less than it says.
+
+| Refused | Why |
+|---|---|
+| An unknown member — `reason:` where you meant `note:` | The schema is closed, so a typo would silently drop the label |
+| An empty `labels` list | It measures nothing while looking like a measurement |
+| Two labels for one `(trace, artifact, eval)` | Whichever won would silently decide the number |
+| A `trace` outside the corpus you are running | Checked before anything is judged, so a misspelling costs no inference |
+
+A label that survives all four and still matches no eval result is **exit 2** as well, reported
+after the run with the ids that trace actually produced. It cannot be a warning: a typo'd id
+contributes to no count, so the report would come out looking like a cleaner corpus than it is.
+
+## The three numbers
+
+Point the command at the corpus. Every example on this page runs offline against this
+repository's own fixtures.
+
+{/* test {"testId":"calibrate","description":"calibrate reports the three numbers, sweeps for free, and gates only when asked."} */}
+{/* step {"description":"Calibration measures the corpus and exits 0 even though it disagrees.","runShell":{"command":"moose-tracevals calibrate test/fixtures/traces/claude-session.jsonl test/fixtures/traces/claude-session-sidecar.jsonl --project test/fixtures/project --labels test/fixtures/project/tracevals/labels.yaml --provider mock --no-cache","exitCodes":[0],"stdio":"false passes"}} */}
+
+```bash
+moose-tracevals calibrate test/fixtures/traces/claude-session.jsonl \
+  test/fixtures/traces/claude-session-sidecar.jsonl \
+  --project test/fixtures/project \
+  --labels test/fixtures/project/tracevals/labels.yaml \
+  --provider mock
+```
+
+```
+moose-tracevals calibrate — 2 trace(s), 10 label(s)
+runs 3 · autoPass 0.8 · autoFail 0.8 · labels test/fixtures/project/tracevals/labels.yaml
+
+Agreement 5/8 (62.5%)
+     1  false passes   labelled fail, judged pass — the expensive error
+     1  false fails    labelled pass, judged fail — erodes trust fastest
+     1  needs-review   across the whole corpus — the review volume
+     0  deferred       labelled pass or fail, routed to a human instead
+     1  missed reviews labelled ambiguous, decided anyway
+     0  errors         the eval could not be graded at all
+     2  unscored       labelled, but the eval never armed
+```
+
+**False passes** are the expensive error: something you would have failed came back green.
+**False fails** erode trust fastest — the tool cried wolf, and the next person believes it less.
+**Review volume** is the operational cost of the band: too many and nobody reads them, too few and
+the band is not doing its job. It counts `needs-review` across *every* eval in the corpus, labelled
+or not, because "nobody reads them" is a question about volume rather than accuracy.
+
+Three more rows exist because the grid of (what you said × what it said) is bigger than three cells,
+and collapsing it hides the interesting parts:
+
+| Row | What happened |
+|---|---|
+| `deferred` | You said pass or fail; the tool routed to a human. It declined rather than being wrong — the behaviour zones exist to produce. |
+| `missed reviews` | You said ambiguous; the tool decided anyway. This is the row to watch while raising `autoPass`. |
+| `unscored` | The eval never armed — an unmet [conditional trigger](/moose-tracevals/declare/coverage/), an empty window, a `metadata.eval-skip`. |
+
+<Aside title="Unscored labels stay out of the denominator">
+`Agreement 5/8` above comes from ten labels minus two that produced no evidence. A check that never
+armed has not been satisfied, so folding it in would let a corpus nobody exercised report perfect
+agreement — the same reason a [batch pass rate](/moose-tracevals/reference/report-and-exit-codes/#batch-runs)
+excludes skips. An eval that **errored** is a disagreement, never an agreement, by the same rule
+that makes [an errored run count against consensus](/moose-tracevals/judge/#from-votes-to-consensus).
+</Aside>
+
+## Which eval disagreed
+
+A count with no route back to an assertion is a number nobody can act on, so every disagreement is
+listed with the arithmetic behind it and the note you wrote:
+
+```
+Disagreements
+  FALSE-FAIL     claude-session.jsonl  fix-bug › forbidden-tool (tool-usage)
+                 expected pass, got fail
+                 note: The only in-window Bash call was a read-only `git status`.
+  FALSE-PASS     claude-session.jsonl  AGENTS.md › eval-1 (ai)
+                 expected fail, got pass · 3p/0f/0?/0e over 3 run(s), confidence 0.95
+                 note: The change touched four packages; that is not small and reviewable.
+  MISSED-REVIEW  claude-session.jsonl  fix-bug › eval-5 (ai)
+                 expected needs-review, got pass · 3p/0f/0?/0e over 3 run(s), confidence 0.95
+                 note: One file got its test first, the other did not.
+
+Unscored (no evidence either way)
+  SKIPPED        claude-session-sidecar.jsonl  CLAUDE.md › source-edits-use-the-fix-bug-skill
+                 trigger not met (whole session): no file matching "src/**" was accessed
+```
+
+Read the two judged rows before touching a knob. Both are unanimous at confidence `0.95`, so **no
+zone threshold below `0.95` will move them** — the assertions are the problem, not the band. The
+first row is not a judge problem at all: `forbidden-tool` is a deterministic `tool-usage` eval that
+is simply too blunt. Deterministic and `human`-graded evals are calibrated exactly like judged ones,
+and a blunt option produces a false fail as readily as a hesitant model does.
+
+That is the diagnosis this page used to ask you to make by eye:
+
+- **Reviews clustered just under the threshold, unanimous.** The threshold is too high for your
+  model. Lower it and watch `false passes`.
+- **Reviews with split votes.** The *assertion* is ambiguous, and no threshold will fix it. Go
+  sharpen the eval.
+
+## Sweep the knobs for free
+
+`--sweep` re-scores the same corpus at every setting in the grid and reports what each one would
+have produced.
+
+{/* step {"description":"A sweep reports every axis and costs no further inference.","runShell":{"command":"moose-tracevals calibrate test/fixtures/traces/claude-session.jsonl test/fixtures/traces/claude-session-sidecar.jsonl --project test/fixtures/project --labels test/fixtures/project/tracevals/labels.yaml --provider mock --sweep","exitCodes":[0],"stdio":"no further model calls"}} */}
+
+```bash
+moose-tracevals calibrate <traces...> --labels tracevals/labels.yaml --sweep
+```
+
+```
+Sweep
+  re-scored from the verdicts this run already produced — no further model calls
+  axis                 setting                                 agree  false-pass  false-fail  review  reviewVol
+  baseline             runs=3 autoPass=0.8 autoFail=0.8           5           1           1       0          1
+  ensembleRuns         runs=1 autoPass=0.8 autoFail=0.8           5           1           1       0          1
+  ensembleRuns         runs=3 autoPass=0.8 autoFail=0.8           5           1           1       0          1
+  ensembleRuns         runs=5 autoPass=0.8 autoFail=0.8           5           1           1       0          1
+  zones.autoPass       runs=3 autoPass=0.5 autoFail=0.8           5           1           1       0          1
+  zones.autoPass       runs=3 autoPass=0.6 autoFail=0.8           5           1           1       0          1
+  zones.autoPass       runs=3 autoPass=0.7 autoFail=0.8           5           1           1       0          1
+  zones.autoPass       runs=3 autoPass=0.8 autoFail=0.8           5           1           1       0          1
+  zones.autoPass       runs=3 autoPass=0.9 autoFail=0.8           5           1           1       0          1
+  zones.autoPass       runs=3 autoPass=0.95 autoFail=0.8          5           0           1       2          4
+  zones.autoFail       runs=3 autoPass=0.8 autoFail=0.5           5           1           1       0          1
+  zones.autoFail       runs=3 autoPass=0.8 autoFail=0.6           5           1           1       0          1
+  zones.autoFail       runs=3 autoPass=0.8 autoFail=0.7           5           1           1       0          1
+  zones.autoFail       runs=3 autoPass=0.8 autoFail=0.8           5           1           1       0          1
+  zones.autoFail       runs=3 autoPass=0.8 autoFail=0.9           5           1           1       0          1
+  zones.autoFail       runs=3 autoPass=0.8 autoFail=0.95          5           1           1       0          1
+```
+
+One row moves, and it is the whole answer: at `autoPass: 0.95` the false pass disappears and review
+volume goes from 1 to 4. That is the trade stated in numbers instead of adjectives — you buy the
+removal of one wrong verdict with three more deferrals — and you can make the call without running
+anything again.
+
+**One axis at a time**, every other knob held at its configured value, because that is what "move
+one knob and recount" has always meant. The full cross-product of the default grid is 108 rows and
+answers a question nobody asked. The grid itself lives in
+[`calibrate.sweep`](/moose-tracevals/reference/configuration/#calibrate).
+
+### Why it is free
+
+Verdicts are cached per-run, and a judged eval's report carries **every run** the ensemble made —
+the votes, the confidences, the errors. Zone thresholds were never part of the
+[cache key](#what-invalidates-a-cached-verdict): they are applied *after* consensus, not sent to the
+model. So a different `autoPass` is arithmetic over verdicts already on disk.
+
+`ensembleRuns` **is** in the key, so the sweep handles it differently: the corpus is judged once at
+the **largest** ensemble the grid asks for, and each smaller cell is scored from the first *k* of
+those runs.
+
+<Aside type="caution" title="Two consequences, and neither is hidden">
+A swept `ensembleRuns` row is a **sub-sample** of the ensemble that was drawn, not a fresh *k*-run
+ensemble. At temperature 0 the runs are independent samples of one prompt, so it is an honest
+estimate — but it is an estimate.
+
+And a sweep's **first** run costs `max(calibrate.sweep.ensembleRuns)` runs per judged eval instead
+of your configured count: 5 rather than 3 with the defaults. Every sweep after it is free, because
+the cache key depends on the grid rather than on the cell. Narrow the grid if that first run
+matters.
+</Aside>
+
+## The knobs themselves
 
 All live under `tracevals.judge` in `moose.config.yaml`; see the
 [configuration reference](/moose-tracevals/reference/configuration/) for types and defaults.
@@ -64,23 +254,48 @@ ensemble through.
 <Aside type="caution" title="Leave temperature at 0">
 Nonzero temperature adds noise to verdicts, which is the opposite of what an ensemble is for — you
 want independent samples of the same judgement, not varied ones. moose-tracevals warns once per process
-if you set it above zero.
+if you set it above zero. `--sweep` does not vary it for the same reason.
 </Aside>
 
-### Reading the numbers behind a verdict
+## Measurement, not a gate
 
-`--format json` carries the full consensus object for every judged eval, which is what you actually
-tune against:
+`calibrate` exits **0 even when it disagrees with you**. The first honest calibration of a real
+corpus finds disagreement — that is the point of running it — and a command that fails on its own
+findings is one people stop running, or start running with `|| true`.
 
-```bash
-jq -r '.evalResults[] | select(.consensus)
-       | "\(.evalName)\t\(.outcome)\tvotes=\(.consensus.votes)\tconf=\(.consensus.meanConfidence)"' \
-  baseline.json
-```
+Two things do turn it red:
 
-If most of your reviews show unanimous votes with mean confidence just under the threshold, the
-threshold is too high for your model. If they show split votes, the *assertions* are ambiguous and
-no threshold will fix them — go sharpen the evals instead.
+<Steps>
+
+1. **A threshold you asked for, and missed.** What counts as too many false passes is your decision,
+   so state it:
+
+   {/* step {"description":"A threshold turns a measurement into a gate.","runShell":{"command":"moose-tracevals calibrate test/fixtures/traces/claude-session.jsonl test/fixtures/traces/claude-session-sidecar.jsonl --project test/fixtures/project --labels test/fixtures/project/tracevals/labels.yaml --provider mock --max-false-pass 0","exitCodes":[1],"stdio":"exceeded"}} */}
+
+   ```bash
+   moose-tracevals calibrate <traces...> --labels tracevals/labels.yaml --max-false-pass 0
+   ```
+
+   ```
+   Thresholds
+     falsePass: 1 of at most 0 — exceeded
+
+   Exit 1: a threshold was exceeded, or a trace in the corpus could not be evaluated.
+   ```
+
+   `--max-false-fail` and `--max-review` work the same way, and all three have
+   [config equivalents](/moose-tracevals/reference/configuration/#calibrate).
+
+2. **A trace in the corpus that could not be evaluated.** The measurement is then incomplete, and an
+   incomplete number presented as a clean one is worse than no number.
+
+</Steps>
+
+{/* test end */}
+
+Everything else is exit `2` and operational — a missing or invalid labels file, a label naming a
+trace outside the corpus, a label matching no eval. See the
+[CLI reference](/moose-tracevals/reference/cli/#calibrate).
 
 ## Cap what it can spend
 
@@ -90,8 +305,10 @@ tracevals:
     maxCostUsd: 2.50
 ```
 
-Checked **before each judged eval**. Once the budget is spent, the remaining evals are reported as
-`skipped` with the reason naming the budget, rather than being dropped silently:
+Checked **before each judged eval**, and the budget spans the whole invocation — every trace in a
+batch or a calibration corpus is charged against one total, not one each. Once it is spent, the
+remaining evals are reported as `skipped` with the reason naming the budget, rather than being
+dropped silently:
 
 ```
 SKIP   CLAUDE.md › adheres-to-artifact (implicit)
@@ -100,7 +317,8 @@ SKIP   CLAUDE.md › adheres-to-artifact (implicit)
 
 Because it is checked per eval and evaluated in order, a budget stops the run *somewhere in the
 middle* — the evals that got skipped are an artifact of ordering, not importance. Treat a
-budget-exhausted run as incomplete rather than as a result.
+budget-exhausted run as incomplete rather than as a result. In a calibration run those evals become
+`unscored` rows, so an exhausted budget can never inflate agreement.
 
 <Aside type="caution" title="A budget is only as good as the price table">
 Cost is computed from a built-in per-model price table. **A model the table does not recognise is
@@ -131,8 +349,8 @@ Verdicts are cached under `judge.cacheDir` (default `.moose-tracevals/cache`), k
 7. a hash of the eval plan — the assertion, evidence, examples, and the artifact's full content
 
 Change any one and you get a fresh judgement. Change none and you get an instant replay, which is
-what makes re-tuning zones free: **zone thresholds are not part of the key**, because they are
-applied after consensus rather than sent to the model.
+what makes a sweep free: **zone thresholds are not in the key**, because they are applied after
+consensus rather than sent to the model.
 
 <Aside type="caution" title="The silent one: a stale cache after a prompt change">
 Prompt version is in the key precisely so a prompt revision cannot replay verdicts produced by the
@@ -140,7 +358,8 @@ old prompt. That protection only works if the version is bumped. If you fork thi
 the judge prompts, bump `PROMPT_VERSION` in `src/judge/prompt.ts` in the same change — otherwise
 every cached eval silently keeps answering with a prompt that no longer exists.
 
-To rule the cache out while debugging, run with `--no-cache`.
+To rule the cache out while debugging, run with `--no-cache`. Note that `--no-cache` and `--sweep`
+together still work, but the sweep then re-scores verdicts produced fresh in that run.
 </Aside>
 
 Note that the artifact's **content** is in the key, so editing a `SKILL.md` re-judges every eval on
@@ -154,6 +373,11 @@ question.
     title="Evolve the evals standard"
     description="Pin a schema version, separate probes from regression guards, and roll out a convention in stages."
     href="/moose-tracevals/judge/schema-versioning/"
+  />
+  <LinkCard
+    title="Every calibrate flag"
+    description="--labels, --sweep, the three thresholds, and the exit-code contract."
+    href="/moose-tracevals/reference/cli/#calibrate"
   />
   <LinkCard
     title="Every judge key"
