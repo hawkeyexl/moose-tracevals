@@ -32,8 +32,9 @@ character with a hyphen. `/work/demo` becomes `-work-demo`.
 
 **Sidechain**
 : A tool call made *inside a spawned subagent* rather than in the main conversation. Excluded from
-counts by default; `tool-usage` opts in with `includeSidechains: true`. `turnCount` counts only
-non-sidechain user prompts.
+counts by default; `tool-usage` opts in with `includeSidechains: true`. The exception is an eval on
+an agent definition, whose window *is* a branch — there the branch's calls are the subject and are
+always counted. `turnCount` counts only non-sidechain user prompts.
 
 **Turn**
 : One non-sidechain user prompt. What `turn-count` measures.

@@ -790,30 +790,50 @@ async function mergeSidecarBranches(
   };
   registerSpawns(base);
 
+  // Ownership is resolved **iteratively**, not in one depth-sorted pass.
+  //
+  // The pass assumed `meta.spawnDepth` was always there, but `SidecarMeta`
+  // documents every member as optional — and with the depths equal the order
+  // fell to the agent-id tiebreak, so a depth-2 branch whose id happened to
+  // sort first was visited before its parent had registered the `Agent` call
+  // it hangs off, and was discarded with a warning. Renaming the same file
+  // made it merge. Repeating until nothing new attaches reaches every branch
+  // whose owner is reachable at all, whatever the metadata says.
   const children = new Map<string, LoadedSidecar[]>();
   const attached: Array<{ sidecar: LoadedSidecar; branchId: string }> = [];
-  const ordered = [...loaded].sort(
+  // Byte comparison, not `localeCompare`: sibling modules already sort this
+  // way so the ubuntu and windows CI legs order reports identically.
+  const pending = [...loaded].sort(
     (a, b) =>
       (a.meta.spawnDepth ?? 1) - (b.meta.spawnDepth ?? 1) ||
-      a.agentId.localeCompare(b.agentId),
+      (a.agentId < b.agentId ? -1 : a.agentId > b.agentId ? 1 : 0),
   );
-  for (const sidecar of ordered) {
-    const branchId = sidecar.meta.toolUseId;
-    const owner = branchId === undefined ? undefined : spawnOwner.get(branchId);
-    if (branchId === undefined || owner === undefined) {
-      trace.warnings.push(
-        `subagent transcript agent-${sidecar.agentId}.jsonl names Agent call ` +
-          `${branchId ?? "(none recorded)"}, which is not in this trace, so ` +
-          `that branch was not merged`,
-      );
-      continue;
+  let progress = true;
+  while (progress) {
+    progress = false;
+    for (let i = 0; i < pending.length; i += 1) {
+      const sidecar = pending[i] as LoadedSidecar;
+      const branchId = sidecar.meta.toolUseId;
+      const owner = branchId === undefined ? undefined : spawnOwner.get(branchId);
+      if (branchId === undefined || owner === undefined) continue;
+      pending.splice(i, 1);
+      i -= 1;
+      progress = true;
+      stampBranch(sidecar.sub, branchId);
+      sources.set(sidecar.agentId, sidecar.source);
+      const key = `${owner.sourceId}\u0000${owner.local}`;
+      children.set(key, [...(children.get(key) ?? []), sidecar]);
+      registerSpawns(sidecar.source);
+      attached.push({ sidecar, branchId });
     }
-    stampBranch(sidecar.sub, branchId);
-    sources.set(sidecar.agentId, sidecar.source);
-    const key = `${owner.sourceId} ${owner.local}`;
-    children.set(key, [...(children.get(key) ?? []), sidecar]);
-    registerSpawns(sidecar.source);
-    attached.push({ sidecar, branchId });
+  }
+  // Whatever is left names an `Agent` call no reachable transcript makes.
+  for (const sidecar of pending) {
+    trace.warnings.push(
+      `subagent transcript agent-${sidecar.agentId}.jsonl names Agent call ` +
+        `${sidecar.meta.toolUseId ?? "(none recorded)"}, which is not in this ` +
+        `trace, so that branch was not merged`,
+    );
   }
   if (attached.length === 0) return;
 
@@ -825,7 +845,7 @@ async function mergeSidecarBranches(
     if (source === undefined) return;
     for (let local = 0; local < source.events.length; local += 1) {
       slots.push({ sourceId, local });
-      for (const kid of children.get(`${sourceId} ${local}`) ?? []) {
+      for (const kid of children.get(`${sourceId}\u0000${local}`) ?? []) {
         emit(kid.agentId);
       }
     }
