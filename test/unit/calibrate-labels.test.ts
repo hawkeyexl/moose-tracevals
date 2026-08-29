@@ -50,6 +50,23 @@ describe("parseLabels", () => {
     expect(labels[1]?.type).toBe("project-rules");
   });
 
+  it("accepts every artifact type the resolver can produce", () => {
+    // `slash-command` is a fourth `ArtifactType` (ADR 01023). Leaving it out of
+    // the enum is not a cosmetic gap: `joinLabels` indexes each result under
+    // both a typed and an untyped key, and one name can resolve to both a
+    // slash command and a skill in one run — so without the disambiguator the
+    // label silently joins to whichever was indexed last.
+    for (const type of [
+      "skill",
+      "agent",
+      "project-rules",
+      "slash-command",
+    ] as const) {
+      const text = good.replace("type: project-rules", `type: ${type}`);
+      expect(parseLabels(text, "labels.yaml")[1]?.type).toBe(type);
+    }
+  });
+
   it("rejects an unknown expected outcome", () => {
     const text = good.replace("expected: fail", "expected: maybe");
     expect(() => parseLabels(text, "labels.yaml")).toThrow(TracevalsError);

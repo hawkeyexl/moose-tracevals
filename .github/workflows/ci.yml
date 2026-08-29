@@ -256,6 +256,96 @@ jobs:
             }
           '
 
+          # The flag has to be a *pair*. Declared alone, `--no-commands` makes
+          # commander default `opts.commands` to true, and the `??` overlay in
+          # prepareRun then never sees undefined -- which makes
+          # `graders.command.enabled: false` unreachable from the CLI and
+          # leaves ADR 01011's opt-out dead. Only a run whose config disables
+          # commands, with no flag passed, can catch that.
+          mkdir -p .tmp
+          # Both runs exit 1 on the engineered deterministic failure, which is
+          # unrelated to the flag under test, so `set -e` must not read it as
+          # the step failing.
+          set +e
+          ( cd test/fixtures/no-commands \
+            && MOOSE_TRACEVALS_HOME=../home node ../../../dist/cli.js run \
+                 ../../../test/fixtures/traces/claude-session.jsonl \
+                 --project ../../../test/fixtures/project \
+                 --deterministic-only --format json \
+                 > ../../../.tmp/nocmd-config.json )
+          ( cd test/fixtures/no-commands \
+            && MOOSE_TRACEVALS_HOME=../home node ../../../dist/cli.js run \
+                 ../../../test/fixtures/traces/claude-session.jsonl \
+                 --project ../../../test/fixtures/project \
+                 --deterministic-only --commands --format json \
+                 > ../../../.tmp/nocmd-forced.json )
+          set -e
+          node -e '
+            const fs = require("fs");
+            const read = (f) => {
+              let raw = fs.readFileSync(f, "utf8");
+              if (raw.charCodeAt(0) === 0xfeff) raw = raw.slice(1);
+              return JSON.parse(raw);
+            };
+            const find = (r) => r.evalResults.find((x) => x.evalName === "no-force-push");
+            const fromConfig = find(read(".tmp/nocmd-config.json"));
+            if (fromConfig?.outcome !== "skipped") {
+              console.error("graders.command.enabled: false must reach a flagless run, got", JSON.stringify(fromConfig));
+              process.exitCode = 1;
+            }
+            const forced = find(read(".tmp/nocmd-forced.json"));
+            if (forced?.outcome !== "pass") {
+              console.error("--commands must override a config that disabled them, got", JSON.stringify(forced));
+              process.exitCode = 1;
+            }
+          '
+          rm -f .tmp/nocmd-config.json .tmp/nocmd-forced.json
+
+      # A flag that fails to parse must be an operational error, never a
+      # silently-disabled limit: NaN is not undefined, so it survives the `??`
+      # overlay and reaches the runtime as a ceiling that can never be hit.
+      - name: Dogfood flag validation (a bad limit is loud)
+        shell: bash
+        env:
+          MOOSE_TRACEVALS_HOME: test/fixtures/home
+        run: |
+          trace=test/fixtures/traces/claude-session.jsonl
+          bad() {
+            set +e
+            node dist/cli.js "$@" > /dev/null 2> .tmp/flag-error.txt
+            code=$?
+            set -e
+            if [ "$code" -ne 2 ]; then
+              echo "Expected exit 2 for: $*"
+              echo "got $code"; cat .tmp/flag-error.txt; exit 1
+            fi
+            grep -q "must be a" .tmp/flag-error.txt || {
+              echo "no explanation for: $*"; cat .tmp/flag-error.txt; exit 1
+            }
+          }
+          mkdir -p .tmp
+          # An unparseable budget is the expensive one: `spentUsd >= NaN` is
+          # false forever, so a batch bills with no ceiling while the report
+          # still claims one.
+          bad run "$trace" --project test/fixtures/project --provider mock --max-cost-usd abc
+          bad run "$trace" --project test/fixtures/project --provider mock --max-cost-usd=-1
+          # `slice(0, -1)` evaluates every trace except the oldest.
+          bad run --all-projects --limit=-1 --project test/fixtures/project --deterministic-only
+          bad run "$trace" --project test/fixtures/project --provider mock --runs 0
+          bad list --limit=-1
+          # calibrate shares the flags, so it shares the guard.
+          bad calibrate "$trace" --project test/fixtures/project --runs=-1
+          rm -f .tmp/flag-error.txt
+          # And the values a user actually passes still work.
+          set +e
+          node dist/cli.js run "$trace" --project test/fixtures/project --provider mock \
+            --no-cache --runs 1 --max-cost-usd 0.5 --format json > /dev/null
+          code=$?
+          set -e
+          if [ "$code" -eq 2 ]; then
+            echo "valid numeric flags must not be rejected"; exit 1
+          fi
+
       # `--report-unused-artifacts` is the opt-in half of the same observation:
       # the full roster is what a 274-skill session would drown the report with,
       # so it must stay behind the flag — and must never move the exit code.
@@ -860,6 +950,54 @@ jobs:
           '
           rm -f .tmp/bad-trace.jsonl
 
+          # 4b. And an exhausted budget is never green. The corpus above also
+          #     contains the engineered deterministic failure, so it would exit
+          #     1 either way; this one is a corpus where *nothing failed* and
+          #     the only thing wrong is that the run stopped judging. Exit 0
+          #     here would certify 46 unjudged traces out of 50 as clean.
+          set +e
+          node dist/cli.js run --all-projects --limit 1 --project test/fixtures/project \
+            --provider mock --max-cost-usd 0 --format json > moose-tracevals-batch-cut.json
+          code=$?
+          set -e
+          if [ "$code" -ne 1 ]; then
+            echo "Expected exit 1 from a batch cut short by its own budget, got $code"
+            cat moose-tracevals-batch-cut.json
+            exit 1
+          fi
+          node -e '
+            const fs = require("fs");
+            let raw = fs.readFileSync("moose-tracevals-batch-cut.json", "utf8");
+            if (raw.charCodeAt(0) === 0xfeff) raw = raw.slice(1);
+            const r = JSON.parse(raw);
+            // The old exit-code inputs are both zero; only the budget is wrong.
+            if (r.summary.tracesFailed !== 0 || r.summary.tracesErrored !== 0) {
+              console.error("this case is only meaningful with no failed or errored trace:", JSON.stringify(r.summary));
+              process.exitCode = 1;
+            }
+            if (r.exitCode !== 1) {
+              console.error("a budget-exhausted batch must not exit 0");
+              process.exitCode = 1;
+            }
+            if (!r.budget || r.budget.skippedEvals < 1 || r.budget.traces < 1) {
+              console.error("the report must say how much went unjudged:", JSON.stringify(r.budget));
+              process.exitCode = 1;
+            }
+            if (!r.warnings.some((w) => /never judged/.test(w))) {
+              console.error("and say so in the warnings:", JSON.stringify(r.warnings));
+              process.exitCode = 1;
+            }
+          '
+          # The human report leads with it, rather than burying it at the foot.
+          set +e
+          node dist/cli.js run --all-projects --limit 1 --project test/fixtures/project \
+            --provider mock --max-cost-usd 0 > moose-tracevals-batch-cut.txt
+          set -e
+          grep -q "BUDGET EXHAUSTED" moose-tracevals-batch-cut.txt || {
+            echo "the human batch report must flag an exhausted budget:"
+            cat moose-tracevals-batch-cut.txt; exit 1
+          }
+
           # 5. Discovery selectors. A wide --since matches the fixture store
           #    regardless of checkout time; an empty store must be loud.
           node dist/cli.js run --all-projects --since 520w --limit 5 --project test/fixtures/project --deterministic-only --format json > moose-tracevals-batch-since.json
@@ -1004,6 +1142,59 @@ jobs:
             // supply: a silently under-sampled cell is a wrong number.
             if (sweep.some((c) => c.counts.insufficient !== 0)) {
               console.error("a sweep cell must never score from too few cached runs");
+              process.exitCode = 1;
+            }
+            // Every cell states its denominator. Without it a reader tuning
+            // thresholds cannot tell "zero false passes" from "nothing scored".
+            if (sweep.some((c) => typeof c.counts.scored !== "number")) {
+              console.error("every sweep cell must carry the count it scored over");
+              process.exitCode = 1;
+            }
+          '
+          # The sweep table prints both, not just the JSON.
+          node dist/cli.js calibrate "$a" "$b" $common --sweep > moose-tracevals-cal-sweep.txt
+          for column in scored insuff; do
+            grep -q "$column" moose-tracevals-cal-sweep.txt || {
+              echo "the sweep table must name the $column column:"
+              cat moose-tracevals-cal-sweep.txt; exit 1
+            }
+          done
+
+          # 3b. A measurement that measured nothing must not report a pass.
+          #     Every label here names an ai-graded eval, so
+          #     `--deterministic-only` skips all of them: `scored` is 0,
+          #     agreement is null, and each --max-* threshold reads "0 of at
+          #     most N, not exceeded". Exit 0 would certify an unmeasured
+          #     corpus, which is the empty-selector failure by another route.
+          set +e
+          node dist/cli.js calibrate "$a" "$b" --project test/fixtures/project \
+            --labels test/fixtures/project/tracevals/ai-only.labels.yaml \
+            --deterministic-only --max-false-pass 0 \
+            --format json > moose-tracevals-cal-vacuous.json
+          code=$?
+          set -e
+          if [ "$code" -ne 1 ]; then
+            echo "Expected exit 1 when nothing was scored, got $code"
+            cat moose-tracevals-cal-vacuous.json
+            exit 1
+          fi
+          node -e '
+            const fs = require("fs");
+            let raw = fs.readFileSync("moose-tracevals-cal-vacuous.json", "utf8");
+            if (raw.charCodeAt(0) === 0xfeff) raw = raw.slice(1);
+            const r = JSON.parse(raw);
+            if (r.counts.scored !== 0 || r.counts.agreement !== null) {
+              console.error("this case is only meaningful with an empty denominator:", JSON.stringify(r.counts));
+              process.exitCode = 1;
+            }
+            // The gate itself is honest: 0 false passes is not an exceeded
+            // threshold. What is wrong is the denominator behind it.
+            if (r.gates[0]?.exceeded !== false) {
+              console.error("the threshold must not be reported as exceeded:", JSON.stringify(r.gates));
+              process.exitCode = 1;
+            }
+            if (!r.warnings.some((w) => /no labelled eval produced evidence/.test(w))) {
+              console.error("and the report must say why it is red:", JSON.stringify(r.warnings));
               process.exitCode = 1;
             }
           '

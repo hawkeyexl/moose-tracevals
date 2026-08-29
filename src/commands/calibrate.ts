@@ -135,6 +135,21 @@ export async function runCalibrate(
     );
   }
 
+  // A measurement that measured nothing must not report a pass.
+  //
+  // Every label joining to a `skipped` result — `--deterministic-only` over
+  // ai-graded labels, a budget exhausted on the first trace — leaves `scored`
+  // at 0, `agreement` at null, and each threshold reading "0 of at most N, not
+  // exceeded". The gates are not lying; the denominator behind them is empty.
+  // Saying so is the report's job, and exit 0 would say the opposite.
+  const measuredNothing = scored.counts.scored === 0;
+  if (measuredNothing) {
+    warnings.push(
+      `no labelled eval produced evidence: ${scored.counts.labels} label(s) all joined to a skipped result, ` +
+        `so agreement and every --max-* threshold are computed over an empty denominator`,
+    );
+  }
+
   const report: CalibrationReport = {
     labelsFile,
     corpus,
@@ -148,10 +163,14 @@ export async function runCalibrate(
     warnings,
     // A calibration run is a measurement, not a gate: disagreement is the
     // finding, not a failure. Exit 1 only when a threshold was asked for and
-    // missed, or when a trace was lost — in which case the number itself is
-    // incomplete and should not be read as clean.
+    // missed, or when the measurement itself is incomplete — a trace lost, the
+    // shared judge budget cut the corpus short, or nothing scored at all. An
+    // incomplete number presented as a clean one is worse than no number.
     exitCode:
-      gates.some((g) => g.exceeded) || batch.report.summary.tracesErrored > 0
+      gates.some((g) => g.exceeded) ||
+      batch.report.summary.tracesErrored > 0 ||
+      batch.report.budget !== undefined ||
+      measuredNothing
         ? 1
         : 0,
     costUsd: batch.report.costUsd,
