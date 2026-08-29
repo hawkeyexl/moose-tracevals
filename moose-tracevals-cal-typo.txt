@@ -1,2 +1,0 @@
-moose-tracevals: C:\Users\hawkeyexl\Documents\Workspaces\agentevals\.claude\worktrees\agent-aa7052b521f70132e\test\fixtures\project\tracevals\.typo-labels.yaml: label(s) matched no eval result:
-  fix-bug › forbiden-tool on claude-session.jsonl (that trace evaluated eval-5, forbidden-tool, no-force-push, refactor-preserved-intent, used-read for "fix-bug")
