@@ -111,6 +111,18 @@
         "file": { "type": "string" }
       }
     },
+    "capture": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Session manifests — sha256 of every instruction artifact plus the git SHA, recorded at session start by `moose-tracevals capture` and read back by `run` to make staleness exact instead of an mtime guess. See ADR 01024.",
+      "properties": {
+        "dir": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Directory manifests are written to and looked for, resolved against the project root. `run` also accepts one placed beside the trace as `<trace>.manifest.json`, and --manifest names one outright."
+        }
+      }
+    },
     "fill": {
       "type": "object",
       "additionalProperties": false,

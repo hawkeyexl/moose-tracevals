@@ -299,6 +299,127 @@ describe("reporters", () => {
       );
     });
   });
+
+  /**
+   * A manifest turns the mtime guess into content identity (ADR 01024), and the
+   * report has to say which of the two answered — they are different claims and
+   * a reader acts on them differently.
+   */
+  describe("a coverage entry checked against a session manifest", () => {
+    const withManifest = (overrides: Partial<RunReport>): RunReport => ({
+      ...report,
+      manifest: {
+        path: ".moose-tracevals/sessions/abc.json",
+        sessionId: "abc",
+        capturedAt: "2026-06-01T00:00:00.000Z",
+        gitSha: "0123456789abcdef0123456789abcdef01234567",
+        matched: 1,
+        changed: 0,
+        unrecorded: 0,
+      },
+      ...overrides,
+    });
+
+    const changed = withManifest({
+      coverage: [
+        {
+          ref: "fix-bug",
+          kind: "skill",
+          resolved: true,
+          path: "C:\\work\\demo\\SKILL.md",
+          tried: [],
+          stale: true,
+          modifiedAt: "2026-07-01T00:00:00.000Z",
+          contentCheck: {
+            status: "mismatch",
+            expected: "a".repeat(64),
+            actual: "b".repeat(64),
+          },
+        },
+      ],
+      manifest: {
+        path: ".moose-tracevals/sessions/abc.json",
+        sessionId: "abc",
+        capturedAt: "2026-06-01T00:00:00.000Z",
+        gitSha: "0123456789abcdef0123456789abcdef01234567",
+        matched: 0,
+        changed: 1,
+        unrecorded: 0,
+      },
+    });
+
+    it("human names content identity, not mtime, for an exact mismatch", () => {
+      const out = render(changed, "human");
+      expect(out).toContain("changed since the session started");
+      expect(out).not.toContain("modified after the session ended");
+      // The path still leads the row: a flagged row is the one to open.
+      expect(out).toContain("C:\\work\\demo\\SKILL.md");
+    });
+
+    it("human reports the manifest it consulted", () => {
+      const out = render(changed, "human");
+      expect(out).toContain("Session manifest");
+      expect(out).toContain(".moose-tracevals/sessions/abc.json");
+      expect(out).toContain("0123456789ab");
+      expect(out).toContain("1 changed");
+    });
+
+    it("markdown keeps its column count with a manifest verdict", () => {
+      const out = render(changed, "markdown");
+      const header = out.split("\n").find((l) => l.startsWith("| Resolved"))!;
+      const row = out
+        .split("\n")
+        .find((l) => l.includes("changed since the session started"))!;
+      const cells = (line: string) => line.split(/(?<!\\)\|/).length - 2;
+      expect(cells(row)).toBe(cells(header));
+      expect(out).toContain("## Session manifest");
+    });
+
+    it("marks nothing when the manifest proved the content unchanged", () => {
+      const unchanged = withManifest({
+        coverage: [
+          {
+            ref: "fix-bug",
+            kind: "skill",
+            resolved: true,
+            path: "C:\\work\\demo\\SKILL.md",
+            tried: [],
+            // mtime moved — a checkout does that — and the manifest answered.
+            stale: false,
+            modifiedAt: "2026-07-01T00:00:00.000Z",
+            contentCheck: { status: "match" },
+          },
+        ],
+      });
+      const out = render(unchanged, "human");
+      expect(out).not.toContain("modified after the session ended");
+      expect(out).not.toContain("changed since the session started");
+      expect(out).toContain("1 artifact(s) unchanged");
+    });
+
+    it("says nothing at all when no manifest was found", () => {
+      // Silence is the default: a line on every run of every project that has
+      // not adopted `capture` is noise.
+      expect(render(report, "human")).not.toContain("Session manifest");
+      expect(render(report, "markdown")).not.toContain("## Session manifest");
+    });
+
+    it("names how many rows still rest on the mtime guess", () => {
+      const partial = withManifest({
+        manifest: {
+          path: ".moose-tracevals/sessions/abc.json",
+          sessionId: "abc",
+          capturedAt: "2026-06-01T00:00:00.000Z",
+          matched: 1,
+          changed: 0,
+          unrecorded: 2,
+        },
+      });
+      const out = render(partial, "human");
+      expect(out).toContain("2 not recorded");
+      expect(out).toContain("keep the mtime heuristic");
+    });
+  });
 });
 
 /**

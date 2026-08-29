@@ -3,6 +3,8 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { resolveArtifacts } from "../../src/artifacts/resolve.js";
+import { buildManifest } from "../../src/capture/build.js";
+import type { SessionManifest } from "../../src/capture/types.js";
 import { parseTraceFile } from "../../src/trace/claude.js";
 import type { Trace } from "../../src/trace/types.js";
 
@@ -275,5 +277,124 @@ describe("artifact staleness", () => {
     expect(resolved.coverage.find((c) => c.kind === "project-rules")?.resolved).toBe(
       true,
     );
+  });
+});
+
+describe("artifact staleness with a session manifest", () => {
+  let dir: string;
+
+  beforeEach(async () => {
+    await mkdir(".tmp", { recursive: true });
+    dir = await mkdtemp(join(".tmp", "manifest-"));
+    await writeFile(join(dir, "CLAUDE.md"), "# Rules\n", "utf-8");
+  });
+
+  afterEach(async () => {
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  /** A manifest captured against the rules file as it stands right now. */
+  async function capture(): Promise<SessionManifest> {
+    return buildManifest({ sessionId: "s1", root: dir });
+  }
+
+  function traceEnding(endedAt?: string) {
+    return emptyTrace({
+      cwd: dir,
+      sessionId: "s1",
+      ...(endedAt !== undefined ? { endedAt } : {}),
+    });
+  }
+
+  async function resolveWith(manifest?: SessionManifest, endedAt?: string) {
+    return resolveArtifacts(traceEnding(endedAt), {
+      projectDir: dir,
+      projectRoot: dir,
+      env: {},
+      ...(manifest !== undefined ? { manifest } : {}),
+    });
+  }
+
+  it("reports the hash check as skipped, with a reason, when there is no manifest", async () => {
+    const { coverage } = await resolveWith(
+      undefined,
+      "2026-06-01T00:00:00.000Z",
+    );
+    const rules = coverage.find((c) => c.kind === "project-rules");
+    expect(rules?.contentCheck?.status).toBe("skipped");
+    expect(rules?.contentCheck?.reason).toMatch(/manifest/i);
+  });
+
+  it("clears the mtime guess when the content is provably unchanged", async () => {
+    const manifest = await capture();
+    // A checkout rewrites every mtime, which is exactly the CI false positive
+    // ADR 01021 accepted. The manifest answers mtime's own question exactly.
+    const future = new Date("2099-01-01T00:00:00.000Z");
+    await utimes(join(dir, "CLAUDE.md"), future, future);
+    const { coverage, warnings } = await resolveWith(
+      manifest,
+      "2026-06-01T00:00:00.000Z",
+    );
+    const rules = coverage.find((c) => c.kind === "project-rules");
+    expect(rules?.contentCheck?.status).toBe("match");
+    expect(rules?.stale).toBe(false);
+    // The observation itself is never hidden — only the conclusion changes.
+    expect(rules?.modifiedAt).toBe("2099-01-01T00:00:00.000Z");
+    expect(warnings.some((w) => /modified after the session ended/.test(w))).toBe(
+      false,
+    );
+  });
+
+  it("flags an exact mismatch even when mtime says the file is older", async () => {
+    const manifest = await capture();
+    await writeFile(join(dir, "CLAUDE.md"), "# Rules, rewritten\n", "utf-8");
+    const past = new Date("2020-01-01T00:00:00.000Z");
+    await utimes(join(dir, "CLAUDE.md"), past, past);
+    const { coverage, warnings } = await resolveWith(
+      manifest,
+      "2026-06-01T00:00:00.000Z",
+    );
+    const rules = coverage.find((c) => c.kind === "project-rules");
+    expect(rules?.contentCheck?.status).toBe("mismatch");
+    expect(rules?.stale).toBe(true);
+    expect(warnings.some((w) => /changed since the session started/.test(w))).toBe(
+      true,
+    );
+  });
+
+  it("compares content even when the trace records no end time", async () => {
+    const manifest = await capture();
+    await writeFile(join(dir, "CLAUDE.md"), "# Different\n", "utf-8");
+    const { coverage } = await resolveWith(manifest);
+    const rules = coverage.find((c) => c.kind === "project-rules");
+    expect(rules?.contentCheck?.status).toBe("mismatch");
+    expect(rules?.stale).toBe(true);
+  });
+
+  it("falls back to the mtime heuristic for an artifact the manifest never recorded", async () => {
+    const manifest = await capture();
+    // Recorded before this file existed, so the manifest can say nothing.
+    await writeFile(join(dir, "AGENTS.md"), "# Extra\n", "utf-8");
+    const future = new Date("2099-01-01T00:00:00.000Z");
+    await utimes(join(dir, "AGENTS.md"), future, future);
+    const { coverage, warnings } = await resolveWith(
+      manifest,
+      "2026-06-01T00:00:00.000Z",
+    );
+    const rules = coverage.find((c) => c.kind === "project-rules");
+    expect(rules?.contentCheck?.status).toBe("skipped");
+    expect(rules?.stale).toBe(true);
+    expect(warnings.some((w) => /mtime is a heuristic/.test(w))).toBe(true);
+  });
+
+  it("never lets a manifest reach an eval — the artifact resolves either way", async () => {
+    const manifest = await capture();
+    await writeFile(join(dir, "CLAUDE.md"), "# Rewritten\n", "utf-8");
+    const resolved = await resolveWith(manifest, "2026-06-01T00:00:00.000Z");
+    expect(resolved.artifacts).toHaveLength(1);
+    expect(resolved.artifacts[0]?.content).toContain("# Rewritten");
+    expect(
+      resolved.coverage.find((c) => c.kind === "project-rules")?.resolved,
+    ).toBe(true);
   });
 });

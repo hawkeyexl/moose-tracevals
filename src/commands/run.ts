@@ -53,6 +53,11 @@ export interface RunSharedOptions {
   require?: string[];
   /** Overrides config.reportUnusedArtifacts; undefined defers to the config. */
   reportUnusedArtifacts?: boolean;
+  /**
+   * An explicitly named session manifest (ADR 01024). Without it the engine
+   * looks in the conventional places and says nothing when there is none.
+   */
+  manifest?: string;
   /** Directory holding moose.config.yaml; defaults to cwd. */
   configDir?: string;
   env?: Record<string, string | undefined>;
@@ -196,6 +201,7 @@ export async function runOne(
     ...(options.deterministicOnly !== undefined
       ? { deterministicOnly: options.deterministicOnly }
       : {}),
+    ...(options.manifest !== undefined ? { manifest: options.manifest } : {}),
     ...(context.warnings.length > 0 ? { warnings: context.warnings } : {}),
   });
 
