@@ -12,3 +12,11 @@ dist/
 # Doc Detective run output. The docs site's own build artifacts are ignored by
 # docs/.gitignore, which keeps that nested project self-contained.
 .doc-detective/
+
+# Dogfood output. Every `Dogfood *` step in ci.yml writes its report to the
+# repo root and asserts against it in the same step, so these are build
+# artifacts of a local CI reproduction, not inputs. Five were committed once
+# (d857344) carrying one worktree's absolute paths and per-run durationMs,
+# which dirtied the tree for anyone who ran those steps locally.
+/moose-tracevals-*.json
+/moose-tracevals-*.txt

@@ -1,1 +1,0 @@
-moose-tracevals: C:\Users\hawkeyexl\Documents\Workspaces\agentevals\.claude\worktrees\agent-aa7052b521f70132e\test\fixtures\project\tracevals\labels.yaml: label(s) name trace(s) not in the corpus: ../../traces/claude-session-sidecar.jsonl. The corpus is: claude-session.jsonl
