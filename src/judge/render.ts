@@ -36,6 +36,20 @@ const DEFAULTS: Required<RenderOptions> = {
   redact: [],
 };
 
+/**
+ * The smallest timeline the head/tail window will ever leave.
+ *
+ * The cap used to be skipped outright when the header grew past it — the guard
+ * was `budget > 0`, so a non-positive budget *disabled* truncation and shipped
+ * the entire unclipped transcript to a third-party provider, precisely when the
+ * user had asked for the tightest cap. A floor keeps truncation running; the
+ * header is bounded separately so the whole digest still honours the cap.
+ */
+const MIN_TIMELINE_CHARS = 200;
+
+const HEADER_TRUNCATED = "\n[... header truncated ...]";
+const TIMELINE_SHELL = "\n\n## Timeline\n";
+
 export function renderTrace(
   trace: Trace,
   options: RenderOptions = {},
@@ -59,7 +73,7 @@ export function renderTrace(
 
   // Scrubbed too: `cwd` and a branch name are author-supplied strings, and the
   // header is as much a thing that leaves the machine as the timeline is.
-  const header = scrub(
+  const fullHeader = scrub(
     [
       "# Session",
       `source: ${trace.source}`,
@@ -86,6 +100,22 @@ export function renderTrace(
       .join("\n"),
   );
 
+  // The header lists every skill name, agent type and branch, so on a busy
+  // session it can outgrow a tight cap on its own. Bound it first, leaving the
+  // timeline its floor, so `maxTotalChars` stays a cap on the whole digest
+  // rather than on one half of it.
+  const headerRoom = Math.max(
+    maxTotalChars - TIMELINE_SHELL.length - MIN_TIMELINE_CHARS,
+    0,
+  );
+  const header =
+    fullHeader.length <= headerRoom
+      ? fullHeader
+      : fullHeader.slice(
+          0,
+          Math.max(headerRoom - HEADER_TRUNCATED.length, 0),
+        ) + HEADER_TRUNCATED;
+
   // Two concurrent subagents are indistinguishable under a flat `:sidechain`
   // tag, so each branch becomes a labelled block named for the subagent that
   // ran it. The header can fall outside the head/tail window below, so every
@@ -104,10 +134,7 @@ export function renderTrace(
   const callAt = new Map(trace.toolCalls.map((call) => [call.index, call]));
 
   if (scoped?.empty === true) {
-    return `${header}
-
-## Timeline
-[no turns: ${scrub(scoped.reason ?? "")}]`;
+    return `${header}${TIMELINE_SHELL}[no turns: ${scrub(scoped.reason ?? "")}]`;
   }
 
   const lines: string[] = [];
@@ -155,13 +182,26 @@ export function renderTrace(
   // branch labels — and anything a later change adds to this loop without
   // remembering to scrub it. Redaction is idempotent, so it costs nothing.
   let timeline = scrub(lines.join("\n"));
-  const budget = maxTotalChars - header.length - 64;
-  if (timeline.length > budget && budget > 0) {
-    const headLen = Math.floor(budget * 0.6);
-    const tailLen = budget - headLen;
+  // A floor, never a switch: `budget > 0` used to turn truncation *off* for a
+  // non-positive budget, which is the one case where it matters most.
+  const budget = Math.max(
+    maxTotalChars - header.length - TIMELINE_SHELL.length,
+    MIN_TIMELINE_CHARS,
+  );
+  if (timeline.length > budget) {
+    // The marker counts against the budget, so the digest never exceeds what
+    // the caller asked for. `omitted` is at most `timeline.length`, so the
+    // width reserved for it is always enough.
+    const marker = (omitted: number): string =>
+      `\n[... truncated ${omitted} chars of transcript ...]\n`;
+    const room = Math.max(budget - marker(timeline.length).length, 0);
+    const headLen = Math.floor(room * 0.6);
+    const tailLen = room - headLen;
     const omitted = timeline.length - headLen - tailLen;
-    timeline = `${timeline.slice(0, headLen)}\n[... truncated ${omitted} chars of transcript ...]\n${timeline.slice(-tailLen)}`;
+    timeline = `${timeline.slice(0, headLen)}${marker(omitted)}${
+      tailLen > 0 ? timeline.slice(-tailLen) : ""
+    }`;
   }
 
-  return `${header}\n\n## Timeline\n${timeline}`;
+  return `${header}${TIMELINE_SHELL}${timeline}`;
 }
