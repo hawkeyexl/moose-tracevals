@@ -39,6 +39,7 @@ export {
   findGitRoot,
   findInTree,
   listInTree,
+  safeMtime,
   safeRead,
 } from "./artifacts/fs.js";
 export {
@@ -80,6 +81,14 @@ export {
   type WhenCondition,
 } from "./graders/when.js";
 export { renderTrace, type RenderOptions } from "./judge/render.js";
+export {
+  CUSTOM_PLACEHOLDER,
+  REDACTION_PATTERNS,
+  compileRedactPatterns,
+  makeRedactor,
+  type RedactionPattern,
+  type Redactor,
+} from "./judge/redact.js";
 export {
   JUDGE_SYSTEM_PROMPT,
   PROMPT_VERSION,

@@ -105,6 +105,21 @@ export async function runEvals(options: EngineOptions): Promise<RunReport> {
       continue;
     }
 
+    // The one grader that executes something. ADR 01011 keeps it on by
+    // default; ADR 01019 gives the person taking that risk a lever. A disabled
+    // check is `skipped` with a reason, never `pass`: an unrun check has not
+    // been satisfied.
+    if (plan.grader === "command" && !config.graders.command.enabled) {
+      results.push({
+        ...base,
+        outcome: "skipped",
+        skipReason:
+          "command execution is disabled (--no-commands / graders.command.enabled: false)",
+        durationMs: 0,
+      });
+      continue;
+    }
+
     const grader = graderFor(plan.grader);
     if (!grader) {
       // The grader vocabulary is an open enum: any kebab name validates, and
@@ -187,8 +202,15 @@ export async function runEvals(options: EngineOptions): Promise<RunReport> {
         });
       }
     } else {
+      // `judge.redact` rides along with the render caps: the digest is the one
+      // thing that leaves the machine, so its size limits and its redaction
+      // list are decided in the same place (ADR 01020).
       const judged = await options.judge(aiPlans, (plan) =>
-        renderTrace(trace, config.render, plan),
+        renderTrace(
+          trace,
+          { ...config.render, redact: config.judge.redact },
+          plan,
+        ),
       );
       judged.forEach((j, i) => {
         const plan = aiPlans[i];

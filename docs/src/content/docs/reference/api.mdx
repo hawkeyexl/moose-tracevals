@@ -69,7 +69,7 @@ The CLI's three commands, callable directly. Each pairs a runner with a renderer
 | `PROJECT_RULES_FILENAMES` | `["CLAUDE.md", "AGENTS.md", "GEMINI.md"]`. |
 | `coverAvailability(trace, coverage, options)` | Classify coverage rows as offered-and-used, offered-not-used, or not-offered, and count the roster. |
 | `ResolveOptions`, `DiscoverArtifactsOptions`, `DiscoveredArtifact`, `DiscoveryResult`, `AvailabilityCoverage`, `AvailabilityOptions` | |
-| `findGitRoot`, `findInTree`, `listInTree`, `safeRead`, `PRUNED_DIRS` | Filesystem helpers the resolvers share. |
+| `findGitRoot`, `findInTree`, `listInTree`, `safeRead`, `safeMtime`, `PRUNED_DIRS` | Filesystem helpers the resolvers share. All degrade to `null`/empty rather than throwing. |
 | *(all of `artifacts/types`)* | `ResolvedArtifact`, `CoverageEntry`, `ArtifactType`, `ResolvedArtifacts`, `ArtifactAvailability`, `AvailabilityReport`, `AvailabilityCounts`. |
 
 ## Evals
@@ -107,7 +107,11 @@ The CLI's three commands, callable directly. Each pairs a runner with a renderer
 |---|---|
 | `makeTraceJudge(options)` | Build the ensemble judge. |
 | `makeJudgeProvider(...)`, `providerSpecFor(...)` | Provider construction. `providerSpecFor` resolves identity without constructing, so a fully cached run needs no API key. |
-| `renderTrace(trace, options?, plan?)` | The transcript as the judge sees it. With a `plan`, only that artifact's window. |
+| `renderTrace(trace, options?, plan?)` | The transcript as the judge sees it — redacted. With a `plan`, only that artifact's window. |
+| `makeRedactor(extra?)` | The scrubber `renderTrace` applies. Built-in shapes plus any extra sources, which **add to** them. |
+| `REDACTION_PATTERNS`, `CUSTOM_PLACEHOLDER` | The built-in shapes with their labels, and the placeholder a configured pattern produces. |
+| `compileRedactPatterns(sources)` | Compile-check pattern sources up front; throws `TracevalsError` on one that will not compile. |
+| `RedactionPattern`, `Redactor` | |
 | `JUDGE_SYSTEM_PROMPT`, `buildUserContent(plan, rendered)` | The prompts. |
 | `PROMPT_VERSION` | Cache-key component. Bump on any prompt change. |
 | `cacheKey(...)`, `sha256(...)` | |

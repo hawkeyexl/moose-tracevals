@@ -7,7 +7,7 @@
 import { basename, dirname, join, resolve } from "node:path";
 import { homeDir } from "../trace/discover.js";
 import { coverAvailability } from "./availability.js";
-import { findGitRoot, findInTree, safeRead } from "./fs.js";
+import { findGitRoot, findInTree, safeMtime, safeRead } from "./fs.js";
 import type { Trace } from "../trace/types.js";
 import type {
   CoverageEntry,
@@ -140,7 +140,7 @@ export async function resolveArtifacts(
 
   const rules = await resolveProjectRules(projectDir, projectRoot);
   for (const rule of rules.artifacts) add(rule);
-  coverage.push({
+  const rulesEntry: CoverageEntry = {
     ref: "project rules",
     kind: "project-rules",
     resolved: rules.artifacts.length > 0,
@@ -148,7 +148,22 @@ export async function resolveArtifacts(
     ...(rules.artifacts.length === 0
       ? { note: "no CLAUDE.md or AGENTS.md found" }
       : {}),
-  });
+  };
+  coverage.push(rulesEntry);
+
+  // One aggregated entry covers several files, so it has no single `path` to
+  // stat; name them explicitly. Every other entry stats the file it resolved to.
+  //
+  // Before the roster pass, not after: staleness only has something to say
+  // about rows that resolved to a file, and the roster's own offered-but-unused
+  // rows never do. Annotating first also keeps these flags on the entries the
+  // roster copies forward.
+  await annotateStaleness(
+    trace,
+    coverage,
+    new Map([[rulesEntry, rules.artifacts.map((a) => a.path)]]),
+    warnings,
+  );
 
   // What the session was *offered* is the other half of coverage: resolution
   // only ever sees what it used (ADR 01016).
@@ -164,6 +179,61 @@ export async function resolveArtifacts(
     availability: availability.report,
     warnings,
   };
+}
+
+// ── Staleness ────────────────────────────────────────────────────
+
+/**
+ * Flag every resolved artifact whose file is newer than the session (ADR
+ * 01021). Evals are read from the artifact *as it is now* while the session
+ * followed it *as it was then*, so editing a SKILL.md after a session grades
+ * that session against instructions it never saw.
+ *
+ * A heuristic, and deliberately a soft one: mtime is not content identity, a
+ * fresh clone rewrites every mtime, and an unreadable mtime says nothing. It
+ * produces a coverage flag and one warning — never an eval outcome, never an
+ * exit code.
+ */
+async function annotateStaleness(
+  trace: Trace,
+  coverage: CoverageEntry[],
+  extraPaths: Map<CoverageEntry, string[]>,
+  warnings: string[],
+): Promise<void> {
+  // No session end means no ground to compare against, and guessing one would
+  // manufacture a warning out of no evidence.
+  if (trace.endedAt === undefined) return;
+  const endedAt = Date.parse(trace.endedAt);
+  if (!Number.isFinite(endedAt)) return;
+
+  const staleRefs: string[] = [];
+  for (const entry of coverage) {
+    if (!entry.resolved) continue;
+    const paths = extraPaths.get(entry) ?? (entry.path ? [entry.path] : []);
+    if (paths.length === 0) continue;
+
+    let newest: string | undefined;
+    for (const path of paths) {
+      const mtime = await safeMtime(path);
+      if (mtime === null) continue;
+      if (newest === undefined || mtime > newest) newest = mtime;
+    }
+    if (newest === undefined) continue;
+
+    entry.modifiedAt = newest;
+    entry.stale = Date.parse(newest) > endedAt;
+    if (entry.stale) staleRefs.push(entry.ref);
+  }
+
+  if (staleRefs.length > 0) {
+    // One warning, not one per artifact: a fresh checkout flags everything, and
+    // a wall of identical lines is how a real signal gets tuned out.
+    warnings.push(
+      `${staleRefs.length} artifact(s) were modified after the session ended ` +
+        `(${staleRefs.join(", ")}) — their evals may not be the instructions ` +
+        `this session followed. mtime is a heuristic, not content identity.`,
+    );
+  }
 }
 
 // ── Skills ───────────────────────────────────────────────────────

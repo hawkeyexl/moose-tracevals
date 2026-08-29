@@ -12,6 +12,7 @@ import { join } from "node:path";
 import { Ajv2020 } from "ajv/dist/2020.js";
 import { parse as parseYaml } from "yaml";
 import configSchemaJson from "./config-schema.json" with { type: "json" };
+import { compileRedactPatterns } from "../judge/redact.js";
 import { TracevalsError } from "../types.js";
 
 const configSchema = configSchemaJson as Record<string, unknown>;
@@ -63,10 +64,28 @@ export interface TracevalsConfig {
     zones: { autoPass: number; autoFail: number };
     cacheDir: string;
     maxCostUsd?: number;
+    /**
+     * Extra patterns scrubbed from the session digest before it reaches a
+     * provider, applied *on top of* the built-in secret shapes (ADR 01020).
+     * Always a list; validated for compilability at load time.
+     */
+    redact: string[];
   };
   render: {
     maxBlockChars: number;
     maxTotalChars: number;
+  };
+  /**
+   * Per-grader settings, for the graders that have a knob outside the eval
+   * entry that names them.
+   */
+  graders: {
+    /**
+     * `command` runs by default — ADR 01011's reasoning is unchanged. This is
+     * the opt-out that decision never provided, for the person evaluating a
+     * trace whose project they do not trust (ADR 01019).
+     */
+    command: { enabled: boolean };
   };
   history: {
     file: string;
@@ -135,10 +154,16 @@ export function parseConfig(raw: unknown): TracevalsConfig {
         autoFail: r.judge?.zones?.autoFail ?? 0.8,
       },
       cacheDir: r.judge?.cacheDir ?? ".moose-tracevals/cache",
+      // Always a list: the render site concatenates nothing onto it, but a
+      // hole here would be a special case in every consumer.
+      redact: [...(r.judge?.redact ?? [])],
     },
     render: {
       maxBlockChars: r.render?.maxBlockChars ?? 2000,
       maxTotalChars: r.render?.maxTotalChars ?? 150000,
+    },
+    graders: {
+      command: { enabled: r.graders?.command?.enabled ?? true },
     },
     history: {
       file: r.history?.file ?? ".moose-tracevals/history.jsonl",
@@ -159,6 +184,10 @@ export function parseConfig(raw: unknown): TracevalsConfig {
     // runs to hundreds of skills (ADR 01016).
     reportUnusedArtifacts: r.reportUnusedArtifacts ?? false,
   };
+  // Compilability is not expressible in JSON Schema, and a pattern that cannot
+  // compile must fail here rather than at the moment a digest is about to be
+  // sent — a dropped redaction pattern is a silent leak.
+  compileRedactPatterns(config.judge.redact);
   if (typeof r.judge?.maxCostUsd === "number") {
     config.judge.maxCostUsd = r.judge.maxCostUsd;
   }

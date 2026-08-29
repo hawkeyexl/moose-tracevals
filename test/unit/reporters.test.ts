@@ -245,6 +245,55 @@ describe("reporters", () => {
       expect(markdown).not.toContain("not found");
     });
   });
+
+  // Editing a SKILL.md after a session grades that session against instructions
+  // it never saw. The coverage table is where that shows.
+  describe("a stale coverage entry", () => {
+    const stale: RunReport = {
+      ...report,
+      coverage: [
+        {
+          ref: "fix-bug",
+          kind: "skill",
+          resolved: true,
+          path: "C:\\work\\demo\\SKILL.md",
+          tried: [],
+          stale: true,
+          modifiedAt: "2026-07-01T00:00:00.000Z",
+        },
+      ],
+    };
+
+    it("human marks the row and keeps the path", () => {
+      const out = render(stale, "human");
+      expect(out).toContain("C:\\work\\demo\\SKILL.md");
+      expect(out).toContain("modified after the session ended");
+      expect(out).toContain("2026-07-01T00:00:00.000Z");
+    });
+
+    it("markdown marks the row without breaking the table", () => {
+      const out = render(stale, "markdown");
+      expect(out).toContain("modified after the session ended");
+      const header = out.split("\n").find((l) => l.startsWith("| Resolved"))!;
+      // By the note, not by the ref: `fix-bug` also names a row in the evals
+      // table above, which has a different column count by design.
+      const row = out
+        .split("\n")
+        .find((l) => l.includes("modified after the session ended"))!;
+      const cells = (line: string) => line.split(/(?<!\\)\|/).length - 2;
+      expect(cells(row)).toBe(cells(header));
+      expect(row).toContain("`C:\\work\\demo\\SKILL.md`");
+    });
+
+    it("says nothing when the entry is not stale", () => {
+      expect(render(report, "human")).not.toContain(
+        "modified after the session ended",
+      );
+      expect(render(report, "markdown")).not.toContain(
+        "modified after the session ended",
+      );
+    });
+  });
 });
 
 /**
