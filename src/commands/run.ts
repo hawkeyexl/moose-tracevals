@@ -44,6 +44,11 @@ export interface RunSharedOptions {
   history?: boolean;
   /** Overrides config.failOnNeedsReview; undefined defers to the config. */
   failOnNeedsReview?: boolean;
+  /**
+   * `--no-commands` sets this false. Overrides
+   * `config.graders.command.enabled`; undefined defers to the config.
+   */
+  commands?: boolean;
   /** `--require`: grader plugins to load *in addition to* `config.plugins`. */
   require?: string[];
   /** Overrides config.reportUnusedArtifacts; undefined defers to the config. */
@@ -94,6 +99,13 @@ export async function prepareRun(
   const config = {
     ...loaded,
     failOnNeedsReview: options.failOnNeedsReview ?? loaded.failOnNeedsReview,
+    graders: {
+      ...loaded.graders,
+      command: {
+        ...loaded.graders.command,
+        enabled: options.commands ?? loaded.graders.command.enabled,
+      },
+    },
     // A set-valued knob, so `--require` *adds* instead of replacing. A one-off
     // flag must not silently unregister the house graders a repo's config
     // names — every eval declaring one would flip to `unknown grader kind`,

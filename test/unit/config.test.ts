@@ -84,6 +84,51 @@ describe("parseConfig", () => {
     });
   });
 
+  describe("graders.command.enabled", () => {
+    it("defaults to enabled — ADR 01011 stands, this is only an opt-out", () => {
+      expect(parseConfig({}).graders.command.enabled).toBe(true);
+    });
+
+    it("honours an explicit opt-out", () => {
+      const config = parseConfig({ graders: { command: { enabled: false } } });
+      expect(config.graders.command.enabled).toBe(false);
+    });
+
+    it("rejects unknown keys under graders", () => {
+      expect(() => parseConfig({ graders: { commands: {} } })).toThrow(
+        TracevalsError,
+      );
+      expect(() =>
+        parseConfig({ graders: { command: { enabled: "no" } } }),
+      ).toThrow(TracevalsError);
+    });
+  });
+
+  describe("judge.redact", () => {
+    it("defaults to an empty list — the built-ins are a floor, not a default", () => {
+      expect(parseConfig({}).judge.redact).toEqual([]);
+    });
+
+    it("keeps declared patterns", () => {
+      const config = parseConfig({ judge: { redact: ["ACME-[0-9]{4}"] } });
+      expect(config.judge.redact).toEqual(["ACME-[0-9]{4}"]);
+    });
+
+    it("rejects a pattern that will not compile, at load time", () => {
+      // An unusable pattern must not surface as a crash inside the judge, and
+      // must never be silently dropped — that would be a silent leak.
+      expect(() => parseConfig({ judge: { redact: ["("] } })).toThrow(
+        TracevalsError,
+      );
+      expect(() => parseConfig({ judge: { redact: [""] } })).toThrow(
+        TracevalsError,
+      );
+      expect(() => parseConfig({ judge: { redact: "secret" } })).toThrow(
+        TracevalsError,
+      );
+    });
+  });
+
   describe("provider section", () => {
     it("defaults to claude-cli so a fresh checkout needs no API key", () => {
       const config = parseConfig({});
