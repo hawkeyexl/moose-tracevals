@@ -36,6 +36,7 @@ Options:
 {/* step {"description":"run exposes the grader-plugin flag.","runShell":{"command":"moose-tracevals run --help","exitCodes":[0],"stdio":"--require <module>"}} */}
 {/* step {"description":"run accepts many traces.","runShell":{"command":"moose-tracevals run --help","exitCodes":[0],"stdio":"run [options] [traces...]"}} */}
 {/* step {"description":"run exposes the trace-selection flags.","runShell":{"command":"moose-tracevals run --help","exitCodes":[0],"stdio":"--since <duration>"}} */}
+{/* step {"description":"run exposes the command opt-out.","runShell":{"command":"moose-tracevals run --help","exitCodes":[0],"stdio":"--no-commands"}} */}
 {/* step {"description":"fill exposes the documented flags.","runShell":{"command":"moose-tracevals fill --help","exitCodes":[0],"stdio":"--confidence <n>"}} */}
 {/* step {"description":"fill exposes the grader-plugin flag too.","runShell":{"command":"moose-tracevals fill --help","exitCodes":[0],"stdio":"--require <module>"}} */}
 {/* step {"description":"list exposes the documented flags.","runShell":{"command":"moose-tracevals list --help","exitCodes":[0],"stdio":"--all-projects"}} */}
@@ -103,7 +104,8 @@ moose-tracevals: no traces matched (--all-projects, --since 7d); run `moose-trac
 | `--provider` | `<name>` | `provider.default` (`claude-cli`) | Judge provider: `claude-cli`, `anthropic`, `openai`, `mock`. |
 | `--model` | `<model>` | the selected provider's configured model | Judge model override. |
 | `--runs` | `<n>` | `judge.ensembleRuns` (`3`) | Ensemble runs per judged eval. |
-| `--deterministic-only` | — | off | Skip judged evals entirely. They are reported as `skipped`, not failed. No model call is made. |
+| `--deterministic-only` | — | off | Skip judged evals entirely. They are reported as `skipped`, not failed. No model call is made, so nothing leaves the machine. |
+| `--no-commands` | — | commands run | Do not execute [`command`-graded evals](/moose-tracevals/reference/graders/#command). They report `skipped` with the reason stated, never `pass`. Overrides [`graders.command.enabled`](/moose-tracevals/reference/configuration/#graders). |
 | `--no-cache` | — | cache on | Bypass the judge cache. |
 | `--max-cost-usd` | `<usd>` | `judge.maxCostUsd` (unset) | Judge cost budget for the whole invocation, **shared across every trace in a batch** — not applied per trace. |
 | `-f, --format` | `<format>` | `human` | `human`, `json`, or `markdown`. |

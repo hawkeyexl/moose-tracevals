@@ -153,4 +153,36 @@ describe("runEvals", () => {
     expect(forbidden?.outcome).toBe("fail");
     expect(forbidden?.findings?.[0]?.message).toContain("used 1 time(s)");
   });
+
+  describe("the command opt-out", () => {
+    const disabled = parseConfig({ graders: { command: { enabled: false } } });
+
+    it("runs command evals by default (ADR 01011 is unchanged)", async () => {
+      const report = await run();
+      const cmd = report.evalResults.find((r) => r.evalName === "no-force-push");
+      expect(cmd?.grader).toBe("command");
+      expect(cmd?.outcome).toBe("pass");
+    });
+
+    it("skips them with a stated reason when disabled — never passes them", async () => {
+      const report = await run({ config: disabled });
+      const cmd = report.evalResults.find((r) => r.evalName === "no-force-push");
+      expect(cmd?.outcome).toBe("skipped");
+      expect(cmd?.skipReason).toMatch(/command execution is disabled/);
+    });
+
+    it("changes nothing else about the run", async () => {
+      const on = await run();
+      const off = await run({ config: disabled });
+      const outcomes = (r: Awaited<ReturnType<typeof run>>) =>
+        Object.fromEntries(
+          r.evalResults
+            .filter((x) => x.evalName !== "no-force-push")
+            .map((x) => [`${x.artifactName}/${x.evalName}`, x.outcome]),
+        );
+      expect(outcomes(off)).toEqual(outcomes(on));
+      // A skipped check must not turn a failing run green, nor a green one red.
+      expect(off.exitCode).toBe(on.exitCode);
+    });
+  });
 });

@@ -4,7 +4,8 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { MockProvider, mockVerdict } from "@hawkeyexl/inference";
 import { makeTraceJudge } from "../../src/judge/trace-judge.js";
 import { cacheKey } from "../../src/judge/cache.js";
-import { makePlan } from "../helpers.js";
+import { renderTrace } from "../../src/judge/render.js";
+import { makePlan, makeTrace } from "../helpers.js";
 
 let tmpDir: string;
 beforeAll(async () => {
@@ -17,6 +18,11 @@ afterAll(async () => {
 });
 
 const plan = makePlan({ grader: "ai" });
+
+const leakyTrace = makeTrace({
+  events: [{ kind: "user", text: "Fix the crash in app.ts", raw: {}, index: 0 }],
+  userMessages: ["Fix the crash in app.ts"],
+});
 
 describe("makeTraceJudge", () => {
   it("passes on a unanimous high-confidence ensemble", async () => {
@@ -159,6 +165,26 @@ describe("cacheKey", () => {
     expect(
       cacheKey("mock", "m", 3, 0, "trace", makePlan({ assertion: "different" })),
     ).not.toBe(base);
+  });
+
+  // Redaction rewrites the digest, and the digest is a key component — so the
+  // cache does the right thing for free: a redacted run gets its own slot and
+  // can never replay a verdict formed on unredacted text, while a redaction
+  // that matched nothing keeps the existing entry.
+  it("separates a redacted digest from the unredacted one", () => {
+    const raw = renderTrace(leakyTrace);
+    const scrubbed = renderTrace(leakyTrace, { redact: ["Fix the crash"] });
+    expect(cacheKey("mock", "m", 3, 0, raw, plan)).not.toBe(
+      cacheKey("mock", "m", 3, 0, scrubbed, plan),
+    );
+  });
+
+  it("keeps the same entry when a pattern matched nothing", () => {
+    const raw = renderTrace(leakyTrace);
+    const unchanged = renderTrace(leakyTrace, { redact: ["nothing-matches-me"] });
+    expect(cacheKey("mock", "m", 3, 0, raw, plan)).toBe(
+      cacheKey("mock", "m", 3, 0, unchanged, plan),
+    );
   });
 
   describe("per-eval provider override", () => {
