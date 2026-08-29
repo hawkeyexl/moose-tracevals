@@ -46,6 +46,6 @@ The reader needs to be able to close a small, closed set of loops:
 The framing that makes this journey coherent: **coverage is the honest answer to "what did you not
 check?"** Surfacing it is a feature.
 
-**Coverage.** No gaps. `declare/coverage/` carries the five states a coverage row can be in, the
-full resolution order for skills, agents, and project rules, and how to diagnose an unresolved
-reference from the `tried` list. `reference/traces/` carries the discovery side.
+**Coverage.** No gaps. `declare/coverage/` carries the six states a coverage row can be in, the
+full resolution order for skills, agents, slash commands, and project rules, and how to diagnose an
+unresolved reference from the `tried` list. `reference/traces/` carries the discovery side.

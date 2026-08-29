@@ -25,6 +25,13 @@ const TYPE_GUIDANCE: Record<ArtifactType, string> = {
     "process steps (what must actually happen), and output specifications (what",
     "the result must contain or must never contain).",
   ].join("\n"),
+  "slash-command": [
+    "This artifact is a slash command: a procedure whose body is injected as a",
+    "prompt when a person types its name. Its testable claims are the steps it",
+    "mandates, the tools it permits or forbids, and the artifact it must leave",
+    "behind. Its `argument-hint` and `description` are harness metadata, not",
+    "assertions — do not test them.",
+  ].join("\n"),
   agent: [
     "This artifact is an agent definition: a role with boundaries.",
     "Its testable claims are constraints (what the agent must never do),",

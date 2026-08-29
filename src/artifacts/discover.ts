@@ -74,8 +74,11 @@ function classify(path: string): ArtifactType | undefined {
   if (RULES_NAMES.has(name)) return "project-rules";
   if (name === "SKILL.md") return "skill";
   if (!name.endsWith(".md")) return undefined;
-  // Candidate only — `isRecognizedAgent` decides whether this particular
-  // `agents/` directory is one the resolver would ever look in.
+  // Candidates only — `isRecognizedSlashCommand` and `isRecognizedAgent`
+  // decide whether this particular directory is one the resolver would ever
+  // look in. Commands nest (an organizing subdirectory does not rename the
+  // command), so any `commands` ancestor is a candidate; agents do not.
+  if (segments(dirname(path)).includes("commands")) return "slash-command";
   if (segments(dirname(path)).at(-1) === "agents") return "agent";
   return undefined;
 }
@@ -97,8 +100,29 @@ function relativeSegments(anchor: string, path: string): string[] | null {
  */
 function nameFor(type: ArtifactType, path: string): string {
   if (type === "skill") return segments(dirname(path)).at(-1) ?? basename(path);
-  if (type === "agent") return basename(path).replace(/\.md$/, "");
+  // A slash command is referenced by its filename stem with the leading slash
+  // stripped, and an organizing subdirectory does not enter the name — so
+  // `commands/release/tag.md` is `tag`, the same string the trace records.
+  if (type === "agent" || type === "slash-command") {
+    return basename(path).replace(/\.md$/, "");
+  }
   return basename(path);
+}
+
+/**
+ * Slash commands live in `.claude/commands/` at any depth — the only place
+ * `resolveArtifacts` looks for a project command, so discovery and resolution
+ * agree on the same population.
+ *
+ * Deliberately narrow, for the reason `isRecognizedAgent` is: `fill` writes by
+ * default, and matching any directory named `commands` would classify a docs
+ * page about a CLI as an instruction artifact and edit it.
+ */
+function isRecognizedSlashCommand(path: string, anchor: string): boolean {
+  const parts = relativeSegments(anchor, path);
+  if (parts === null) return false;
+  const at = parts.indexOf("commands");
+  return at >= 1 && parts[at - 1] === ".claude" && at < parts.length - 1;
 }
 
 /** A skill file must sit as `<skillsDir>/<skillName>/SKILL.md`. */
@@ -212,6 +236,9 @@ export async function discoverArtifacts(
       if (type === undefined) return false;
       if (type === "skill") return isRecognizedSkill(path, target);
       if (type === "agent") return isRecognizedAgent(path, target);
+      if (type === "slash-command") {
+        return isRecognizedSlashCommand(path, target);
+      }
       return true;
     });
     for (const path of found) {

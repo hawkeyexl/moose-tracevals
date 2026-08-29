@@ -167,16 +167,18 @@ describe("parseTraceFile (session dialect)", () => {
 
   it("counts turns as non-sidechain user prompts (not tool results)", async () => {
     const trace = await parseTraceFile(sessionFixture);
-    // The injection prompt and the plain prompt; tool_result records and the
-    // sidechain user record do not count.
-    expect(trace.turnCount).toBe(2);
+    // Three command injections (identify-ai-tells, /model, /ship-it) and the
+    // plain prompt; tool_result records and the sidechain user record do not
+    // count.
+    expect(trace.turnCount).toBe(4);
   });
 
   it("sums usage across non-sidechain assistant messages", async () => {
     const trace = await parseTraceFile(sessionFixture);
-    // 100+130+200+150+120+90+80+70+60 input, 50+18+25+30+40+35+12+15+20 output
-    // (the two sidechain records, 80/10 and 60/8, are excluded)
-    expect(trace.usage).toMatchObject({ inputTokens: 1000, outputTokens: 245 });
+    // 100+130+200+150+120+90+80+70+60 input, 50+18+25+30+40+35+12+15+20 output,
+    // plus the /ship-it turns' 40+45+30 and 10+22+14 (the two sidechain
+    // records, 80/10 and 60/8, are excluded)
+    expect(trace.usage).toMatchObject({ inputTokens: 1115, outputTokens: 291 });
   });
 
   it("collects user prompts and assistant texts", async () => {
