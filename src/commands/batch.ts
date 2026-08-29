@@ -10,10 +10,14 @@
  * fifty times the configured ceiling while every report claimed to respect it.
  */
 import { writeFile } from "node:fs/promises";
-import { aggregate, type BatchOutcome } from "../aggregate.js";
+import {
+  aggregate,
+  type BatchOutcome,
+  type BatchReportWithBudget,
+} from "../aggregate.js";
 import { discoverTraces } from "../trace/discover.js";
 import { renderBatch, type ReportFormat } from "../reporters/index.js";
-import { TracevalsError, type BatchReport, type RunReport } from "../types.js";
+import { TracevalsError, type RunReport } from "../types.js";
 import type { HistoryComparison } from "../history.js";
 import {
   prepareRun,
@@ -35,7 +39,8 @@ export interface BatchCommandOptions extends RunSharedOptions {
 }
 
 export interface BatchCommandResult {
-  report: BatchReport;
+  /** Carries `budget` when the shared judge budget was exhausted mid-corpus. */
+  report: BatchReportWithBudget;
   rendered: string;
   /** Per-trace reports in batch order; absent entries failed to parse. */
   reports: RunReport[];
