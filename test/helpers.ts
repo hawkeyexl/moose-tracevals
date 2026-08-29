@@ -12,6 +12,13 @@ export function makeTrace(overrides: Partial<Trace> = {}): Trace {
     skillInvocations: [],
     agentSpawns: [],
     subagentBranches: [],
+    availability: {
+      recorded: false,
+      skills: [],
+      agents: [],
+      tools: [],
+      mcpServers: [],
+    },
     fileAccesses: [],
     userMessages: [],
     assistantTexts: [],

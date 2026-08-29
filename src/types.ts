@@ -1,6 +1,9 @@
 /** Shared result model and errors for moose-tracevals. */
 import type { ConsensusResult } from "@hawkeyexl/inference";
-import type { CoverageEntry } from "./artifacts/types.js";
+import type {
+  AvailabilityReport,
+  CoverageEntry,
+} from "./artifacts/types.js";
 import type { ArtifactType } from "./artifacts/types.js";
 import type { Finding } from "./graders/types.js";
 
@@ -54,6 +57,11 @@ export interface RunReport {
   /** Trace + resolution warnings, surfaced in every format. */
   warnings: string[];
   coverage: CoverageEntry[];
+  /**
+   * Offered versus used (ADR 01016). An observation about the session's
+   * configuration; it never contributes to `summary` or `exitCode`.
+   */
+  availability: AvailabilityReport;
   evalResults: EvalResult[];
   summary: RunSummary;
   /** 0 pass, 1 any fail/error (and needs-review when failOnNeedsReview). */

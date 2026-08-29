@@ -118,3 +118,84 @@ describe("runRun grader plugins", () => {
     ).rejects.toThrow(TracevalsError);
   });
 });
+/**
+ * The three coverage states end to end against the committed corpus
+ * (ADR 01016). The fixture roster offers `fix-bug` and the plugin skill (used),
+ * three more skills and one agent that are never used, and deliberately omits
+ * `doc-writer` — which the session spawns anyway.
+ */
+describe("runRun availability reporting", () => {
+  const fixtureProject = fileURLToPath(
+    new URL("../fixtures/project", import.meta.url),
+  );
+  const fixtureHome = fileURLToPath(
+    new URL("../fixtures/home", import.meta.url),
+  );
+
+  function cover(overrides: Record<string, unknown> = {}) {
+    return runRun({
+      tracePath: sessionFixture,
+      project: fixtureProject,
+      deterministicOnly: true,
+      env: { MOOSE_TRACEVALS_HOME: fixtureHome },
+      ...overrides,
+    });
+  }
+
+  it("summarises the roster without listing it by default", async () => {
+    const { report } = await cover();
+    expect(report.availability).toEqual({
+      recorded: true,
+      skills: { offered: 5, used: 2, unused: 3 },
+      agents: { offered: 3, used: 2, unused: 1 },
+      listed: false,
+    });
+    expect(
+      report.coverage.some((c) => c.availability === "offered-not-used"),
+    ).toBe(false);
+  });
+
+  it("distinguishes offered-and-used from not-offered", async () => {
+    const { report } = await cover();
+    const byRef = new Map(report.coverage.map((c) => [c.ref, c.availability]));
+    expect(byRef.get("fix-bug")).toBe("offered-and-used");
+    expect(byRef.get("reviewer")).toBe("offered-and-used");
+    // Spawned, resolved on disk, and never on the menu — a configuration bug,
+    // not an adherence failure.
+    expect(byRef.get("doc-writer")).toBe("not-offered");
+    // Project rules are always in force, so the roster says nothing about them.
+    expect(byRef.get("project rules")).toBeUndefined();
+  });
+
+  it("lists offered-but-unused artifacts when the flag is passed", async () => {
+    const { report } = await cover({ reportUnusedArtifacts: true });
+    expect(report.availability.listed).toBe(true);
+    const unused = report.coverage.filter(
+      (c) => c.availability === "offered-not-used",
+    );
+    expect(unused.map((c) => c.ref)).toEqual([
+      "deep-research",
+      "bare-listing",
+      "tdd-coverage",
+      "researcher",
+    ]);
+  });
+
+  it("never lets availability move the exit code", async () => {
+    // `not-offered` and three unused skills are observations, so the exit code
+    // is exactly what the evals decided.
+    const plain = await cover();
+    const listed = await cover({ reportUnusedArtifacts: true });
+    expect(listed.report.exitCode).toBe(plain.report.exitCode);
+    expect(listed.report.summary).toEqual(plain.report.summary);
+  });
+
+  it("arms one conditional eval and leaves the other unarmed", async () => {
+    const { report } = await cover();
+    const byName = new Map(report.evalResults.map((r) => [r.evalName, r]));
+    expect(byName.get("source-edits-use-the-fix-bug-skill")?.outcome).toBe("pass");
+    const unarmed = byName.get("docs-work-uses-the-writing-skill");
+    expect(unarmed?.outcome).toBe("skipped");
+    expect(unarmed?.skipReason).toContain("trigger not met");
+  });
+});

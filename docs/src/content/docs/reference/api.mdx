@@ -54,7 +54,11 @@ The CLI's three commands, callable directly. Each pairs a runner with a renderer
 | `slugFor(cwd)` | The project-slug rule: every non-alphanumeric character to `-`. |
 | `pickTrace(options, promptFn?)` | The interactive picker. `promptFn` makes it testable. |
 | `DiscoverOptions`, `TraceListing`, `PickerChoice`, `PromptFn` | |
-| *(all of `trace/types`)* | `Trace`, `TraceSource`, `TraceFormat`, `FileAccess`, `TraceUsage`, and the event types. |
+| `availableAt(entries, index)` | Filter an availability list to the entries offered at that ordinal. |
+| `offeredNames(entries)` | Every distinct name that was offered at any point. |
+| `joinDescriptions(content, names)` | Parse a listing's `- name: description` lines onto its names. Handles `plugin:skill` and wrapped descriptions. |
+| `newAvailability()` | An empty roster, for a synthetic `Trace`. |
+| *(all of `trace/types`)* | `Trace`, `TraceSource`, `TraceFormat`, `FileAccess`, `TraceUsage`, the event types, and `TraceAvailability` / `AvailabilityEntry`. |
 
 ## Artifacts
 
@@ -63,9 +67,10 @@ The CLI's three commands, callable directly. Each pairs a runner with a renderer
 | ★ `resolveArtifacts(trace, options)` | Trace-driven resolution. Returns artifacts, coverage, warnings. |
 | `discoverArtifacts(options)` | Static, project-only scan. What `fill` uses. |
 | `PROJECT_RULES_FILENAMES` | `["CLAUDE.md", "AGENTS.md", "GEMINI.md"]`. |
-| `ResolveOptions`, `DiscoverArtifactsOptions`, `DiscoveredArtifact`, `DiscoveryResult` | |
+| `coverAvailability(trace, coverage, options)` | Classify coverage rows as offered-and-used, offered-not-used, or not-offered, and count the roster. |
+| `ResolveOptions`, `DiscoverArtifactsOptions`, `DiscoveredArtifact`, `DiscoveryResult`, `AvailabilityCoverage`, `AvailabilityOptions` | |
 | `findGitRoot`, `findInTree`, `listInTree`, `safeRead`, `PRUNED_DIRS` | Filesystem helpers the resolvers share. |
-| *(all of `artifacts/types`)* | `ResolvedArtifact`, `CoverageEntry`, `ArtifactType`, `ResolvedArtifacts`. |
+| *(all of `artifacts/types`)* | `ResolvedArtifact`, `CoverageEntry`, `ArtifactType`, `ResolvedArtifacts`, `ArtifactAvailability`, `AvailabilityReport`, `AvailabilityCounts`. |
 
 ## Evals
 
@@ -92,6 +97,9 @@ The CLI's three commands, callable directly. Each pairs a runner with a renderer
 | `windowFor(trace, plan)` | The slice of the trace that plan's artifact governed. A custom grader that counts events should read this rather than the trace. |
 | `skippedWindow(window)` | The `GradeResult` for an empty window: a skip carrying its reason, never a pass. |
 | `TraceWindow` | |
+| `validateWhen(options)`, `evaluateWhen(options, window)` | The [conditional trigger](/moose-tracevals/reference/graders/#conditional-triggers) contract, shared so a custom grader implements it identically. |
+| `matchesGlob(path, glob)`, `globToRegExp(glob)` | The path glob `when.file-access` uses. |
+| `WHEN_CONDITIONS`, `WhenCondition`, `TriggerResult` | |
 
 ## Judge
 

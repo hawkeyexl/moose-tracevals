@@ -45,7 +45,11 @@ describe("discoverArtifacts", () => {
       a.artifact.path.endsWith("CLAUDE.md"),
     );
     expect(rules?.status).toBe("ok");
-    expect(rules?.existingNames).toEqual([]);
+    // CLAUDE.md declares the two conditionally-triggered evals (ADR 01016).
+    expect(rules?.existingNames).toEqual([
+      "source-edits-use-the-fix-bug-skill",
+      "docs-work-uses-the-writing-skill",
+    ]);
   });
 
   describe("in a scratch tree", () => {

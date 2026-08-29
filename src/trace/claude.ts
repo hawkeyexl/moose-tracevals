@@ -6,6 +6,13 @@
 import { readdir, readFile } from "node:fs/promises";
 import { basename, dirname, join, resolve } from "node:path";
 import { detectContentFormat } from "./detect.js";
+import {
+  applyAvailabilityRecord,
+  foldBranchAvailability,
+  newAvailability,
+  newReplay,
+  remapAvailability,
+} from "./availability.js";
 import type {
   AgentSpawn,
   FileAccess,
@@ -116,6 +123,7 @@ function newTrace(filePath: string): Trace {
     skillInvocations: [],
     agentSpawns: [],
     subagentBranches: [],
+    availability: newAvailability(),
     fileAccesses: [],
     userMessages: [],
     assistantTexts: [],
@@ -160,6 +168,10 @@ function resolveBranch(
 function parseSession(records: Rec[], filePath: string): Trace {
   const trace = newTrace(filePath);
   const branches: BranchIndex = { spawns: new Map(), resolved: new Map() };
+  // Availability is replayed in record order: `isInitial` replaces the set,
+  // a delta adds or removes, and each entry keeps the ordinal it changed at
+  // (ADR 01016).
+  const availability = newReplay();
   // Resolving a continuation pointer needs the whole file's uuids up front.
   const uuids = new Set<string>();
   for (const rec of records) {
@@ -194,7 +206,15 @@ function parseSession(records: Rec[], filePath: string): Trace {
       ) {
         continuations.push(rec.leafUuid);
       }
-      pushEvent(trace, { kind: "meta", timestamp, raw: rec });
+      const index = pushEvent(trace, { kind: "meta", timestamp, raw: rec });
+      // An `attachment` record is bookkeeping to every other consumer, but the
+      // listing ones are the only record of what the session was *offered*.
+      if (
+        type === "attachment" &&
+        applyAvailabilityRecord(availability, rec.attachment, index)
+      ) {
+        availability.roster.recorded = true;
+      }
       continue;
     }
 
@@ -253,6 +273,7 @@ function parseSession(records: Rec[], filePath: string): Trace {
         `content is not what it was working from`,
     );
   }
+  trace.availability = availability.roster;
   trace.subagentBranches = buildBranches(trace);
   return trace;
 }
@@ -841,6 +862,22 @@ async function mergeSidecarBranches(
   trace.fileAccesses = gather((s) => s.fileAccesses);
   trace.skillInvocations = gather((s) => s.skillInvocations);
   trace.agentSpawns = gather((s) => s.agentSpawns);
+
+  // The roster's ordinals are positions in `trace.events`, which the splice
+  // just renumbered. Then each branch's own roster contributes whatever the
+  // session never saw elsewhere, anchored at the spawn (ADR 01016).
+  trace.availability = remapAvailability(trace.availability, (index) =>
+    finalIndex("", index),
+  );
+  for (const { sidecar, branchId } of attached) {
+    const owner = spawnOwner.get(branchId);
+    foldBranchAvailability(
+      trace.availability,
+      sidecar.sub.availability,
+      branchId,
+      owner === undefined ? 0 : finalIndex(owner.sourceId, owner.local),
+    );
+  }
 
   const described = new Map<string, Partial<SubagentBranch>>();
   for (const { sidecar, branchId } of attached) {

@@ -6,6 +6,7 @@
  */
 import { basename, dirname, join, resolve } from "node:path";
 import { homeDir } from "../trace/discover.js";
+import { coverAvailability } from "./availability.js";
 import { findGitRoot, findInTree, safeRead } from "./fs.js";
 import type { Trace } from "../trace/types.js";
 import type {
@@ -20,6 +21,12 @@ export interface ResolveOptions {
   /** Ceiling for the parent-directory walk; defaults to the git root. */
   projectRoot?: string;
   env?: Record<string, string | undefined>;
+  /**
+   * List every offered-but-unused artifact in the coverage table rather than
+   * only counting them (ADR 01016). Off by default: a real roster runs to
+   * hundreds of skills.
+   */
+  reportUnusedArtifacts?: boolean;
 }
 
 /**
@@ -143,7 +150,20 @@ export async function resolveArtifacts(
       : {}),
   });
 
-  return { artifacts, coverage, warnings };
+  // What the session was *offered* is the other half of coverage: resolution
+  // only ever sees what it used (ADR 01016).
+  const availability = coverAvailability(trace, coverage, {
+    ...(options.reportUnusedArtifacts !== undefined
+      ? { listUnused: options.reportUnusedArtifacts }
+      : {}),
+  });
+
+  return {
+    artifacts,
+    coverage: availability.coverage,
+    availability: availability.report,
+    warnings,
+  };
 }
 
 // ── Skills ───────────────────────────────────────────────────────

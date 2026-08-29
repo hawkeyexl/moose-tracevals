@@ -87,6 +87,8 @@ export interface TracevalsConfig {
    * kind. `--require` appends to this list rather than replacing it.
    */
   plugins: string[];
+  /** List offered-but-unused artifacts in coverage, not just count them. */
+  reportUnusedArtifacts: boolean;
 }
 
 const ajv = new Ajv2020({ allErrors: true });
@@ -153,6 +155,9 @@ export function parseConfig(raw: unknown): TracevalsConfig {
     // Always a list, never undefined: the read site concatenates `--require`
     // onto it, and a hole there would be a special case in every caller.
     plugins: [...(r.plugins ?? [])],
+    // An observation, not a gate: listing it is opt-in because a real roster
+    // runs to hundreds of skills (ADR 01016).
+    reportUnusedArtifacts: r.reportUnusedArtifacts ?? false,
   };
   if (typeof r.judge?.maxCostUsd === "number") {
     config.judge.maxCostUsd = r.judge.maxCostUsd;

@@ -58,6 +58,12 @@ const report: RunReport = {
       costUsd: 0.01,
     },
   ],
+  availability: {
+    recorded: true,
+    skills: { offered: 4, used: 1, unused: 3 },
+    agents: { offered: 2, used: 0, unused: 2 },
+    listed: false,
+  },
   summary: { total: 2, pass: 1, fail: 1, error: 0, needsReview: 0, skipped: 0 },
   exitCode: 1,
   costUsd: 0.01,
@@ -109,7 +115,7 @@ describe("reporters", () => {
     it("markdown renders an empty location, never the string undefined", () => {
       const out = render(aggregated, "markdown");
       expect(out).not.toContain("undefined");
-      expect(out).toContain("| yes | project-rules | project rules |  |");
+      expect(out).toContain("| yes | project-rules | project rules |  |  |");
     });
 
     it("human renders an empty location, never the string undefined", () => {
@@ -140,15 +146,102 @@ describe("reporters", () => {
       expect(cells(row)).toBe(cells(header));
     });
 
+    it("keeps the availability column when the ref carries a pipe", () => {
+      const piped: RunReport = {
+        ...aggregated,
+        coverage: [
+          {
+            ref: "weird|name",
+            kind: "skill",
+            resolved: false,
+            tried: [],
+            availability: "not-offered",
+          },
+        ],
+      };
+      expect(render(piped, "markdown")).toContain("not-offered");
+    });
+
     it("falls back to the note when one is present", () => {
       const withNote: RunReport = {
         ...aggregated,
         coverage: [{ ...aggregated.coverage[0]!, note: "several files" }],
       };
       expect(render(withNote, "markdown")).toContain(
-        "| yes | project-rules | project rules | several files |",
+        "| yes | project-rules | project rules |  | several files |",
       );
       expect(render(withNote, "human")).toContain("several files");
+    });
+  });
+
+  // Offered, offered-but-unused, and not-offered are three different problems
+  // (ADR 01016), and collapsing any pair sends a reader to the wrong place.
+  describe("availability", () => {
+    it("summarises the roster without listing it", () => {
+      const out = render(report, "human");
+      expect(out).toContain("4 skill(s) offered, 1 used, 3 never used");
+      expect(out).toContain("2 agent(s) offered, 0 used, 2 never used");
+      expect(out).toContain("--report-unused-artifacts");
+    });
+
+    it("markdown carries the same summary", () => {
+      const out = render(report, "markdown");
+      expect(out).toContain("## Availability");
+      expect(out).toContain("4 skill(s) offered, 1 used, 3 never used");
+    });
+
+    it("says unknown rather than zero when no roster was recorded", () => {
+      const none: RunReport = {
+        ...report,
+        availability: {
+          recorded: false,
+          skills: { offered: 0, used: 0, unused: 0 },
+          agents: { offered: 0, used: 0, unused: 0 },
+          listed: false,
+        },
+      };
+      for (const format of ["human", "markdown"] as const) {
+        const out = render(none, format);
+        expect(out).toContain("unknown");
+        expect(out).not.toContain("0 skill(s) offered");
+      }
+    });
+
+    it("flags a referenced artifact that was never on the menu", () => {
+      const missing: RunReport = {
+        ...report,
+        coverage: [
+          { ref: "ghost", kind: "skill", resolved: false, tried: [], availability: "not-offered" },
+        ],
+      };
+      expect(render(missing, "human")).toContain("not offered");
+      expect(render(missing, "markdown")).toContain("not-offered");
+    });
+
+    it("never claims an unused artifact was not found", () => {
+      // Nothing was looked for on disk, so "not found (0 locations tried)"
+      // would be a claim about a search that never ran.
+      const unused: RunReport = {
+        ...report,
+        availability: { ...report.availability, listed: true },
+        coverage: [
+          {
+            ref: "deep-research",
+            kind: "skill",
+            resolved: false,
+            tried: [],
+            note: "offered, never used — Fan-out web searches.",
+            availability: "offered-not-used",
+          },
+        ],
+      };
+      const human = render(unused, "human");
+      expect(human).toContain("offered, never used — Fan-out web searches.");
+      expect(human).not.toContain("not found");
+      expect(human).not.toContain("--report-unused-artifacts");
+      const markdown = render(unused, "markdown");
+      expect(markdown).toContain("| n/a | skill | deep-research |");
+      expect(markdown).not.toContain("not found");
     });
   });
 });
