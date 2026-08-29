@@ -853,7 +853,17 @@ jobs:
             // sweep exists, and it costs no inference to produce.
             const strict = sweep.find((c) => c.axis === "zones.autoPass" && c.value === 0.95);
             check("strict false passes", strict?.counts.falsePass, 0);
-            check("strict review volume", strict?.counts.reviewVolume, 4);
+            // Relational, not a count: the claim is the conversion, so review
+            // volume must rise above the baseline row. A hard-coded number
+            // here goes stale the moment the fixture corpus gains a judged
+            // eval, which is exactly how this assertion broke once already.
+            if (!(strict?.counts.reviewVolume > sweep[0]?.counts.reviewVolume)) {
+              console.error(
+                `strict review volume: expected a rise above the baseline ` +
+                `${sweep[0]?.counts.reviewVolume}, got ${strict?.counts.reviewVolume}`,
+              );
+              process.exitCode = 1;
+            }
             // Nothing was scored against an ensemble the cache could not
             // supply: a silently under-sampled cell is a wrong number.
             if (sweep.some((c) => c.counts.insufficient !== 0)) {
