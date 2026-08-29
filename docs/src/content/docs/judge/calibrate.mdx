@@ -47,7 +47,7 @@ labels:
 |---|---|---|
 | `trace` | yes | Path to the trace, resolved **against this file's own directory** — not your working directory, so a committed labels file means the same thing from anywhere. |
 | `artifact` | yes | The name the report shows: a skill name, a `subagent_type`, or a project-rules filename such as `CLAUDE.md`. |
-| `type` | no | `skill`, `agent`, or `project-rules`. Needed only to disambiguate a name two artifact kinds share. |
+| `type` | no | `skill`, `agent`, `project-rules`, or `slash-command`. Needed only to disambiguate a name two artifact kinds share — a skill and an agent, or a skill and the slash command that types it. |
 | `eval` | yes | The eval's `id`. |
 | `expected` | yes | `pass`, `fail`, or `needs-review`. |
 | `note` | no | Why you decided that. It travels into the disagreement report, where it is the thing that makes a disagreement actionable. |
@@ -178,29 +178,35 @@ moose-tracevals calibrate <traces...> --labels tracevals/labels.yaml --sweep
 ```
 Sweep
   re-scored from the verdicts this run already produced — no further model calls
-  axis                 setting                                 agree  false-pass  false-fail  review  reviewVol
-  baseline             runs=3 autoPass=0.8 autoFail=0.8           5           1           1       0          1
-  ensembleRuns         runs=1 autoPass=0.8 autoFail=0.8           5           1           1       0          1
-  ensembleRuns         runs=3 autoPass=0.8 autoFail=0.8           5           1           1       0          1
-  ensembleRuns         runs=5 autoPass=0.8 autoFail=0.8           5           1           1       0          1
-  zones.autoPass       runs=3 autoPass=0.5 autoFail=0.8           5           1           1       0          1
-  zones.autoPass       runs=3 autoPass=0.6 autoFail=0.8           5           1           1       0          1
-  zones.autoPass       runs=3 autoPass=0.7 autoFail=0.8           5           1           1       0          1
-  zones.autoPass       runs=3 autoPass=0.8 autoFail=0.8           5           1           1       0          1
-  zones.autoPass       runs=3 autoPass=0.9 autoFail=0.8           5           1           1       0          1
-  zones.autoPass       runs=3 autoPass=0.95 autoFail=0.8          5           0           1       2          4
-  zones.autoFail       runs=3 autoPass=0.8 autoFail=0.5           5           1           1       0          1
-  zones.autoFail       runs=3 autoPass=0.8 autoFail=0.6           5           1           1       0          1
-  zones.autoFail       runs=3 autoPass=0.8 autoFail=0.7           5           1           1       0          1
-  zones.autoFail       runs=3 autoPass=0.8 autoFail=0.8           5           1           1       0          1
-  zones.autoFail       runs=3 autoPass=0.8 autoFail=0.9           5           1           1       0          1
-  zones.autoFail       runs=3 autoPass=0.8 autoFail=0.95          5           1           1       0          1
+  axis                 setting                                scored  agree  false-pass  false-fail  review  reviewVol  insuff
+  baseline             runs=3 autoPass=0.8 autoFail=0.8            8      5           1           1       0          1       0
+  ensembleRuns         runs=1 autoPass=0.8 autoFail=0.8            8      5           1           1       0          1       0
+  ensembleRuns         runs=3 autoPass=0.8 autoFail=0.8            8      5           1           1       0          1       0
+  ensembleRuns         runs=5 autoPass=0.8 autoFail=0.8            8      5           1           1       0          1       0
+  zones.autoPass       runs=3 autoPass=0.5 autoFail=0.8            8      5           1           1       0          1       0
+  zones.autoPass       runs=3 autoPass=0.6 autoFail=0.8            8      5           1           1       0          1       0
+  zones.autoPass       runs=3 autoPass=0.7 autoFail=0.8            8      5           1           1       0          1       0
+  zones.autoPass       runs=3 autoPass=0.8 autoFail=0.8            8      5           1           1       0          1       0
+  zones.autoPass       runs=3 autoPass=0.9 autoFail=0.8            8      5           1           1       0          1       0
+  zones.autoPass       runs=3 autoPass=0.95 autoFail=0.8           8      5           0           1       2          5       0
+  zones.autoFail       runs=3 autoPass=0.8 autoFail=0.5            8      5           1           1       0          1       0
+  zones.autoFail       runs=3 autoPass=0.8 autoFail=0.6            8      5           1           1       0          1       0
+  zones.autoFail       runs=3 autoPass=0.8 autoFail=0.7            8      5           1           1       0          1       0
+  zones.autoFail       runs=3 autoPass=0.8 autoFail=0.8            8      5           1           1       0          1       0
+  zones.autoFail       runs=3 autoPass=0.8 autoFail=0.9            8      5           1           1       0          1       0
+  zones.autoFail       runs=3 autoPass=0.8 autoFail=0.95           8      5           1           1       0          1       0
 ```
 
 One row moves, and it is the whole answer: at `autoPass: 0.95` the false pass disappears and review
-volume goes from 1 to 4. That is the trade stated in numbers instead of adjectives — you buy the
-removal of one wrong verdict with three more deferrals — and you can make the call without running
-anything again.
+volume rises. That is the trade stated in numbers instead of adjectives — you buy the removal of
+one wrong verdict with more deferrals — and you can make the call without running anything again.
+
+`scored` and `insuff` are the two columns that keep the rest honest. `scored` is the denominator:
+"zero false passes" over 8 scored labels is a finding, over 0 is a run that measured nothing. `insuff`
+counts cells whose cached ensemble was smaller than the setting asks for, which are left at their
+reported outcome rather than guessed at — a silently under-sampled cell is a wrong number.
+
+{/* step {"description":"Every sweep row states the denominator it was computed over.","runShell":{"command":"moose-tracevals calibrate test/fixtures/traces/claude-session.jsonl test/fixtures/traces/claude-session-sidecar.jsonl --project test/fixtures/project --labels test/fixtures/project/tracevals/labels.yaml --provider mock --sweep","exitCodes":[0],"stdio":"scored"}} */}
 
 **One axis at a time**, every other knob held at its configured value, because that is what "move
 one knob and recount" has always meant. The full cross-product of the default grid is 108 rows and
@@ -263,7 +269,7 @@ if you set it above zero. `--sweep` does not vary it for the same reason.
 corpus finds disagreement — that is the point of running it — and a command that fails on its own
 findings is one people stop running, or start running with `|| true`.
 
-Two things do turn it red:
+Four things do turn it red — a threshold you set, and three kinds of incomplete measurement:
 
 <Steps>
 
@@ -280,7 +286,7 @@ Two things do turn it red:
    Thresholds
      falsePass: 1 of at most 0 — exceeded
 
-   Exit 1: a threshold was exceeded, or a trace in the corpus could not be evaluated.
+   Exit 1: a threshold was exceeded, or the measurement is incomplete — a trace could not be evaluated, or the judge budget cut the corpus short.
    ```
 
    `--max-false-fail` and `--max-review` work the same way, and all three have
@@ -288,6 +294,29 @@ Two things do turn it red:
 
 2. **A trace in the corpus that could not be evaluated.** The measurement is then incomplete, and an
    incomplete number presented as a clean one is worse than no number.
+
+3. **The shared judge budget ran out mid-corpus.** `--max-cost-usd` spans the whole invocation, so
+   it can stop the run part way through: the remaining labels become `unscored` rows and the counts
+   describe the corpus the run stopped measuring. Same reasoning as a lost trace, same exit code.
+
+4. **Nothing scored at all.** If every label joins to a `skipped` result — a
+   `--deterministic-only` run over `ai`-graded labels, or a budget exhausted on the first trace
+   — `scored` is `0`, `agreement` is `null`, and every threshold reads *"0 of at most N, not
+   exceeded"*. The thresholds are honest; the denominator behind them is empty:
+
+   {/* step {"description":"A run that scored nothing is never green.","runShell":{"command":"moose-tracevals calibrate test/fixtures/traces/claude-session.jsonl test/fixtures/traces/claude-session-sidecar.jsonl --project test/fixtures/project --labels test/fixtures/project/tracevals/ai-only.labels.yaml --deterministic-only","exitCodes":[1],"stdio":"nothing was scored"}} */}
+
+   ```
+   Agreement 0/0 (—)
+
+   Warnings
+     ! no labelled eval produced evidence: 2 label(s) all joined to a skipped result, so agreement and every --max-* threshold are computed over an empty denominator
+
+   Exit 1: nothing was scored — every label joined to a skipped result, so agreement and every threshold above rest on an empty denominator.
+   ```
+
+   A measurement that measured nothing must not report a pass — the same reasoning that makes a
+   [selector matching no trace](/moose-tracevals/reference/cli/#run) exit `2` rather than `0`.
 
 </Steps>
 
@@ -318,7 +347,12 @@ SKIP   CLAUDE.md › adheres-to-artifact (implicit)
 Because it is checked per eval and evaluated in order, a budget stops the run *somewhere in the
 middle* — the evals that got skipped are an artifact of ordering, not importance. Treat a
 budget-exhausted run as incomplete rather than as a result. In a calibration run those evals become
-`unscored` rows, so an exhausted budget can never inflate agreement.
+`unscored` rows, so an exhausted budget can never inflate agreement — and the run exits `1`
+rather than reporting a partial measurement as a clean one.
+
+The batch underneath says so too: a [batch cut short by its own
+budget](/moose-tracevals/ci/exit-codes-and-reports/#a-batch-that-ran-out-of-budget) exits `1` and
+names how many evals went unjudged.
 
 <Aside type="caution" title="A budget is only as good as the price table">
 Cost is computed from a built-in per-model price table. **A model the table does not recognise is
