@@ -566,7 +566,7 @@ jobs:
             }
             // Rows are sorted by key on both OS legs, so two runs compare.
             const keys = batch.evals.map((e) => e.key);
-            if (keys.join(" ") !== [...keys].sort().join(" ")) {
+            if (JSON.stringify(keys) !== JSON.stringify([...keys].sort())) {
               console.error("aggregate rows are not deterministically ordered");
               process.exitCode = 1;
             }
