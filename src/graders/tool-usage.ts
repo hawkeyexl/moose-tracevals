@@ -10,6 +10,8 @@ import {
   orderedBounds,
   pass,
   requiredString,
+  skippedWindow,
+  windowFor,
   type Options,
 } from "./util.js";
 
@@ -53,7 +55,12 @@ export const toolUsageGrader: TraceGrader = {
     const expect = (options.expect as string | undefined) ?? "used";
     const includeSidechains = options.includeSidechains === true;
 
-    const count = trace.toolCalls.filter(
+    // Count only the calls the artifact was governing (ADR 01015). An agent's
+    // own branch is entirely sidechain, so `includeSidechains` still decides
+    // whether a *nested* subagent's calls count toward it.
+    const window = windowFor(trace, plan);
+    if (window.empty) return skippedWindow(window);
+    const count = window.toolCalls.filter(
       (c) => c.name === tool && (includeSidechains || !c.sidechain),
     ).length;
 

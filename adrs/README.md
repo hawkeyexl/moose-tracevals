@@ -26,3 +26,5 @@ Every **behavior change** in moose-tracevals ships with an ADR here. The ADR rec
 | [01010](01010-adopt-the-docmeta-artifact-evals-vocabulary.md) | Adopt `docmeta:artifact-evals` as the eval vocabulary, and stop publishing our own | accepted |
 | [01011](01011-execute-command-graded-evals.md) | Execute `command`-graded evals, on by default | accepted |
 | [01012](01012-verify-quoted-paths-and-pin-the-vendored-schema.md) | Verify repo paths quoted in the docs, and pin the vendored schema's bytes | accepted |
+| [01013](01013-carry-position-and-branch-identity-in-the-trace-model.md) | Carry position and branch identity in the normalized trace model | accepted |
+| [01014](01014-merge-sidecar-subagent-transcripts-into-the-trace.md) | Merge sidecar subagent transcripts into the trace, spliced at the spawn | accepted |

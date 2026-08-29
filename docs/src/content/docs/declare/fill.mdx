@@ -89,10 +89,12 @@ Proposals are checked in this order:
    | agent | `ai`, `tool-usage`, `file-access` |
    | project rules | `ai`, `skill-invoked`, `tool-usage` |
 
-   Two exclusions are deliberate. `cost`, `turn-count`, and `json-output` are **whole-session**
-   graders: a budget declared inside one skill would silently constrain the entire session, so they
-   are never proposed. And `skill-invoked` is excluded from skills and agents, because a skill
-   asserting that it was itself invoked is permanently green.
+   Two exclusions are deliberate. `cost` and `json-output` are **whole-session** graders — tokens
+   and the session's final message are not attributable to whichever artifact was governing — so a
+   budget declared inside one skill would silently constrain everything, and they are never
+   proposed. `turn-count` is windowed and no longer has that problem, but it stayed out of the
+   allowlist: widening it is a separate decision. And `skill-invoked` is excluded from skills and
+   agents, because a skill asserting that it was itself invoked is permanently green.
 
 3. **`invalid-options`**: the grader itself refused the options. Every grader validates its own
    options, and a grader that cannot do so is rejected outright.

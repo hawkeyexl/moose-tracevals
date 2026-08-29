@@ -47,6 +47,7 @@ export {
 export { IMPLICIT_EVAL_NAME, planEvals, type EvalPlan } from "./core/plan.js";
 export * from "./graders/types.js";
 export { graderFor, listGraderKinds, registerGrader } from "./graders/registry.js";
+export { skippedWindow, windowFor, type TraceWindow } from "./graders/util.js";
 export { renderTrace, type RenderOptions } from "./judge/render.js";
 export {
   JUDGE_SYSTEM_PROMPT,
