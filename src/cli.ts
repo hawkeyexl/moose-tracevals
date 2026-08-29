@@ -30,6 +30,7 @@ interface RunFlags {
   format?: string;
   output?: string;
   history?: boolean;
+  failOnNeedsReview?: boolean;
 }
 
 async function executeRun(trace: string | undefined, opts: RunFlags) {
@@ -55,6 +56,8 @@ async function executeRun(trace: string | undefined, opts: RunFlags) {
     format: (opts.format as ReportFormat | undefined) ?? "human",
     output: opts.output,
     history: opts.history,
+    // Left undefined when neither flag is passed, so the config still decides.
+    failOnNeedsReview: opts.failOnNeedsReview,
   });
   console.log(rendered);
   process.exitCode = report.exitCode;
@@ -74,7 +77,9 @@ function addRunFlags(cmd: Command): Command {
     .option("--max-cost-usd <usd>", "judge cost budget", (v) => parseFloat(v))
     .option("-f, --format <format>", "human | json | markdown", "human")
     .option("-o, --output <file>", "also write the report to a file")
-    .option("--history", "append to history and compare with the previous run");
+    .option("--history", "append to history and compare with the previous run")
+    .option("--fail-on-needs-review", "treat needs-review as a failure")
+    .option("--no-fail-on-needs-review", "do not fail the run on needs-review");
 }
 
 addRunFlags(

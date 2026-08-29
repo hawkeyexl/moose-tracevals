@@ -25,3 +25,4 @@ Every **behavior change** in moose-tracevals ships with an ADR here. The ADR rec
 | [01009](01009-share-one-moose-config-file-across-the-family.md) | Read settings from a `tracevals:` section of a shared `moose.config.yaml` | accepted |
 | [01010](01010-adopt-the-docmeta-artifact-evals-vocabulary.md) | Adopt `docmeta:artifact-evals` as the eval vocabulary, and stop publishing our own | accepted |
 | [01011](01011-execute-command-graded-evals.md) | Execute `command`-graded evals, on by default | accepted |
+| [01012](01012-verify-quoted-paths-and-pin-the-vendored-schema.md) | Verify repo paths quoted in the docs, and pin the vendored schema's bytes | accepted |

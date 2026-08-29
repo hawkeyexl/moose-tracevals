@@ -67,6 +67,15 @@ tracevals:
 Now `needs-review` no longer contributes to a non-zero exit. It still appears in the report and in
 the summary counts, so you can surface it without blocking on it.
 
+To decide per invocation instead — a strict pre-merge job and a lenient nightly one sharing a config
+— override it on the command line:
+
+```bash
+npx moose-tracevals run <trace> --no-fail-on-needs-review
+```
+
+`--fail-on-needs-review` forces the opposite. Passing neither leaves the config value in force.
+
 <Aside type="tip" title="Decide this before you meet it">
 Pick a policy when you install the gate. Meeting `needs-review` for the first time as a red build
 nobody can explain is the avoidable version of this.

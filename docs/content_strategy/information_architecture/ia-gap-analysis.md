@@ -81,7 +81,7 @@ or revising one:
 | `reference/cli` | `src/cli.ts` |
 | `reference/configuration` | `src/core/config-schema.json`, `src/core/config.ts` |
 | `reference/graders` | `src/graders/` — one file per kind, plus `registry.ts` and `util.ts` for the shared validators and their exact messages |
-| `reference/evals-schema` | `schemas/artifact-evals-0.2.json`, `schemas/artifact-evals-0.1.json`, `src/evals/` |
+| `reference/evals-schema` | `schemas/artifact-evals-1.0.0-proposal.1.json` (vendored from docmeta), `src/evals/` |
 | `reference/report-and-exit-codes` | `src/types.ts`, `src/reporters/`, `src/history.ts` |
 | `reference/traces` | `src/trace/` — `detect.ts`, `claude.ts`, `discover.ts` |
 | `reference/api` | `src/index.ts` |
