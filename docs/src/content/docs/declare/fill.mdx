@@ -1,6 +1,6 @@
 ---
 title: Fill in evals across a project
-description: Use fill to propose evals for every skill, agent, and rules file in a project — understand the gate that gets applied, and review the diff before anything is written.
+description: Use fill to propose evals for every skill, agent, slash command, and rules file in a project — understand the gate that gets applied, and review the diff before anything is written.
 sidebar:
   order: 2
 ---
@@ -37,13 +37,16 @@ npx moose-tracevals fill --dry-run
 proposed  .claude/agents/doc-writer.md  +1 (reads-before-editing 0.90) — dry run, not written
           below 0.7: explains-its-reasoning 0.30
           needs sharpening: "Produce high-quality work." — "high-quality" has no measurable bar, so no session could fail it
+proposed  .claude/commands/ship-it.md  +1 (reads-before-editing 0.90) — dry run, not written
+          below 0.7: explains-its-reasoning 0.30
+          needs sharpening: "Produce high-quality work." — "high-quality" has no measurable bar, so no session could fail it
 proposed  .claude/skills/fix-bug/SKILL.md  +1 (reads-before-editing 0.90) — dry run, not written
           below 0.7: explains-its-reasoning 0.30
           needs sharpening: "Produce high-quality work." — "high-quality" has no measurable bar, so no session could fail it
 proposed  AGENTS.md  +1 (reads-before-editing 0.90) — project rules are never written; copy what you want
 proposed  CLAUDE.md  +1 (reads-before-editing 0.90) — project rules are never written; copy what you want
 
-Threshold 0.7 · 4 evals proposed, none written (dry run)
+Threshold 0.7 · 6 evals proposed, none written (dry run)
 ```
 
 {/* Doc Detective inline tests: run the documented fill workflow against the
@@ -86,15 +89,20 @@ Proposals are checked in this order:
    | Artifact type | Graders it may use |
    |---|---|
    | skill | `ai`, `tool-usage`, `file-access`, `regex` |
+   | slash command | `ai`, `tool-usage`, `file-access`, `regex` |
    | agent | `ai`, `tool-usage`, `file-access` |
    | project rules | `ai`, `skill-invoked`, `tool-usage` |
+
+   A slash command carries the skill list unchanged, because it is the same shape of artifact: an
+   injected procedure graded over the span it governed.
 
    Two exclusions are deliberate. `cost` and `json-output` are **whole-session** graders — tokens
    and the session's final message are not attributable to whichever artifact was governing — so a
    budget declared inside one skill would silently constrain everything, and they are never
    proposed. `turn-count` is windowed and no longer has that problem, but it stayed out of the
-   allowlist: widening it is a separate decision. And `skill-invoked` is excluded from skills and
-   agents, because a skill asserting that it was itself invoked is permanently green.
+   allowlist: widening it is a separate decision. And `skill-invoked` is excluded from skills, slash
+   commands, and agents, because an artifact asserting that it was itself invoked is permanently
+   green.
 
 3. **`invalid-options`**: the grader itself refused the options. Every grader validates its own
    options, and a grader that cannot do so is rejected outright.
@@ -163,6 +171,12 @@ measurement stops meaning anything the moment the subject can read it.
 
 So the proposals are printed, and you decide which ones to carry over by hand. The reasoning is
 recorded in [ADR 01005](https://github.com/hawkeyexl/moose-tracevals/blob/main/adrs/01005-fill-proposes-evals-at-authoring-time.md).
+
+**Slash commands are written**, like skills and agents. The distinction is not "does the agent read
+this file" but *"does the agent read this file's frontmatter"*: Claude Code consumes a command's
+`description`, `argument-hint`, and `allowed-tools` itself and injects only the body as the prompt,
+so an eval block there never reaches the session under test. Project rules are injected verbatim,
+frontmatter included, which is what makes them the exception.
 
 ## Where to go next
 

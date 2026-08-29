@@ -93,6 +93,62 @@ describe("resolveArtifacts", () => {
     expect(warnings.some((w) => w.includes("Explore"))).toBe(false);
   });
 
+  // A `<command-name>` injection is one of three things and only the
+  // filesystem can say which (ADR 01023).
+  it("resolves a project slash command from .claude/commands", async () => {
+    const { artifacts, coverage } = await resolveFixtureSession();
+    const command = artifacts.find((a) => a.name === "ship-it");
+    expect(command?.type).toBe("slash-command");
+    expect(command?.origin).toBe("project");
+    expect(command?.content).toContain("Ship it");
+    const entry = coverage.find((c) => c.ref === "ship-it");
+    expect(entry?.kind).toBe("slash-command");
+    expect(entry?.resolved).toBe(true);
+  });
+
+  it("keeps a slash command that resolves to a SKILL.md a skill", async () => {
+    const { coverage } = await resolveFixtureSession();
+    const entry = coverage.find(
+      (c) => c.ref === "writing-toolkit:identify-ai-tells",
+    );
+    expect(entry?.kind).toBe("skill");
+    expect(entry?.resolved).toBe(true);
+  });
+
+  it("notes a built-in slash command rather than a missing skill", async () => {
+    const { artifacts, coverage, warnings } = await resolveFixtureSession();
+    expect(artifacts.some((a) => a.name === "model")).toBe(false);
+    const entry = coverage.find((c) => c.ref === "model");
+    expect(entry?.kind).toBe("slash-command");
+    expect(entry?.resolved).toBe(false);
+    expect(entry?.note).toContain("built-in");
+    // The whole point: it must not be reported as a skill that went missing.
+    expect(coverage.some((c) => c.ref === "model" && c.kind === "skill")).toBe(
+      false,
+    );
+    expect(warnings.some((w) => w.includes("model"))).toBe(false);
+  });
+
+  it("resolves a plugin slash command from the user plugin store", async () => {
+    const { artifacts } = await resolveArtifacts(
+      emptyTrace({
+        skillInvocations: [
+          {
+            name: "writing-toolkit:polish-prose",
+            via: "command-injection",
+            index: 0,
+          },
+        ],
+      }),
+      { env: { MOOSE_TRACEVALS_HOME: fixtureHome } },
+    );
+    const command = artifacts.find(
+      (a) => a.name === "writing-toolkit:polish-prose",
+    );
+    expect(command?.type).toBe("slash-command");
+    expect(command?.origin).toBe("plugin");
+  });
+
   it("resolves project rules at the project dir", async () => {
     const { artifacts } = await resolveFixtureSession();
     const rules = artifacts.filter((a) => a.type === "project-rules");
