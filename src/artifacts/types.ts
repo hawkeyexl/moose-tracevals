@@ -1,4 +1,5 @@
 /** Resolved instruction artifacts and coverage reporting. */
+import type { ContentCheck } from "../capture/types.js";
 
 /**
  * The kinds of instruction artifact a session can be governed by.
@@ -59,15 +60,28 @@ export interface CoverageEntry {
    */
   availability?: ArtifactAvailability;
   /**
-   * The artifact on disk is newer than the session, so the evals being run may
-   * not be the instructions the session followed (ADR 01021). A heuristic —
-   * mtime is not content identity — and a warning only: it never becomes an
-   * eval outcome and never changes the exit code. Absent when the trace
-   * records no end time, since then there is nothing to compare against.
+   * The artifact on disk is not the one the session followed, so its evals may
+   * not be the instructions in force at the time.
+   *
+   * Two sources, and which one answered is in `contentCheck`. Without a session
+   * manifest this is the **mtime heuristic** of ADR 01021 — the file is newer
+   * than the session's end — and it is absent when the trace records no end
+   * time, since then there is nothing to compare against. With a manifest it is
+   * the **exact** answer: a sha256 that differs from the one recorded when the
+   * session started, or provably identical content (ADR 01024).
+   *
+   * A warning either way. It never becomes an eval outcome and never changes
+   * the exit code.
    */
   stale?: boolean;
-  /** The artifact's mtime, ISO-8601. Present whenever `stale` is. */
+  /** The artifact's mtime, ISO-8601. Present whenever it could be read. */
   modifiedAt?: string;
+  /**
+   * What the session manifest said about this row's content (ADR 01024).
+   * `skipped` — with the reason — whenever there was no manifest, or none that
+   * covered this artifact; then `stale` is still the mtime guess.
+   */
+  contentCheck?: ContentCheck;
 }
 
 /** Roster tallies for one artifact kind. */

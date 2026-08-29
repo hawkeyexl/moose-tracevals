@@ -87,6 +87,8 @@ tracevals:
     maxTotalChars: 150000
   history:
     file: .moose-tracevals/history.jsonl
+  capture:
+    dir: .moose-tracevals/sessions   # where session manifests are written and read
   fill:
     confidenceThreshold: 0.7
     maxEvalsPerArtifact: 8
@@ -275,6 +277,21 @@ at the cost of a larger prompt.
 Where `--history` appends. See
 [Reports & exit codes](/moose-tracevals/reference/report-and-exit-codes/#history).
 
+## `capture`
+
+| Key | Type | Default | CLI |
+|---|---|---|---|
+| `dir` | string | `.moose-tracevals/sessions` | `capture --out` writes elsewhere; `run --manifest` reads elsewhere |
+
+Where [`capture`](/moose-tracevals/reference/cli/#capture) writes a session manifest and where `run`
+looks for one, resolved against the **project root** rather than the working directory. Inside
+`.moose-tracevals/` on purpose: that directory is already where the judge cache lives, it is already
+gitignored, and being inside the project is what makes a manifest travel with its trace in the
+[CI patterns](/moose-tracevals/ci/#carry-the-manifest-with-the-trace).
+
+Changing it changes both ends, so a project that relocates manifests keeps `capture` and `run`
+agreeing without a flag on either.
+
 ## `fill`
 
 | Key | Type | Default | CLI |
@@ -384,6 +401,7 @@ Worth knowing, because they can only be changed in the config file:
 
 `judge.temperature` · `judge.zones.autoPass` · `judge.zones.autoFail` · `judge.cacheDir` ·
 `judge.redact` · `render.maxBlockChars` · `render.maxTotalChars` · `history.file` ·
+`capture.dir` ·
 `fill.temperature` · `fill.cacheDir` · `calibrate.sweep.ensembleRuns` ·
 `calibrate.sweep.autoPass` · `calibrate.sweep.autoFail` · every `provider.*` key except
 `model`
@@ -395,3 +413,8 @@ session's end time; one that is newer is flagged in the coverage table and named
 always on because it costs one `stat` and can only ever add information — it never becomes an eval
 outcome and never changes the exit code. See
 [Artifact coverage](/moose-tracevals/declare/coverage/#staleness).
+
+**Reading a session manifest** has no knob either, beyond where to look. If one exists for the
+trace, `run` uses it; if not, every hash check reports `skipped` with the reason and the mtime
+heuristic above stands unchanged. There is nothing to turn on, because there is nothing to turn on
+*for* until someone runs [`capture`](/moose-tracevals/reference/cli/#capture).

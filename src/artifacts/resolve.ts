@@ -8,6 +8,8 @@ import { basename, dirname, join, resolve, sep } from "node:path";
 import { homeDir } from "../trace/discover.js";
 import { coverAvailability } from "./availability.js";
 import { findGitRoot, findInTree, safeMtime, safeRead } from "./fs.js";
+import { checkContent, hashFile, relPosix } from "../capture/manifest.js";
+import type { SessionManifest } from "../capture/types.js";
 import type { Trace } from "../trace/types.js";
 import type {
   CoverageEntry,
@@ -27,6 +29,12 @@ export interface ResolveOptions {
    * hundreds of skills.
    */
   reportUnusedArtifacts?: boolean;
+  /**
+   * The session manifest for this trace, when one was found (ADR 01024). It
+   * makes staleness exact for the artifacts it recorded and changes nothing
+   * else — no eval outcome, no exit code, no resolution decision.
+   */
+  manifest?: SessionManifest;
 }
 
 /**
@@ -225,6 +233,8 @@ export async function resolveArtifacts(
     coverage,
     new Map([[rulesEntry, rules.artifacts.map((a) => a.path)]]),
     warnings,
+    projectRoot,
+    options.manifest,
   );
 
   // What the session was *offered* is the other half of coverage: resolution
@@ -246,53 +256,120 @@ export async function resolveArtifacts(
 // ── Staleness ────────────────────────────────────────────────────
 
 /**
- * Flag every resolved artifact whose file is newer than the session (ADR
- * 01021). Evals are read from the artifact *as it is now* while the session
+ * Say, for every resolved artifact, whether it is still the one the session
+ * followed. Evals are read from the artifact *as it is now* while the session
  * followed it *as it was then*, so editing a SKILL.md after a session grades
  * that session against instructions it never saw.
  *
- * A heuristic, and deliberately a soft one: mtime is not content identity, a
- * fresh clone rewrites every mtime, and an unreadable mtime says nothing. It
- * produces a coverage flag and one warning — never an eval outcome, never an
- * exit code.
+ * Two sources of evidence, and the better one wins **only on its own question**:
+ *
+ *  - **A session manifest** (ADR 01024) recorded a sha256 per artifact when the
+ *    session started. A digest that differs is an exact "this changed"; a digest
+ *    that matches is an exact "this did not". Either one settles the row.
+ *  - **mtime** (ADR 01021) is the fallback, and a soft one: it is not content
+ *    identity, a fresh clone rewrites every mtime, and an unreadable mtime says
+ *    nothing.
+ *
+ * A manifest may therefore quiet the mtime warning for an artifact it covers —
+ * that is the entire point, since a checkout otherwise flags everything in CI —
+ * and it may do nothing else. It never reaches an eval outcome, never moves the
+ * exit code, and it cannot silence a row it has no entry for. The observation
+ * itself (`modifiedAt`) is reported either way, so nothing is hidden; only the
+ * conclusion drawn from it changes.
  */
 async function annotateStaleness(
   trace: Trace,
   coverage: CoverageEntry[],
   extraPaths: Map<CoverageEntry, string[]>,
   warnings: string[],
+  projectRoot: string,
+  manifest?: SessionManifest,
 ): Promise<void> {
-  // No session end means no ground to compare against, and guessing one would
-  // manufacture a warning out of no evidence.
-  if (trace.endedAt === undefined) return;
-  const endedAt = Date.parse(trace.endedAt);
-  if (!Number.isFinite(endedAt)) return;
+  // No session end means no ground for the *heuristic* to stand on, and
+  // guessing one would manufacture a warning out of no evidence. A manifest
+  // supplies its own ground, so it still has something to say here.
+  const endedAt =
+    trace.endedAt !== undefined ? Date.parse(trace.endedAt) : Number.NaN;
+  const haveEnd = Number.isFinite(endedAt);
+  if (!haveEnd && manifest === undefined) return;
 
-  const staleRefs: string[] = [];
+  /** Refs still resting on the mtime guess. */
+  const guessed: string[] = [];
+  /** Refs the manifest proved changed. */
+  const changed: string[] = [];
+
   for (const entry of coverage) {
     if (!entry.resolved) continue;
     const paths = extraPaths.get(entry) ?? (entry.path ? [entry.path] : []);
     if (paths.length === 0) continue;
 
     let newest: string | undefined;
+    let outside = false;
+    const digests = new Map<string, string>();
     for (const path of paths) {
       const mtime = await safeMtime(path);
-      if (mtime === null) continue;
-      if (newest === undefined || mtime > newest) newest = mtime;
+      if (mtime !== null && (newest === undefined || mtime > newest)) {
+        newest = mtime;
+      }
+      if (manifest === undefined) continue;
+      // Keyed on the project-relative path, so the manifest still joins after
+      // the repository has been checked out somewhere else. An artifact outside
+      // the project — a user-level or plugin skill — has no relative path, and
+      // `capture` is project-scoped, so it was never recordable in the first
+      // place. That is a different sentence from "it changed" and gets one.
+      const rel = relPosix(projectRoot, path);
+      if (rel === null) {
+        outside = true;
+        continue;
+      }
+      const digest = await hashFile(path);
+      if (digest !== null) digests.set(rel, digest);
     }
-    if (newest === undefined) continue;
+    if (newest !== undefined) entry.modifiedAt = newest;
 
-    entry.modifiedAt = newest;
+    const check =
+      manifest === undefined
+        ? ({
+            status: "skipped",
+            reason: "no session manifest for this trace",
+          } as const)
+        : outside && digests.size === 0
+          ? ({
+              status: "skipped",
+              reason:
+                "outside the project root, so no session manifest could record it",
+            } as const)
+          : checkContent(manifest, digests);
+    entry.contentCheck = check;
+
+    if (check.status === "mismatch") {
+      entry.stale = true;
+      changed.push(entry.ref);
+      continue;
+    }
+    if (check.status === "match") {
+      // Exact, and it answers mtime's own question — so the guess does not run.
+      entry.stale = false;
+      continue;
+    }
+    if (!haveEnd || newest === undefined) continue;
     entry.stale = Date.parse(newest) > endedAt;
-    if (entry.stale) staleRefs.push(entry.ref);
+    if (entry.stale) guessed.push(entry.ref);
   }
 
-  if (staleRefs.length > 0) {
+  if (changed.length > 0) {
+    warnings.push(
+      `${changed.length} artifact(s) changed since the session started ` +
+        `(${changed.join(", ")}) — the session manifest recorded a different ` +
+        `sha256, so their evals are not the instructions this session followed.`,
+    );
+  }
+  if (guessed.length > 0) {
     // One warning, not one per artifact: a fresh checkout flags everything, and
     // a wall of identical lines is how a real signal gets tuned out.
     warnings.push(
-      `${staleRefs.length} artifact(s) were modified after the session ended ` +
-        `(${staleRefs.join(", ")}) — their evals may not be the instructions ` +
+      `${guessed.length} artifact(s) were modified after the session ended ` +
+        `(${guessed.join(", ")}) — their evals may not be the instructions ` +
         `this session followed. mtime is a heuristic, not content identity.`,
     );
   }

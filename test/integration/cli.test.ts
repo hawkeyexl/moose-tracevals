@@ -5,6 +5,8 @@
  */
 import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
+import { copyFile, mkdir, readFile, rm } from "node:fs/promises";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { describe, expect, it } from "vitest";
@@ -427,6 +429,124 @@ describe.skipIf(!built)("built CLI", () => {
       );
       expect(code).toBe(2);
       expect(stderr).toMatch(/could not read labels file/);
+    });
+  });
+
+  /**
+   * `capture` end to end (ADR 01024). The hook payload really arrives on
+   * stdin, so this exercises the one path the unit tests inject around.
+   */
+  describe("capture", () => {
+    async function runCliStdin(
+      args: string[],
+      stdin: string,
+      env: Record<string, string> = {},
+    ): Promise<{ code: number; stdout: string; stderr: string }> {
+      const child = execFile("node", [cli, ...args], {
+        cwd: root,
+        env: { ...process.env, ...env },
+      });
+      child.stdin?.end(stdin);
+      return new Promise((settle) => {
+        let stdout = "";
+        let stderr = "";
+        child.stdout?.on("data", (d) => (stdout += String(d)));
+        child.stderr?.on("data", (d) => (stderr += String(d)));
+        child.on("close", (code) => settle({ code: code ?? 0, stdout, stderr }));
+      });
+    }
+
+    it("writes a manifest from a hook payload on stdin, and keeps stdout empty", async () => {
+      const dir = join(".tmp", `cli-capture-${process.pid}`);
+      await mkdir(dir, { recursive: true });
+      const out = join(dir, "s.json");
+      const { code, stdout, stderr } = await runCliStdin(
+        ["capture", "--out", out],
+        JSON.stringify({
+          session_id: "cli-session",
+          hook_event_name: "SessionStart",
+          how: "startup",
+          cwd: "test/fixtures/project",
+        }),
+      );
+      try {
+        expect(code).toBe(0);
+        // A SessionStart hook's stdout becomes the model's context, so it must
+        // stay empty however chatty the command is.
+        expect(stdout).toBe("");
+        expect(stderr).toContain("cli-session");
+        const manifest = JSON.parse(await readFile(join(root, out), "utf-8"));
+        expect(manifest.sessionId).toBe("cli-session");
+        expect(manifest.hookEvent).toBe("SessionStart");
+        expect(manifest.artifacts.length).toBeGreaterThan(0);
+        expect(manifest.git?.sha).toMatch(/^[0-9a-f]{40}$/);
+      } finally {
+        await rm(dir, { recursive: true, force: true });
+      }
+    });
+
+    it("exits 2 rather than guessing when the payload names no session", async () => {
+      const { code, stderr } = await runCliStdin(["capture"], "{}");
+      expect(code).toBe(2);
+      expect(stderr).toMatch(/no session id/);
+    });
+
+    it("makes staleness exact for `run`, and does nothing to the verdicts", async () => {
+      const dir = join(".tmp", `cli-sharpen-${process.pid}`);
+      await mkdir(dir, { recursive: true });
+      const trace = join(dir, "session.jsonl");
+      await copyFile(
+        join(root, "test/fixtures/traces/claude-session.jsonl"),
+        join(root, trace),
+      );
+      const home = { MOOSE_TRACEVALS_HOME: "test/fixtures/home" };
+      const runArgs = [
+        "run",
+        trace,
+        "--project",
+        "test/fixtures/project",
+        "--deterministic-only",
+        "--format",
+        "json",
+      ];
+      try {
+        const before = JSON.parse((await runCli(runArgs, home)).stdout);
+        expect(before.manifest).toBeUndefined();
+
+        await runCliStdin(
+          ["capture", "--out", join(dir, "session.manifest.json")],
+          JSON.stringify({
+            session_id: "11111111-1111-1111-1111-111111111111",
+            cwd: "test/fixtures/project",
+          }),
+        );
+        const after = JSON.parse((await runCli(runArgs, home)).stdout);
+
+        expect(after.manifest?.changed).toBe(0);
+        expect(after.manifest?.matched).toBeGreaterThan(0);
+        // The mtime false positive a checkout manufactures is gone for every
+        // artifact the manifest recorded, and nothing else moved.
+        const staleRefs = (r: { coverage: { ref: string; stale?: boolean }[] }) =>
+          r.coverage.filter((c) => c.stale === true).map((c) => c.ref);
+        expect(staleRefs(before).length).toBeGreaterThan(staleRefs(after).length);
+        expect(after.summary).toEqual(before.summary);
+        expect(after.exitCode).toBe(before.exitCode);
+      } finally {
+        await rm(dir, { recursive: true, force: true });
+      }
+    });
+
+    it("refuses --manifest against a corpus", async () => {
+      const { code, stderr } = await runCli([
+        "run",
+        "test/fixtures/traces/claude-session.jsonl",
+        "test/fixtures/traces/claude-session-sidecar.jsonl",
+        "--manifest",
+        "whatever.json",
+        "--deterministic-only",
+      ]);
+      expect(code).toBe(2);
+      expect(stderr).toMatch(/cannot be used with a corpus/);
     });
   });
 

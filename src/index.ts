@@ -209,3 +209,32 @@ export {
   type HistoryEntry,
   type HistoryEval,
 } from "./history.js";
+export * from "./capture/types.js";
+export {
+  checkContent,
+  findManifest,
+  hashFile,
+  manifestPathFor,
+  readManifest,
+  relPosix,
+  safeSessionId,
+  sha256Hex,
+  siblingManifestPath,
+  writeManifest,
+  type FindManifestOptions,
+  type FoundManifest,
+} from "./capture/manifest.js";
+export {
+  buildManifest,
+  deviceId,
+  readGit,
+  redactDeep,
+  type BuildManifestOptions,
+} from "./capture/build.js";
+export { parseHookPayload, readStdin, type HookPayload } from "./capture/hook.js";
+export {
+  renderCapture,
+  runCapture,
+  type CaptureCommandOptions,
+  type CaptureCommandResult,
+} from "./commands/capture.js";

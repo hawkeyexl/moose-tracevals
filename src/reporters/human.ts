@@ -7,6 +7,7 @@ import {
   availabilityTag,
   coverageLocation,
   coverageStaleness,
+  manifestLines,
 } from "./coverage.js";
 
 const OUTCOME_LABEL: Record<EvalResult["outcome"], string> = {
@@ -94,6 +95,17 @@ export function renderHuman(report: RunReport): string {
         .filter((part) => part !== "")
         .join(" "),
     );
+  }
+
+  if (report.manifest !== undefined) {
+    // Only when there is one: a line saying "no manifest" on every run of every
+    // project that has not adopted `capture` is noise, and the per-row skipped
+    // content check already carries the machine-readable answer (ADR 01024).
+    lines.push("");
+    lines.push(pc.bold("Session manifest"));
+    for (const line of manifestLines(report.manifest)) {
+      lines.push(`  ${pc.dim(line)}`);
+    }
   }
 
   lines.push("");
