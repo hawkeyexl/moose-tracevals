@@ -1,7 +1,15 @@
+import { copyFile, mkdir, mkdtemp, rm } from "node:fs/promises";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { runEvals } from "../../src/core/engine.js";
 import { parseConfig } from "../../src/core/config.js";
+import { buildManifest } from "../../src/capture/build.js";
+import {
+  siblingManifestPath,
+  writeManifest,
+} from "../../src/capture/manifest.js";
+import { TracevalsError } from "../../src/types.js";
 import type { TraceJudge } from "../../src/judge/trace-judge.js";
 
 const sessionFixture = fileURLToPath(
@@ -183,6 +191,97 @@ describe("runEvals", () => {
       expect(outcomes(off)).toEqual(outcomes(on));
       // A skipped check must not turn a failing run green, nor a green one red.
       expect(off.exitCode).toBe(on.exitCode);
+    });
+  });
+
+  /**
+   * `run` consuming a manifest (ADR 01024). The fixture corpus deliberately
+   * ships **without** one, so the absent case is the default here and the
+   * present case is built at test time.
+   */
+  describe("session manifests", () => {
+    it("says nothing about a manifest when there is none", async () => {
+      const report = await run();
+      expect(report.manifest).toBeUndefined();
+      // Every hash check still reports, so the absence is machine-readable
+      // rather than merely invisible.
+      const resolved = report.coverage.filter((c) => c.resolved && c.path);
+      expect(resolved.length).toBeGreaterThan(0);
+      for (const entry of resolved) {
+        expect(entry.contentCheck?.status).toBe("skipped");
+        expect(entry.contentCheck?.reason).toMatch(/manifest/i);
+      }
+    });
+
+    it("errors rather than shrugging when --manifest names one that cannot be used", async () => {
+      await expect(
+        run({ manifest: join(".tmp", "definitely-not-here.json") }),
+      ).rejects.toThrow(TracevalsError);
+    });
+
+    it("consumes one written beside the trace, and never moves an outcome", async () => {
+      await mkdir(".tmp", { recursive: true });
+      const dir = await mkdtemp(join(".tmp", "engine-manifest-"));
+      const trace = join(dir, "session.jsonl");
+      await copyFile(sessionFixture, trace);
+      const manifest = await buildManifest({
+        sessionId: "11111111-1111-1111-1111-111111111111",
+        root: fixtureProject,
+      });
+      await writeManifest(siblingManifestPath(trace), manifest);
+
+      const before = await run();
+      const after = await run({ tracePath: trace });
+      try {
+        expect(after.manifest?.sessionId).toBe(
+          "11111111-1111-1111-1111-111111111111",
+        );
+        expect(after.manifest?.matched).toBeGreaterThan(0);
+        expect(after.manifest?.changed).toBe(0);
+        // A checkout rewrote every mtime, so `before` flags everything. The
+        // manifest answers mtime's own question for every artifact inside the
+        // project and those flags clear — while every verdict, the summary, and
+        // the exit code stay identical.
+        expect(before.coverage.some((c) => c.stale === true)).toBe(true);
+        const inProject = after.coverage.filter(
+          (c) => c.contentCheck?.status === "match",
+        );
+        expect(inProject.length).toBeGreaterThan(0);
+        expect(inProject.every((c) => c.stale === false)).toBe(true);
+        // `capture` is project-scoped, so the plugin skill from the fixture
+        // home was never recordable — it keeps the guess, and says why.
+        const outside = after.coverage.find(
+          (c) => c.ref === "writing-toolkit:identify-ai-tells",
+        );
+        expect(outside?.contentCheck?.status).toBe("skipped");
+        expect(outside?.contentCheck?.reason).toMatch(/outside the project root/);
+        expect(outside?.stale).toBe(true);
+        expect(after.summary).toEqual(before.summary);
+        expect(after.exitCode).toBe(before.exitCode);
+        expect(after.evalResults.map((r) => r.outcome)).toEqual(
+          before.evalResults.map((r) => r.outcome),
+        );
+      } finally {
+        await rm(dir, { recursive: true, force: true });
+      }
+    });
+
+    it("refuses a manifest captured for another session", async () => {
+      await mkdir(".tmp", { recursive: true });
+      const dir = await mkdtemp(join(".tmp", "engine-wrong-"));
+      const trace = join(dir, "session.jsonl");
+      await copyFile(sessionFixture, trace);
+      await writeManifest(
+        siblingManifestPath(trace),
+        await buildManifest({ sessionId: "somebody-elses", root: fixtureProject }),
+      );
+      try {
+        const report = await run({ tracePath: trace });
+        // Evidence about another session is not evidence about this one.
+        expect(report.manifest).toBeUndefined();
+      } finally {
+        await rm(dir, { recursive: true, force: true });
+      }
     });
   });
 });
