@@ -21,7 +21,7 @@ steps:
 
 **Scope:** the **backbone journey** — first contact through a real, readable result. It stops at the
 moment the reader trusts the output. Making the checks say something specific is
-[`cuj-declare-criteria`](cuj-declare-criteria.md); putting it in a pipeline is
+[`cuj-declare-evals`](cuj-declare-evals.md); putting it in a pipeline is
 [`cuj-gate-ci`](cuj-gate-ci.md).
 
 **Trigger.** Someone has a repository full of agent instructions and a growing suspicion that some
@@ -29,7 +29,7 @@ of them are decorative. They want evidence before investing further.
 
 **Narrative.** This journey is short by construction, and its length is the product's main claim:
 because artifacts are resolved deterministically from the trace and the filesystem, and because
-artifacts with no declared criteria still get one implicit whole-artifact eval, a first run produces
+artifacts with no declared evals still get one implicit whole-artifact eval, a first run produces
 something meaningful with **zero configuration**. Nothing needs authoring before the first result.
 
 Three things must land in order, and each is a place the journey can be lost:
@@ -40,11 +40,11 @@ Three things must land in order, and each is a place the journey can be lost:
    `--provider mock` exercises the full pipeline offline. A first-run experience that demands an API
    key loses both personas at once — which is why the default provider uses the local agent CLI's
    own auth rather than a key anyone has to provision.
-3. **The report is legible without a glossary.** Outcome, artifact, criterion, finding. If reading
+3. **The report is legible without a glossary.** Outcome, artifact, eval, finding. If reading
    the first report requires understanding consensus arithmetic, the on-ramp has failed.
 
 Priya and Devin both walk this journey but leave it by different doors — she toward declaring
-criteria, he toward CI — so it must end with a fork, not a single next step.
+evals, he toward CI — so it must end with a fork, not a single next step.
 
 **Coverage.** No gaps. `get-started/` carries install, trace discovery, the first offline run, and a
 line-by-line read of the report. `declare/coverage/` closes the last step: why an unresolved

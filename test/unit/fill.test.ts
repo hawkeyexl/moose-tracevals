@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { MockProvider } from "@hawkeyexl/inference";
 import { runFill } from "../../src/commands/fill.js";
-import { extractCriteria } from "../../src/criteria/extract.js";
+import { extractEvals } from "../../src/evals/extract.js";
 import { planEvals } from "../../src/core/plan.js";
 import { TracevalsError } from "../../src/types.js";
 
@@ -16,7 +16,7 @@ const fixtureProject = fileURLToPath(
 function proposal(over: Record<string, unknown> = {}) {
   return {
     json: {
-      criteria: [
+      evals: [
         {
           name: "no-shell",
           assertion: "The session never ran shell commands.",
@@ -112,7 +112,7 @@ describe("runFill", () => {
   it("reports rejections with a machine-readable reason", async () => {
     const provider = new MockProvider([
       proposal({
-        criteria: [
+        evals: [
           {
             name: "ghost-tool",
             assertion: "The FileEditor tool was used.",
@@ -124,7 +124,7 @@ describe("runFill", () => {
           {
             name: "unsure",
             assertion: "Something might have happened.",
-            grader: "llm",
+            grader: "ai",
             examples: { pass: "yes", fail: "no" },
             confidence: 0.2,
           },
@@ -233,19 +233,19 @@ describe("runFill", () => {
     ).rejects.toThrow(TracevalsError);
   });
 
-  it("counts existing criteria against the per-artifact cap", async () => {
-    // fix-bug already declares 3 criteria; a cap of 3 leaves no room.
-    const { report } = await run({ maxCriteria: 3, dryRun: true, noCache: true });
+  it("counts existing evals against the per-artifact cap", async () => {
+    // fix-bug already declares 5 evals; a cap of 5 leaves no room.
+    const { report } = await run({ maxEvals: 5, dryRun: true, noCache: true });
     const skill = report.results.find((r) => r.type === "skill");
     expect(skill?.written).toEqual([]);
     expect(skill?.capped.length).toBeGreaterThan(0);
   });
 
-  it("skips an artifact that opts out with metadata.evals.skip", async () => {
+  it("skips an artifact that opts out with metadata.eval-skip", async () => {
     const target = join(project, ".claude", "agents", "doc-writer.md");
     await writeFile(
       target,
-      "---\nname: doc-writer\nmetadata:\n  evals:\n    skip: true\n---\nbody\n",
+      "---\nname: doc-writer\nmetadata:\n  eval-skip: true\n---\nbody\n",
     );
     const provider = new MockProvider([proposal()]);
     const { report } = await run({ providerInstance: provider, noCache: true });
@@ -264,7 +264,7 @@ describe("runFill", () => {
     const path = join(project, ".claude", "skills", "fix-bug", "SKILL.md");
     const content = await readFile(path, "utf-8");
 
-    const extracted = await extractCriteria({
+    const extracted = await extractEvals({
       name: "fix-bug",
       type: "skill",
       path,
@@ -272,7 +272,7 @@ describe("runFill", () => {
       origin: "project",
     });
     expect(extracted.errors).toEqual([]);
-    expect(extracted.criteria.map((c) => c.name)).toContain("no-shell");
+    expect(extracted.evals.map((e) => e.id)).toContain("no-shell");
 
     const plans = await planEvals([
       { name: "fix-bug", type: "skill", path, content, origin: "project" },

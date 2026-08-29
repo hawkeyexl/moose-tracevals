@@ -14,6 +14,7 @@ import {
   pricingOverrideFor,
 } from "../judge/provider.js";
 import { makeTraceJudge, type TraceJudge } from "../judge/trace-judge.js";
+import type { InferenceProvider, Pricing } from "@hawkeyexl/inference";
 import { render, type ReportFormat } from "../reporters/index.js";
 import type { RunReport } from "../types.js";
 
@@ -61,8 +62,30 @@ export async function runRun(
     const pricing = pricingOverrideFor(config, {
       ...(options.provider !== undefined ? { provider: options.provider } : {}),
     });
+    const overrideProviders = new Map<
+      string,
+      { provider: InferenceProvider; pricing?: Pricing }
+    >();
     judge = makeTraceJudge({
       provider,
+      // An eval may name its own provider. Build it from the same config the
+      // default came from, so a per-eval override picks up that provider's
+      // model default, API-key env, and price override rather than a bare name.
+      // Memoized: the judge calls this once per eval, and twenty evals naming
+      // one provider should not build twenty of it.
+      providerFor: (name) => {
+        const cached = overrideProviders.get(name);
+        if (cached) return cached;
+        const built = {
+          provider: makeJudgeProvider(config, { provider: name }),
+          ...(() => {
+            const p = pricingOverrideFor(config, { provider: name });
+            return p !== undefined ? { pricing: p } : {};
+          })(),
+        };
+        overrideProviders.set(name, built);
+        return built;
+      },
       runs: options.runs ?? config.judge.ensembleRuns,
       temperature: config.judge.temperature,
       zones: config.judge.zones,

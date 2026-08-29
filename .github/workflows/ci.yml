@@ -39,7 +39,7 @@ jobs:
       # fixture corpus — this is what catches a broken bin entry, a bad dist
       # build, or a module that only resolves under vitest.
       # Exit 1 is the expected, asserted outcome: the fixture project declares
-      # one deterministic criterion the fixture trace deliberately violates.
+      # one deterministic eval the fixture trace deliberately violates.
       - name: Dogfood run (deterministic graders)
         shell: bash
         env:
@@ -69,13 +69,35 @@ jobs:
                 process.exitCode = 1;
               }
             };
-            // The fixture skill declares a tool-usage criterion the trace violates.
+            // The fixture skill declares a tool-usage eval the trace violates.
             check("SKILL.md forbidden-tool", find("SKILL.md", "forbidden-tool")?.outcome, "fail");
             // And one it satisfies.
             check("SKILL.md used-read", find("SKILL.md", "used-read")?.outcome, "pass");
-            // LLM-graded evals are skipped under --deterministic-only, not failed.
+            // A command-graded eval really spawns its check script over {trace}.
+            check("SKILL.md no-force-push", find("SKILL.md", "no-force-push")?.outcome, "pass");
+            check("SKILL.md no-force-push grader", find("SKILL.md", "no-force-push")?.grader, "command");
+            // `human` is judged per session: it queues for review, never passes
+            // silently, and reports even in a deterministic-only run.
+            check("SKILL.md refactor-preserved-intent", find("SKILL.md", "refactor-preserved-intent")?.outcome, "needs-review");
+            // The single-string block shorthand plans one id-less ai eval.
+            check("AGENTS.md shorthand", find("AGENTS.md", "eval-1")?.grader, "ai");
+            // metadata.eval-skip is reported as skipped, never silently dropped.
+            const pluginSkill = r.evalResults.find((x) => x.artifactName === "writing-toolkit:identify-ai-tells");
+            check("plugin skill eval-skip", pluginSkill?.outcome, "skipped");
+            if (!/eval-skip/.test(pluginSkill?.skipReason ?? "")) {
+              console.error(`plugin skill: expected an eval-skip reason, got ${pluginSkill?.skipReason}`);
+              process.exitCode = 1;
+            }
+            // AI-graded evals are skipped under --deterministic-only, not failed.
             const skipped = r.evalResults.filter((x) => x.outcome === "skipped");
-            if (skipped.length === 0) { console.error("expected skipped llm evals under --deterministic-only"); process.exitCode = 1; }
+            if (skipped.length === 0) { console.error("expected skipped ai evals under --deterministic-only"); process.exitCode = 1; }
+            // Nothing errored: an unknown grader or an unrunnable command would
+            // land here rather than in a verdict.
+            const errored = r.evalResults.filter((x) => x.outcome === "error");
+            if (errored.length > 0) {
+              console.error("unexpected errored evals:", JSON.stringify(errored, null, 2));
+              process.exitCode = 1;
+            }
           '
 
       - name: Dogfood run (mock judge)
@@ -188,6 +210,25 @@ jobs:
               process.exitCode = 1;
             }
           '
+          # Machines propose, humans retire the trail: what fill writes must
+          # carry its own attribution, or a reviewer cannot tell an unreviewed
+          # suggestion from an eval someone signed off on.
+          node -e '
+            const fs = require("fs");
+            const path = ".tmp/fill-ci/project/.claude/agents/doc-writer.md";
+            const text = fs.readFileSync(path, "utf8");
+            for (const want of ["eval-provenance", "generated-by", "confidence"]) {
+              if (!text.includes(want)) {
+                console.error(`expected ${want} in the filled artifact:\n${text}`);
+                process.exitCode = 1;
+              }
+            }
+            // The 0.2 spellings must not reappear through the write path.
+            if (/^\s*criteria:/m.test(text) || /^\s*- name:/m.test(text)) {
+              console.error(`filled artifact used the retired 0.2 spelling:\n${text}`);
+              process.exitCode = 1;
+            }
+          '
           # The written frontmatter must still parse and plan.
           node dist/cli.js run test/fixtures/traces/claude-session.jsonl --project .tmp/fill-ci/project --deterministic-only --format json > moose-tracevals-postfill.json || true
           node -e '
@@ -196,11 +237,11 @@ jobs:
             const r = JSON.parse(raw);
             const errored = r.evalResults.filter((x) => x.outcome === "error");
             if (errored.length > 0) {
-              console.error("filled criteria did not survive a real run:", JSON.stringify(errored, null, 2));
+              console.error("filled evals did not survive a real run:", JSON.stringify(errored, null, 2));
               process.exitCode = 1;
             }
             if (!r.evalResults.some((x) => x.evalName === "reads-before-editing")) {
-              console.error("expected the filled criterion to be planned and graded");
+              console.error("expected the filled eval to be planned and graded");
               process.exitCode = 1;
             }
           '

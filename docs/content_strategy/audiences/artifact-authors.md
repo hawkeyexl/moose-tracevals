@@ -9,7 +9,7 @@ relationship_stages: [prospect, customer]
 personas: [persona-artifact-author]
 features_emphasized:
   - artifact resolution
-  - declared criteria (metadata.evals)
+  - declared evals (metadata.evals)
   - fill
   - deterministic graders
   - implicit whole-artifact eval
@@ -22,7 +22,7 @@ lead: true
 **Scope:** people who write and maintain the instruction artifacts an agent reads — `SKILL.md`
 files, agent definitions, `CLAUDE.md` / `AGENTS.md`. This is the **lead audience**. It does not
 cover people who only *run* those artifacts in a pipeline (see
-[`aud-platform-ci`](platform-ci.md)) or who own the criteria standard as a distinct job (see
+[`aud-platform-ci`](platform-ci.md)) or who own the evals standard as a distinct job (see
 [`aud-eval-standard`](eval-standard.md)).
 
 ## Who they are
@@ -55,7 +55,7 @@ a loop between two things they already own.
   change, a prompt edit, or an unrelated skill starting to shadow it — with no signal.
 - **Instructions that cannot fail.** Much of what they wrote is untestable prose. They do not
   necessarily know which half is which, and being told is more useful than being papered over.
-- **Authoring cost.** Writing criteria by hand for every artifact is the slow part, and it is the
+- **Authoring cost.** Writing evals by hand for every artifact is the slow part, and it is the
   step most likely to stop adoption cold after the first successful run.
 - **Fear of a tool that edits their repo.** Instruction files are hand-tuned and load-bearing. A
   tool that rewrites them without a reviewable diff is not installable.
@@ -74,6 +74,6 @@ a loop between two things they already own.
   CLI and reading its output; the concept of an agent skill / subagent / project rules file, because
   they authored one.
 - **Subject dependencies:** what a *trace* is and where it lives on disk must be established before
-  anything else, because every other concept hangs off it. *Criterion*, *grader*, and *finding*
+  anything else, because every other concept hangs off it. *Eval*, *grader*, and *finding*
   must be defined before the report output is shown. Judge internals — ensemble, consensus, zones —
   are **not** a dependency for their main journey and must not gate it; they belong one link away.

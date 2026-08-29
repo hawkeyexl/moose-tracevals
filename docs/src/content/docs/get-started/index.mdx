@@ -88,8 +88,10 @@ Everything on this page runs **offline**, with no API key.
    npx moose-tracevals run <trace-file> --deterministic-only
    ```
 
-   `--deterministic-only` runs the seven [deterministic graders](/moose-tracevals/reference/graders/),
-   the checks decidable from the trace alone, and **skips** judged evals instead of failing them.
+   `--deterministic-only` runs every check that needs no inference call — the seven
+   [deterministic graders](/moose-tracevals/reference/graders/) decidable from the trace alone, plus
+   `command` evals and the `human` review queue — and **skips** AI-judged evals instead of failing
+   them.
 
    To exercise the whole pipeline, including the judge, without a network call:
 
@@ -113,19 +115,22 @@ Everything on this page runs **offline**, with no API key.
    moose-tracevals — /path/to/session.jsonl
    claude-code · claude-opus-4-8 · 2 turn(s) · /work/demo-project
 
+     SKIP   writing-toolkit:identify-ai-tells › adheres-to-artifact (implicit)
+            artifact skipped via metadata.eval-skip
      PASS   fix-bug › used-read
      FAIL   fix-bug › forbidden-tool
             [error] tool Bash was used 1 time(s) but must not be
-     SKIP   writing-toolkit:identify-ai-tells › adheres-to-artifact (implicit)
-            llm evals skipped (deterministic-only run)
-     SKIP   fix-bug › criterion-3
-            llm evals skipped (deterministic-only run)
+     PASS   fix-bug › no-force-push
+     REVIEW fix-bug › refactor-preserved-intent
+            awaiting human review
+     SKIP   fix-bug › eval-5
+            ai evals skipped (deterministic-only run)
      SKIP   doc-writer › adheres-to-artifact (implicit)
-            llm evals skipped (deterministic-only run)
+            ai evals skipped (deterministic-only run)
      SKIP   CLAUDE.md › adheres-to-artifact (implicit)
-            llm evals skipped (deterministic-only run)
-     SKIP   AGENTS.md › adheres-to-artifact (implicit)
-            llm evals skipped (deterministic-only run)
+            ai evals skipped (deterministic-only run)
+     SKIP   AGENTS.md › eval-1
+            ai evals skipped (deterministic-only run)
 
    Artifact coverage
      ✓ skill: writing-toolkit:identify-ai-tells /path/to/plugins/.../SKILL.md
@@ -137,18 +142,21 @@ Everything on this page runs **offline**, with no API key.
    Warnings
      ! 1 unparseable JSONL line(s) were skipped
 
-   7 eval(s): 1 pass, 1 fail, 0 error, 0 needs-review, 5 skipped
+   9 eval(s): 2 pass, 1 fail, 0 error, 1 needs-review, 5 skipped
    ```
 
-   Four things are worth naming, because the rest of the documentation assumes them:
+   Five things are worth naming, because the rest of the documentation assumes them:
 
    - An **artifact** is an instruction file the session used: a skill, an agent definition, or a
      project-rules file. Here: `fix-bug`, `doc-writer`, `CLAUDE.md`, `AGENTS.md`, and a plugin
      skill.
-   - A **criterion** is one named check declared on an artifact. `used-read` and `forbidden-tool`
+   - An **eval** is one named check declared on an artifact. `used-read` and `forbidden-tool`
      were declared in `fix-bug`'s frontmatter.
+   - **The grader decides how a check is answered.** `used-read` reads the trace directly;
+     `no-force-push` runs a script over it; `refactor-preserved-intent` is `REVIEW` because it asks
+     for a human; the `SKIP`s are AI-judged evals, which `--deterministic-only` does not run.
    - **`adheres-to-artifact (implicit)`** is what you get for free. An artifact that declares no
-     criteria still gets one judged eval asking whether the session followed its instructions, so
+     evals still gets one judged eval asking whether the session followed its instructions, so
      a first run says something before you have authored anything.
    - **Artifact coverage** is the honest answer to *what did you not check?* A `✓` resolved to a
      real file; a `○` did not. `Explore` is a built-in agent with no definition file anywhere, which
@@ -158,8 +166,8 @@ Everything on this page runs **offline**, with no API key.
    session ran a shell command; the finding names the tool and the count.
 
    {/* test {"testId":"get-started-first-run","description":"A deterministic-only run produces the documented outcomes and exit code."} */}
-   {/* step {"description":"The run exits 1 because the fixture session violates a declared criterion.","runShell":{"command":"moose-tracevals run test/fixtures/traces/claude-session.jsonl --project test/fixtures/project --deterministic-only","exitCodes":[1],"stdio":"tool Bash was used 1 time(s) but must not be"}} */}
-   {/* step {"description":"Judged evals are skipped, not failed, under --deterministic-only.","runShell":{"command":"moose-tracevals run test/fixtures/traces/claude-session.jsonl --project test/fixtures/project --deterministic-only","exitCodes":[1],"stdio":"llm evals skipped (deterministic-only run)"}} */}
+   {/* step {"description":"The run exits 1 because the fixture session violates a declared eval.","runShell":{"command":"moose-tracevals run test/fixtures/traces/claude-session.jsonl --project test/fixtures/project --deterministic-only","exitCodes":[1],"stdio":"tool Bash was used 1 time(s) but must not be"}} */}
+   {/* step {"description":"Judged evals are skipped, not failed, under --deterministic-only.","runShell":{"command":"moose-tracevals run test/fixtures/traces/claude-session.jsonl --project test/fixtures/project --deterministic-only","exitCodes":[1],"stdio":"ai evals skipped (deterministic-only run)"}} */}
    {/* test end */}
 
 5. ### Check the exit code
@@ -183,7 +191,7 @@ Two doors from here, depending on what you came for.
 <CardGrid>
   <LinkCard
     title="Make the checks specific"
-    description="The implicit eval is coarse. Declare a criterion on the one instruction you actually care about — then let fill propose the rest."
+    description="The implicit eval is coarse. Declare an eval on the one instruction you actually care about — then let fill propose the rest."
     href="/moose-tracevals/declare/"
   />
   <LinkCard

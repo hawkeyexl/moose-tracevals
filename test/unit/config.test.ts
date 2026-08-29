@@ -32,7 +32,7 @@ describe("parseConfig", () => {
   it("fills fill defaults and honours explicit ones", () => {
     const config = parseConfig({});
     expect(config.fill.confidenceThreshold).toBe(0.7);
-    expect(config.fill.maxCriteriaPerArtifact).toBe(8);
+    expect(config.fill.maxEvalsPerArtifact).toBe(8);
     expect(config.fill.temperature).toBe(0);
     expect(config.fill.cacheDir).toBe(".moose-tracevals/cache/fill");
     expect(config.fill.maxCostUsd).toBeUndefined();
@@ -40,14 +40,14 @@ describe("parseConfig", () => {
     const explicit = parseConfig({ fill: { confidenceThreshold: 0.5, maxCostUsd: 2 } });
     expect(explicit.fill.confidenceThreshold).toBe(0.5);
     expect(explicit.fill.maxCostUsd).toBe(2);
-    expect(explicit.fill.maxCriteriaPerArtifact).toBe(8);
+    expect(explicit.fill.maxEvalsPerArtifact).toBe(8);
   });
 
   it("rejects out-of-range and unknown fill keys", () => {
     expect(() => parseConfig({ fill: { confidenceThreshold: 2 } })).toThrow(
       TracevalsError,
     );
-    expect(() => parseConfig({ fill: { maxCriteriaPerArtifact: 0 } })).toThrow(
+    expect(() => parseConfig({ fill: { maxEvalsPerArtifact: 0 } })).toThrow(
       TracevalsError,
     );
     expect(() => parseConfig({ fill: { bogus: true } })).toThrow(TracevalsError);

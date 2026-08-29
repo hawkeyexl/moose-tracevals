@@ -23,7 +23,7 @@ first.
 | Specifier | What it is |
 |---|---|
 | `moose-tracevals` | The API below. |
-| `moose-tracevals/schemas/artifact-evals-0.2.json` | The current criteria-block schema. |
+| `moose-tracevals/schemas/artifact-evals-1.0.0-proposal.1.json` | The current evals-block schema. |
 | `moose-tracevals/schemas/artifact-evals-0.1.json` | The previous version, for pinned consumers. |
 
 ## Engine
@@ -68,14 +68,14 @@ The CLI's three commands, callable directly. Each pairs a runner with a renderer
 | `findGitRoot`, `findInTree`, `listInTree`, `safeRead`, `PRUNED_DIRS` | Filesystem helpers the resolvers share. |
 | *(all of `artifacts/types`)* | `ResolvedArtifact`, `CoverageEntry`, `ArtifactType`, `ResolvedArtifacts`. |
 
-## Criteria
+## Evals
 
 | Export | Notes |
 |---|---|
 | `extractCriteria(artifact)` | Read and validate a `metadata.evals` block. |
-| `appendArtifactCriteria(...)` | Append criteria to frontmatter. The one write path. |
+| `appendArtifactCriteria(...)` | Append evals to frontmatter. The one write path. |
 | `ARTIFACT_EVALS_SCHEMA_ID`, `artifactEvalsSchemaPath` | The published schema's `$id` and on-disk path. |
-| `Criterion`, `CriterionType`, `ExtractedCriteria`, `Severity`, `NewCriterion` | |
+| `Eval`, `CriterionType`, `ExtractedCriteria`, `Severity`, `NewCriterion` | |
 
 ## Planning and graders
 
@@ -143,7 +143,7 @@ Exported so the authoring path is testable and extensible. Most consumers will n
 | `systemPromptFor(type)`, `buildFillUser(...)` | |
 | `FILL_PROMPT_VERSION`, `MAX_BODY_CHARS` | Cache-key components. |
 | `FillCache`, `fillCacheKey`, `FillCacheKeyParts` | Separate from the judge cache. |
-| `artifactFacts(...)`, `ArtifactFacts` | Grounding inputs, not criteria. |
+| `artifactFacts(...)`, `ArtifactFacts` | Grounding inputs, not evals. |
 | `buildVocabulary(...)`, `BUILTIN_TOOLS` | |
 | `mockFillProposal` | The canned proposal `--provider mock` returns. |
 

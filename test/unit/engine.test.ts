@@ -40,7 +40,7 @@ function run(overrides: Record<string, unknown> = {}) {
 }
 
 describe("runEvals", () => {
-  it("grades declared deterministic criteria against the trace", async () => {
+  it("grades declared deterministic evals against the trace", async () => {
     const report = await run();
     const byName = Object.fromEntries(
       report.evalResults.map((r) => [r.evalName, r]),
@@ -51,17 +51,22 @@ describe("runEvals", () => {
     expect(byName["forbidden-tool"]?.findings?.[0]?.message).toContain("Bash");
   });
 
-  it("routes llm evals through the injected judge", async () => {
+  it("routes ai evals through the injected judge", async () => {
     const report = await run();
-    const llm = report.evalResults.filter((r) => r.grader === "llm");
-    expect(llm.length).toBeGreaterThan(0);
-    expect(llm.every((r) => r.outcome === "pass")).toBe(true);
+    // An artifact carrying `metadata.eval-skip` also plans under the `ai`
+    // grader, so exclude the skipped placeholder: what this pins is that the
+    // evals actually handed to the judge come back with its verdict.
+    const judged = report.evalResults.filter(
+      (r) => r.grader === "ai" && r.outcome !== "skipped",
+    );
+    expect(judged.length).toBeGreaterThan(0);
+    expect(judged.every((r) => r.outcome === "pass")).toBe(true);
   });
 
-  it("skips llm evals under deterministicOnly", async () => {
+  it("skips ai evals under deterministicOnly", async () => {
     const report = await run({ deterministicOnly: true, judge: undefined });
-    const llm = report.evalResults.filter((r) => r.grader === "llm");
-    expect(llm.every((r) => r.outcome === "skipped")).toBe(true);
+    const ai = report.evalResults.filter((r) => r.grader === "ai");
+    expect(ai.every((r) => r.outcome === "skipped")).toBe(true);
   });
 
   it("exits 1 when any eval fails", async () => {
@@ -99,7 +104,7 @@ describe("runEvals", () => {
         costUsd: 0,
         durationMs: 1,
       }));
-    // Neutralize the deterministic failure by only judging llm evals: use a
+    // Neutralize the deterministic failure by only judging ai evals: use a
     // config that fails on needs-review (default) vs one that does not.
     const strict = await run({ judge: reviewJudge });
     expect(strict.summary.needsReview).toBeGreaterThan(0);

@@ -43,17 +43,17 @@ exist and whether anyone owns the standard as a distinct job, not what the perso
 |---|---|---|---|
 | [`aud-artifact-authors`](artifact-authors.md) | Agent-instruction authors — **lead** | `.claude/skills/`, agent definitions, `CLAUDE.md` / `AGENTS.md` | Deepest. Touches every layer. |
 | [`aud-platform-ci`](platform-ci.md) | AI-platform and CI engineers | Pipelines, runners, the merge gate | Focused: exit codes, offline mode, machine-readable output. |
-| [`aud-eval-standard`](eval-standard.md) | Eval and quality owners | The criteria standard itself | Deep but narrow: graders, severity, schema versioning, judge calibration. |
+| [`aud-eval-standard`](eval-standard.md) | Eval and quality owners | The evals standard itself | Deep but narrow: graders, severity, schema versioning, judge calibration. |
 | [`aud-run-triagers`](run-triagers.md) | Session triagers | Nothing — they arrive at one failure | Shallow, highest traffic. One page carries the whole journey. |
 | [`aud-toolsmiths`](toolsmiths.md) | Toolsmiths — **cross-cutting** | Code built on top of moose-tracevals | Narrow: the programmatic API and the extension seams. |
 
 ## Why `aud-artifact-authors` leads
 
 They are the primary adopter and the only segment that touches every layer of the product: they
-install it, discover which artifacts a session used, declare criteria (by hand or via `fill`),
+install it, discover which artifacts a session used, declare evals (by hand or via `fill`),
 choose graders, read reports, and eventually wire CI. Their backbone journey
 [`cuj-first-eval`](../journeys/cuj-first-eval.md) threads through install, artifact resolution,
-criteria, and reporting in one line. Every other segment either serves them or intersects them.
+evals, and reporting in one line. Every other segment either serves them or intersects them.
 
 ## The cross-cutting lens
 

@@ -2,13 +2,13 @@
 type: journeys-index
 journeys:
   - cuj-first-eval
-  - cuj-declare-criteria
-  - cuj-fill-criteria
+  - cuj-declare-evals
+  - cuj-fill-evals
   - cuj-cover-every-artifact
   - cuj-gate-ci
   - cuj-consume-results
   - cuj-calibrate-judge
-  - cuj-evolve-criteria
+  - cuj-evolve-evals
   - cuj-triage-failure
   - cuj-extend
 backbone: cuj-first-eval
@@ -30,13 +30,13 @@ ones are `[GAP]`s, and enumerating them is the point.
 | CUJ | Outcome | Primary persona |
 |---|---|---|
 | [`cuj-first-eval`](cuj-first-eval.md) | **Backbone.** Evaluate a real past session and read the result | Priya |
-| [`cuj-declare-criteria`](cuj-declare-criteria.md) | Turn one instruction into a testable criterion | Priya |
-| [`cuj-fill-criteria`](cuj-fill-criteria.md) | Propose criteria across a project and review the diff | Priya |
+| [`cuj-declare-evals`](cuj-declare-evals.md) | Turn one instruction into a testable eval | Priya |
+| [`cuj-fill-evals`](cuj-fill-evals.md) | Propose evals across a project and review the diff | Priya |
 | [`cuj-cover-every-artifact`](cuj-cover-every-artifact.md) | Account for every artifact a session used | Priya |
 | [`cuj-gate-ci`](cuj-gate-ci.md) | Gate agent work in CI, offline | Devin |
 | [`cuj-consume-results`](cuj-consume-results.md) | Feed results into your own tooling | Devin |
 | [`cuj-calibrate-judge`](cuj-calibrate-judge.md) | Decide whether the judge can be trusted, then tune it | Sam |
-| [`cuj-evolve-criteria`](cuj-evolve-criteria.md) | Evolve the criteria standard without breaking what exists | Sam |
+| [`cuj-evolve-evals`](cuj-evolve-evals.md) | Evolve the evals standard without breaking what exists | Sam |
 | [`cuj-triage-failure`](cuj-triage-failure.md) | Read a failing eval and decide what to do | Theo |
 | [`cuj-extend`](cuj-extend.md) | Build on moose-tracevals instead of around it | Rin |
 
@@ -47,13 +47,13 @@ ones are `[GAP]`s, and enumerating them is the point.
 | CUJ | Priya | Devin | Sam | Theo | Rin |
 |---|:---:|:---:|:---:|:---:|:---:|
 | `cuj-first-eval` | ● | ○ | | | |
-| `cuj-declare-criteria` | ● | | ○ | | |
-| `cuj-fill-criteria` | ● | | | | |
+| `cuj-declare-evals` | ● | | ○ | | |
+| `cuj-fill-evals` | ● | | | | |
 | `cuj-cover-every-artifact` | ● | | | | |
 | `cuj-gate-ci` | | ● | | | |
 | `cuj-consume-results` | | ● | | | ○ |
 | `cuj-calibrate-judge` | | | ● | | |
-| `cuj-evolve-criteria` | | | ● | | |
+| `cuj-evolve-evals` | | | ● | | |
 | `cuj-triage-failure` | | | | ● | |
 | `cuj-extend` | | | | | ● |
 
@@ -68,7 +68,7 @@ persona does, it threads install → trace discovery → artifact resolution →
 single line, and every other journey either branches off it or presumes it has been completed.
 
 It is also the only journey two personas walk together, and they leave by different doors: Priya
-toward [`cuj-declare-criteria`](cuj-declare-criteria.md), Devin toward
+toward [`cuj-declare-evals`](cuj-declare-evals.md), Devin toward
 [`cuj-gate-ci`](cuj-gate-ci.md). Its final section must be a fork, not a single next step.
 
 ## Journey walk-through test

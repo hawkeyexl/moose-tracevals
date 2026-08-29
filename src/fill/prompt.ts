@@ -1,5 +1,5 @@
 /**
- * Fill prompt: asks the provider to extract eval criteria that an artifact's
+ * Fill prompt: asks the provider to extract evals that an artifact's
  * own instructions already imply, each with a self-reported 0-1 confidence.
  * Gating happens downstream; the prompt only demands honesty and restraint.
  *
@@ -13,7 +13,7 @@ import { ALLOWED_GRADERS } from "./gate.js";
 import type { ArtifactFacts } from "./facts.js";
 
 /** Part of the cache key: bump whenever the prompt or schema changes. */
-export const FILL_PROMPT_VERSION = 1;
+export const FILL_PROMPT_VERSION = 2;
 
 export const MAX_BODY_CHARS = 6000;
 
@@ -41,7 +41,7 @@ const TYPE_GUIDANCE: Record<ArtifactType, string> = {
 };
 
 const GRADER_GUIDANCE: Record<string, string> = {
-  llm: "judgment a human would have to read the session to make",
+  ai: "judgment a human would have to read the session to make",
   "tool-usage": "a named tool was or was not used (options: tool, expect, min, max)",
   "skill-invoked": "a named skill was or was not invoked (options: skill, expect)",
   "file-access":
@@ -53,27 +53,27 @@ const GRADER_GUIDANCE: Record<string, string> = {
 export function systemPromptFor(artifactType: ArtifactType): string {
   const allowed = ALLOWED_GRADERS[artifactType];
   return [
-    "You extract eval criteria from an AI agent instruction artifact.",
+    "You extract evals from an AI agent instruction artifact.",
     "",
     TYPE_GUIDANCE[artifactType],
     "",
-    "A criterion is a durable claim about how a session behaved, graded against",
+    "An eval is a durable claim about how a session behaved, graded against",
     "a recorded session trace on every future run. You are extracting claims the",
     "artifact already makes — not inventing new policy for it.",
     "",
-    "Rules for every criterion you propose:",
+    "Rules for every eval you propose:",
     "- It must be decidable as a binary pass or fail against session evidence.",
     "  If you cannot say precisely what would make it fail, it does not qualify.",
     "- Quote the artifact's own intent. Never assert incidental phrasing,",
     "  formatting, or wording that is expected to change.",
     "- Prefer a deterministic grader whenever the claim can be checked",
-    "  mechanically; fall back to `llm` only for genuine judgment.",
-    "- Names are short kebab-case identifiers, unique within the artifact.",
+    "  mechanically; fall back to `ai` only for genuine judgment.",
+    "- Ids are short kebab-case identifiers, unique within the artifact.",
     "- Provide examples.pass and examples.fail: one sentence each describing a",
-    "  session that satisfies or violates the criterion.",
+    "  session that satisfies or violates the eval.",
     "- Report an honest confidence between 0 and 1 that the criterion is",
     "  correct, checkable, and worth guarding. Do not inflate it.",
-    "- Do not restate criteria the artifact already declares.",
+    "- Do not restate evals the artifact already declares.",
     "- Propose at most the requested number, fewer when the artifact offers",
     "  little worth guarding, and none at all when nothing qualifies.",
     "",
@@ -82,7 +82,7 @@ export function systemPromptFor(artifactType: ArtifactType): string {
     "",
     "Deterministic graders only work against targets that really exist. Use tool",
     "and skill names exactly as given below; if the name you want is not listed,",
-    "use the `llm` grader instead of guessing.",
+    "use the `ai` grader instead of guessing.",
     "",
     "Finally, list under `needsSharpening` any instruction in the artifact that",
     "sounds like a requirement but cannot be tested as written — an undefined",
@@ -93,10 +93,10 @@ export function systemPromptFor(artifactType: ArtifactType): string {
 
 export const PROPOSAL_SCHEMA = {
   type: "object",
-  required: ["criteria"],
+  required: ["evals"],
   additionalProperties: false,
   properties: {
-    criteria: {
+    evals: {
       type: "array",
       items: {
         type: "object",
@@ -151,14 +151,14 @@ export function isValidProposal(value: unknown): boolean {
 export interface FillUserOptions {
   artifact: ResolvedArtifact;
   existingNames: string[];
-  maxCriteria: number;
+  maxEvals: number;
   facts: ArtifactFacts;
   /** Skill names discovered in the same scan — the vocabulary for skill-invoked. */
   knownSkills: string[];
 }
 
 export function buildFillUser(options: FillUserOptions): string {
-  const { artifact, existingNames, maxCriteria, facts, knownSkills } = options;
+  const { artifact, existingNames, maxEvals, facts, knownSkills } = options;
   const body =
     artifact.content.length > MAX_BODY_CHARS
       ? `${artifact.content.slice(0, MAX_BODY_CHARS)}\n…(truncated)`
@@ -175,7 +175,7 @@ export function buildFillUser(options: FillUserOptions): string {
   }
   lines.push(
     "",
-    "# Existing criteria (do not restate these)",
+    "# Existing evals (do not restate these)",
     existingNames.length > 0 ? existingNames.join(", ") : "(none)",
     "",
     "# Tools this artifact grants itself",
@@ -184,8 +184,8 @@ export function buildFillUser(options: FillUserOptions): string {
     "# Skills that exist in this project",
     knownSkills.length > 0 ? knownSkills.join(", ") : "(none)",
     "",
-    "# Maximum criteria to propose",
-    String(maxCriteria),
+    "# Maximum evals to propose",
+    String(maxEvals),
     "",
     "# Artifact content",
     "",

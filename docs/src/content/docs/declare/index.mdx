@@ -1,14 +1,14 @@
 ---
 title: Declare what to check
-description: Turn an instruction into a named, testable criterion in an artifact's frontmatter, choosing between a deterministic grader and the judge and setting severity on purpose.
+description: Turn an instruction into a named, testable eval in an artifact's frontmatter, choosing between a deterministic grader and the judge and setting severity on purpose.
 sidebar:
   order: 1
 ---
 
 import { Steps, Aside, LinkCard, CardGrid } from '@astrojs/starlight/components';
 
-**Scope:** authoring one criterion by hand, deliberately. Proposing many at once is
-[Fill in criteria](/moose-tracevals/declare/fill/); tuning how judged criteria are decided is
+**Scope:** authoring one eval by hand, deliberately. Proposing many at once is
+[Fill in evals](/moose-tracevals/declare/fill/); tuning how judged evals are decided is
 [Trust the judge](/moose-tracevals/judge/).
 
 ## The implicit eval
@@ -29,14 +29,14 @@ The implicit eval is coarse on purpose. It answers *did the session follow this 
 verdict, which is hard to act on when the file contains fifteen instructions and only one of them
 matters to you today.
 
-A declared criterion is **named, scoped to one instruction, and stable across runs**, so you can
+A declared eval is **named, scoped to one instruction, and stable across runs**, so you can
 point at it when it fails and watch it specifically over time.
 
-Criteria live **in the artifact's own frontmatter**, next to the instruction they check. Not in a
+Evals live **in the artifact's own frontmatter**, next to the instruction they check. Not in a
 separate suite or a config file, but in the same `SKILL.md` you edit when the instruction changes.
 The check and the rule then move together, so they cannot drift apart.
 
-## Declare your first criterion
+## Declare your first eval
 
 Add a `metadata.evals` block to a skill, an agent definition, or a project-rules file:
 
@@ -46,12 +46,11 @@ name: fix-bug
 description: Fix a reported bug, reproducing it with a failing test first.
 metadata:
   evals:
-    criteria:
       # String shorthand: an LLM-judged assertion at error severity.
       - Reproduce the bug with a failing test before applying the fix.
 
       # Object form: a deterministic grader.
-      - name: forbidden-tool
+      - id: forbidden-tool
         assertion: The session never ran shell commands; this skill is edit-only.
         grader: tool-usage
         options:
@@ -67,13 +66,13 @@ metadata:
 Two forms, and the difference matters more than it looks:
 
 - **A string** is shorthand for a judged assertion at `error` severity. One line, no ceremony. It
-  gets an automatic name derived from its position (`criterion-3` for the third entry), so it suits
+  gets an automatic name derived from its position (`eval-3` for the third entry), so it suits
   anything you will not need to refer to by name.
 - **An object** gives you a stable `name`, a grader, and options. Use it for anything you want to
   track, reference, or decide deterministically.
 
 The full block shape, including every optional field, is in the
-[criteria schema reference](/moose-tracevals/reference/criteria-schema/).
+[evals schema reference](/moose-tracevals/reference/evals-schema/).
 
 ## Judged or deterministic?
 
@@ -92,7 +91,7 @@ certain answer for a probabilistic one, and you pay for it.
 | what the session cost | deterministic | `cost` |
 | whether specific text appeared | deterministic | `regex` |
 | whether the final output is valid JSON of a given shape | deterministic | `json-output` |
-| **reasoning, sequence, judgement, or intent** | judged | `llm` |
+| **reasoning, sequence, judgement, or intent** | judged | `ai` |
 
 Every deterministic grader, its options, and its exact failure messages are in the
 [grader reference](/moose-tracevals/reference/graders/).
@@ -103,7 +102,7 @@ Some instructions are neither. *"Produce high-quality work"* has no measurable b
 could fail it. Turning it into a judged assertion produces a check that is permanently green and
 tells you nothing.
 
-When that happens, **sharpen the instruction** instead of softening the criterion. A rule no session
+When that happens, **sharpen the instruction** instead of softening the eval. A rule no session
 could violate is a defect in the artifact. `fill` names these for you explicitly; see
 [instructions that cannot be tested](/moose-tracevals/declare/fill/#instructions-that-cannot-be-tested).
 
@@ -115,7 +114,7 @@ before applying the fix" passes that test. "Follow best practices" does not.
 
 ## Severity
 
-Every criterion has a severity, and the default is `error`.
+Every eval has a severity, and the default is `error`.
 
 | Severity | Effect |
 |---|---|
@@ -132,7 +131,7 @@ across your artifacts, and promote it to `error` once they are ready.
 
 ## Confirm it fires
 
-A criterion you have not seen fail is a criterion you should not trust yet. Run against a session
+An eval you have not seen fail is an eval you should not trust yet. Run against a session
 you know violated the rule:
 
 ```bash
@@ -144,9 +143,9 @@ npx moose-tracevals run <trace-file> --deterministic-only
          [error] tool Bash was used 1 time(s) but must not be
 ```
 
-The finding names the artifact, the criterion, and what the session actually did.
+The finding names the artifact, the eval, and what the session actually did.
 
-If your new criterion shows `ERROR` instead, the check itself is broken and the session is fine.
+If your new eval shows `ERROR` instead, the check itself is broken and the session is fine.
 Most often that is a grader given options it rejects. Grader options are validated **before**
 grading so that a typo surfaces loudly:
 
@@ -166,12 +165,12 @@ If the `metadata.evals` block itself is invalid, you get an `evals-block-valid` 
 <CardGrid>
   <LinkCard
     title="Do this for every artifact at once"
-    description="fill proposes criteria across a whole project, gates them mechanically, and writes only what survives into a diff you review."
+    description="fill proposes evals across a whole project, gates them mechanically, and writes only what survives into a diff you review."
     href="/moose-tracevals/declare/fill/"
   />
   <LinkCard
     title="Pick the right grader"
-    description="All seven deterministic kinds: options, validation rules, and the exact message each one emits when it fails."
+    description="Every kind: the ai, human, and command families, and the seven deterministic ones with their options and failure messages."
     href="/moose-tracevals/reference/graders/"
   />
 </CardGrid>

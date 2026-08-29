@@ -85,7 +85,7 @@ tracevals:
     file: .moose-tracevals/history.jsonl
   fill:
     confidenceThreshold: 0.7
-    maxCriteriaPerArtifact: 8
+    maxEvalsPerArtifact: 8
     temperature: 0
     cacheDir: .moose-tracevals/cache/fill
     # maxCostUsd has no default
@@ -215,12 +215,12 @@ Where `--history` appends. See
 | Key | Type | Default | CLI |
 |---|---|---|---|
 | `confidenceThreshold` | number 0–1 | `0.7` | `--confidence` |
-| `maxCriteriaPerArtifact` | integer ≥ 1 | `8` | `--max-criteria` |
+| `maxEvalsPerArtifact` | integer ≥ 1 | `8` | `--max-evals` |
 | `temperature` | number 0–2 | `0` | — |
 | `cacheDir` | string | `.moose-tracevals/cache/fill` | `--no-cache` disables |
 | `maxCostUsd` | number ≥ 0 | *(unset)* | `--max-cost-usd` |
 
-`maxCriteriaPerArtifact` counts **existing** criteria too, so an artifact already at the cap gets no
+`maxEvalsPerArtifact` counts **existing** evals too, so an artifact already at the cap gets no
 new ones. The fill cache is separate from the judge cache: different key scheme, different value
 shape.
 

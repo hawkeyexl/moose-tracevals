@@ -1,33 +1,33 @@
 ---
-id: cuj-declare-criteria
+id: cuj-declare-evals
 type: cuj
-title: Turn an instruction into a testable criterion
+title: Turn an instruction into a testable eval
 personas: [persona-artifact-author, persona-eval-owner]
 trigger: "The implicit whole-artifact eval is too coarse — the reader wants a named check on one specific instruction."
 entry_point: /moose-tracevals/declare/
-success_criteria: "A criterion is declared in an artifact's frontmatter, is picked up on the next run, and fails when the session violates it — with the right grader and the right severity."
+success_criteria: "An eval is declared in an artifact's frontmatter, is picked up on the next run, and fails when the session violates it — with the right grader and the right severity."
 steps:
   - { stage: "See why the implicit eval is not enough", doc: "/moose-tracevals/declare/#from-implicit-to-declared", exists: true }
-  - { stage: "Add the metadata.evals block", doc: "/moose-tracevals/declare/#declare-your-first-criterion", exists: true, note: "string shorthand first, object form second" }
+  - { stage: "Add the metadata.evals block", doc: "/moose-tracevals/declare/#declare-your-first-eval", exists: true, note: "string shorthand first, object form second" }
   - { stage: "Choose between a judged and a deterministic check", doc: "/moose-tracevals/declare/#judged-or-deterministic", exists: true }
   - { stage: "Pick the grader that fits", doc: /moose-tracevals/reference/graders/, exists: true }
   - { stage: "Set severity deliberately", doc: "/moose-tracevals/declare/#severity", exists: true, note: "only error fails the eval" }
-  - { stage: "Look up the full block shape", doc: /moose-tracevals/reference/criteria-schema/, exists: true }
+  - { stage: "Look up the full block shape", doc: /moose-tracevals/reference/evals-schema/, exists: true }
   - { stage: "Verify it fires", doc: "/moose-tracevals/declare/#confirm-it-fires", exists: true }
   - { stage: "Mark probes apart from protections", doc: /moose-tracevals/judge/schema-versioning/, exists: true }
 ---
 
-# CUJ: Turn an instruction into a testable criterion
+# CUJ: Turn an instruction into a testable eval
 
-**Scope:** authoring one criterion by hand, deliberately. Proposing many at once is
-[`cuj-fill-criteria`](cuj-fill-criteria.md); tuning how judged criteria are decided is
+**Scope:** authoring one eval by hand, deliberately. Proposing many at once is
+[`cuj-fill-evals`](cuj-fill-evals.md); tuning how judged evals are decided is
 [`cuj-calibrate-judge`](cuj-calibrate-judge.md).
 
 **Trigger.** The reader has run an evaluation and the implicit *"the session adhered to this
 artifact"* verdict is too coarse to act on. They want a named check on the one instruction they
 actually care about.
 
-**Narrative.** This is where the product's central idea becomes concrete: **criteria live in the
+**Narrative.** This is where the product's central idea becomes concrete: **evals live in the
 artifact, next to the instruction they check.** Not in a separate suite, not in a config file — in
 the frontmatter of the same `SKILL.md` a person edits when the instruction changes. That colocation
 is what keeps the two from drifting, and saying so explicitly is what makes the frontmatter block
@@ -36,7 +36,7 @@ feel obvious rather than arbitrary.
 The journey has one genuinely hard decision in the middle, and it is where readers stall: **is this
 instruction decidable by a deterministic grader, judgeable by a model, or not testable at all?**
 The content has to make that call easy, because getting it wrong produces the two worst outcomes in
-the system — a criterion that can never fail, or a judged assertion so vague every verdict is noise.
+the system — an eval that can never fail, or a judged assertion so vague every verdict is noise.
 The string shorthand is the right on-ramp precisely because it is one line, but it must not be
 presented as the default answer: reaching for the judge when `tool-usage` would decide the same
 question is a downgrade, not a shortcut.

@@ -20,7 +20,7 @@ features_emphasized:
 
 **Scope:** people who did not install or configure moose-tracevals and are looking at exactly one
 result — a `FAIL`, an `ERROR`, or a `REVIEW` — that they need to decode and act on. It does not
-cover configuring the tool, authoring criteria, or calibrating the judge; every one of those is
+cover configuring the tool, authoring evals, or calibrating the judge; every one of those is
 somebody else's job and a link away.
 
 ## Who they are
@@ -36,10 +36,10 @@ on this tool, no interest in acquiring much, and a specific question they need a
 
 Answer three questions in order, and then leave:
 
-1. **What failed?** Which artifact, which criterion, and what did the session actually do?
+1. **What failed?** Which artifact, which eval, and what did the session actually do?
 2. **Is the verdict trustworthy?** Especially for a judged eval: was this unanimous, split, or did
    runs error?
-3. **What do I do?** Fix the session's behavior, sharpen the criterion, or escalate to whoever owns
+3. **What do I do?** Fix the session's behavior, sharpen the eval, or escalate to whoever owns
    it.
 
 Anything beyond those three questions is out of scope for this audience and belongs behind a link.
@@ -50,7 +50,7 @@ Anything beyond those three questions is out of scope for this audience and belo
   distinct reasons a check skips (deterministic-only mode, an exhausted cost budget, a trace with
   no usage data, an artifact marked `skip`), each implying a different action.
 - **No stated remedy.** A failure message says what happened, not what to do about it, and the
-  right move sometimes is "the criterion is wrong", which is rarely the reader's first guess.
+  right move sometimes is "the eval is wrong", which is rarely the reader's first guess.
 - **Judged verdicts feel arbitrary.** Without seeing the vote split and the judge's cited
   observation, "an LLM said no" reads as noise.
 - **Unclear ownership.** They frequently cannot fix it themselves and need to know who can.
@@ -67,7 +67,7 @@ resolution**. They will read one page. If that page does not resolve it, they es
 - **Prerequisites they bring:** reading terminal output and CI logs; enough Git to find who owns a
   file. Nothing else can be assumed.
 - **Subject dependencies:** deliberately minimal and inlined rather than linked. The one page
-  serving this audience must define *artifact*, *criterion*, and *outcome* in place, in a sentence
+  serving this audience must define *artifact*, *eval*, and *outcome* in place, in a sentence
   each, because a reader who has to follow a link to understand the first line has already been
   lost. It must **not** require any understanding of ensembles, zones, providers, or configuration
   — the vote split is presented as evidence to weigh, not as a mechanism to understand.

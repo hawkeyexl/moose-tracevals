@@ -4,7 +4,7 @@
  *
  * - Re-running with a different `--confidence` re-gates from cache, so tuning
  *   the threshold costs no tokens.
- * - The existing criterion-name set is part of the key, so a re-run after a
+ * - The existing eval-id set is part of the key, so a re-run after a
  *   fill misses and asks the model for *additional* coverage rather than
  *   replaying a proposal that has already been applied.
  *
@@ -23,7 +23,7 @@ export interface FillCacheKeyParts {
   provider: string;
   model: string;
   temperature: number;
-  maxCriteria: number;
+  maxEvals: number;
   artifactType: ArtifactType;
   /** Artifact path — it appears in the prompt, so it belongs in the key. */
   path: string;
@@ -49,7 +49,7 @@ export function fillCacheKey(parts: FillCacheKeyParts): string {
     parts.model,
     `fill-v${FILL_PROMPT_VERSION}`,
     `t${parts.temperature}`,
-    `n${parts.maxCriteria}`,
+    `n${parts.maxEvals}`,
     parts.artifactType,
     parts.path,
     sha256(parts.body),

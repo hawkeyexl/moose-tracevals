@@ -33,16 +33,17 @@ export {
 export {
   ARTIFACT_EVALS_SCHEMA_ID,
   artifactEvalsSchemaPath,
-  extractCriteria,
-  type Criterion,
-  type CriterionType,
-  type ExtractedCriteria,
+  extractEvals,
+  type EvalEntry,
+  type EvalType,
+  type ExtractedEvals,
   type Severity,
-} from "./criteria/extract.js";
+} from "./evals/extract.js";
 export {
-  appendArtifactCriteria,
-  type NewCriterion,
-} from "./criteria/write.js";
+  appendArtifactEvals,
+  type EvalProvenance,
+  type NewEvalEntry,
+} from "./evals/write.js";
 export { IMPLICIT_EVAL_NAME, planEvals, type EvalPlan } from "./core/plan.js";
 export * from "./graders/types.js";
 export { graderFor, listGraderKinds, registerGrader } from "./graders/registry.js";
@@ -95,7 +96,7 @@ export {
   gateProposals,
   type GateOptions,
   type GateResult,
-  type ProposedCriterion,
+  type ProposedEval,
   type Rejection,
   type RejectionReason,
   type Vocabulary,

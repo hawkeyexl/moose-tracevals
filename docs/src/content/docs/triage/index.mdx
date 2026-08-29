@@ -1,6 +1,6 @@
 ---
 title: Read a failing eval
-description: Decode a FAIL, ERROR, REVIEW, or SKIP from a moose-tracevals run in one page, then decide whether to fix the session, fix the criterion, or escalate.
+description: Decode a FAIL, ERROR, REVIEW, or SKIP from a moose-tracevals run in one page, then decide whether to fix the session, fix the eval, or escalate.
 ---
 
 import { Aside, LinkCard, CardGrid } from '@astrojs/starlight/components';
@@ -20,24 +20,24 @@ Three words, in order:
 - **`FAIL`** is the **outcome**. One of `PASS`, `FAIL`, `ERROR`, `REVIEW`, or `SKIP`.
 - **`fix-bug`** is the **artifact**: an instruction file the agent session used, such as a skill, a
   subagent definition, or a project-rules file like `CLAUDE.md`.
-- **`forbidden-tool`** is the **criterion**: one named check declared in that artifact's
+- **`forbidden-tool`** is the **eval**: one named check declared in that artifact's
   frontmatter, saying something the session was supposed to do or avoid.
 
 So: *the session used the `fix-bug` skill, that skill declares a rule called `forbidden-tool`, and
 the session broke it.*
 
-If the criterion is called `adheres-to-artifact (implicit)`, nothing specific was declared. The
+If the eval is called `adheres-to-artifact (implicit)`, nothing specific was declared. The
 check was the general question *"did the session follow this file's instructions?"*
 
 {/* Doc Detective inline tests: the outcomes described on this page are produced
     by running the CLI against this repository's committed fixtures. */}
-{/* test {"testId":"triage-fail-line","description":"A deterministic failure names the artifact, criterion, and what the session did."} */}
+{/* test {"testId":"triage-fail-line","description":"A deterministic failure names the artifact, eval, and what the session did."} */}
 {/* step {"description":"The documented FAIL line appears verbatim.","runShell":{"command":"moose-tracevals run test/fixtures/traces/claude-session.jsonl --project test/fixtures/project --deterministic-only","exitCodes":[1],"stdio":"tool Bash was used 1 time(s) but must not be"}} */}
 {/* test end */}
 
 ## A check failed
 
-`FAIL` means a criterion was violated. The line underneath tells you what the session actually did:
+`FAIL` means an eval was violated. The line underneath tells you what the session actually did:
 
 ```
          [error] tool Bash was used 1 time(s) but must not be
@@ -46,16 +46,16 @@ check was the general question *"did the session follow this file's instructions
 Deterministic checks are specific like this: a tool name and a count, a file path, a turn count, a
 pattern. No interpretation is involved. The session either did it or it did not.
 
-**`[error]` here is a severity, and severities are set by whoever wrote the criterion.** Only
+**`[error]` here is a severity, and severities are set by whoever wrote the eval.** Only
 `error`-severity findings fail an eval; `warning` and `info` findings are reported and pass. Seeing
 `[error]` means someone decided this check matters.
 
 ## A judged verdict
 
-Some criteria cannot be decided mechanically, so a model decides them. Those look like this:
+Some evals cannot be decided mechanically, so a model decides them. Those look like this:
 
 ```
-  REVIEW fix-bug › criterion-3
+  REVIEW fix-bug › eval-5
          votes pass:1 fail:2 partial:0 error:0 · confidence 0.87
          The session edited src/app.ts at turn 2 without a preceding test run.
 ```
@@ -100,12 +100,12 @@ as a loud error instead of slipping through as a pass:
          options.expect must be one of: used, not-used
 ```
 
-**The criteria block itself is malformed.** You get a check called `evals-block-valid` with a source
+**The evals block itself is malformed.** You get a check called `evals-block-valid` with a source
 line number:
 
 ```
   ERROR  fix-bug › evals-block-valid
-         invalid metadata.evals block: /criteria/1/grader (line 12): must be equal to one of the allowed values
+         invalid metadata.evals block: /evals/1/grader (line 12): must be equal to one of the allowed values
 ```
 
 Either way the bug lives in the artifact's frontmatter, and it belongs to whoever owns that file.
@@ -117,9 +117,9 @@ printed underneath. Read it, because each one means something different:
 
 | Reason shown | What happened | What to do |
 |---|---|---|
-| `llm evals skipped (deterministic-only run)` | The run used `--deterministic-only`, so judged checks did not run. | Nothing. This is the normal CI mode. |
-| `llm evals skipped (no judge provided)` | No judge was configured for this run. | Nothing, unless you expected judged checks; then check the provider config. |
-| `artifact skipped via metadata.evals.skip` | The artifact opted out. | Nothing. Someone chose this on purpose. |
+| `ai evals skipped (deterministic-only run)` | The run used `--deterministic-only`, so judged checks did not run. | Nothing. This is the normal CI mode. |
+| `ai evals skipped (no judge provided)` | No judge was configured for this run. | Nothing, unless you expected judged checks; then check the provider config. |
+| `artifact skipped via metadata.eval-skip` | The artifact opted out. | Nothing. Someone chose this on purpose. |
 | `judge cost budget exhausted ($2.5)` | A spending ceiling was hit; remaining judged evals did not run. | Raise `judge.maxCostUsd`, or accept partial coverage. |
 
 A deterministic grader can also skip itself when the trace lacks the data it needs. Most often that
@@ -158,17 +158,17 @@ and whether each one was found.
 
 Three options, and the third is the one people forget:
 
-1. **Fix the session's behavior.** The criterion is right and the agent broke it. Change the
+1. **Fix the session's behavior.** The eval is right and the agent broke it. Change the
    instructions, the prompt, or the workflow so it stops happening.
 
-2. **Fix the criterion.** Sometimes the check is wrong: it asserts something no session could
+2. **Fix the eval.** Sometimes the check is wrong: it asserts something no session could
    reasonably satisfy, or it describes an old workflow, or the assertion is too vague for anyone to
    adjudicate. **This is a real and common answer**, and you may be the first person to notice. A
-   criterion nobody can satisfy is a defect in the artifact.
+   eval nobody can satisfy is a defect in the artifact.
 
 3. **Escalate to whoever owns the artifact.** The coverage section printed the file path. That file
    is in version control, so `git log` on it names the owner. Bring them the artifact name, the
-   criterion name, and for a judged verdict the vote split and the cited observation. That is
+   eval name, and for a judged verdict the vote split and the cited observation. That is
    enough for them to act without reproducing anything.
 
 <Aside title="You do not need to install anything">
@@ -185,8 +185,8 @@ result, you can: evaluation is read-only and never modifies traces or artifacts.
     href="/moose-tracevals/judge/"
   />
   <LinkCard
-    title="What the criterion is actually asserting"
-    description="How criteria are declared, what each grader checks, and what severity means."
+    title="What the eval is actually asserting"
+    description="How evals are declared, what each grader checks, and what severity means."
     href="/moose-tracevals/declare/"
   />
 </CardGrid>

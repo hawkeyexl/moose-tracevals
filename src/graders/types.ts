@@ -1,7 +1,7 @@
 /** Deterministic trace-grader contract. */
 import type { Trace } from "../trace/types.js";
 import type { EvalPlan } from "../core/plan.js";
-import type { Severity } from "../criteria/extract.js";
+import type { Severity } from "../evals/extract.js";
 
 export interface Finding {
   evalName: string;
@@ -22,6 +22,12 @@ export interface GradeResult {
 export interface TraceGraderContext {
   trace: Trace;
   plan: EvalPlan;
+  /**
+   * Root artifact resolution walked from, when the run pinned one. The command
+   * grader runs checks here so a repo-relative script path in an artifact
+   * resolves the way its author wrote it; absent, the trace's own cwd is used.
+   */
+  projectRoot?: string;
 }
 
 export interface TraceGrader {

@@ -31,12 +31,12 @@ describe("discoverArtifacts", () => {
     ).toBe(false);
   });
 
-  it("reports criteria already declared, for dedupe and cache keying", async () => {
+  it("reports evals already declared, for dedupe and cache keying", async () => {
     const result = await discoverArtifacts({ root: fixtureProject });
     const skill = result.artifacts.find((a) => a.artifact.type === "skill");
 
     expect(skill?.status).toBe("ok");
-    // fix-bug declares two named criteria plus one string shorthand.
+    // fix-bug declares two id'd evals plus one string shorthand.
     expect(skill?.existingNames).toContain("used-read");
     expect(skill?.existingNames).toContain("forbidden-tool");
 

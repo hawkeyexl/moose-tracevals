@@ -16,7 +16,7 @@ afterAll(async () => {
   await rm(tmpDir, { recursive: true, force: true });
 });
 
-const plan = makePlan({ grader: "llm" });
+const plan = makePlan({ grader: "ai" });
 
 describe("makeTraceJudge", () => {
   it("passes on a unanimous high-confidence ensemble", async () => {
@@ -131,5 +131,55 @@ describe("cacheKey", () => {
     expect(
       cacheKey("mock", "m", 3, 0, "trace", makePlan({ assertion: "different" })),
     ).not.toBe(base);
+  });
+
+  describe("per-eval provider override", () => {
+    it("judges through the provider the eval names", async () => {
+      const named = new MockProvider([mockVerdict("fail", 0.95)]);
+      const judge = makeTraceJudge({
+        // The default would pass; the override must be what actually runs.
+        provider: new MockProvider([mockVerdict("pass", 0.95)]),
+        providerFor: () => ({ provider: named }),
+        runs: 3,
+        noCache: true,
+      });
+      const [result] = await judge(
+        [makePlan({ grader: "ai", provider: "mock-secondary" })],
+        "trace text",
+      );
+      expect(result?.outcome).toBe("fail");
+      expect(named.requests.length).toBe(3);
+    });
+
+    it("errors rather than silently judging with the wrong model", async () => {
+      const judge = makeTraceJudge({
+        provider: new MockProvider([mockVerdict("pass", 0.95)]),
+        providerFor: () => {
+          throw new Error("no such provider");
+        },
+        runs: 3,
+        noCache: true,
+      });
+      const [result] = await judge(
+        [makePlan({ grader: "ai", provider: "typo" })],
+        "trace text",
+      );
+      expect(result?.outcome).toBe("error");
+      expect(result?.error).toContain("typo");
+      expect(result?.consensus).toBeUndefined();
+    });
+
+    it("errors when the run cannot construct providers by name at all", async () => {
+      const judge = makeTraceJudge({
+        provider: new MockProvider([mockVerdict("pass", 0.95)]),
+        runs: 3,
+        noCache: true,
+      });
+      const [result] = await judge(
+        [makePlan({ grader: "ai", provider: "claude-cli" })],
+        "trace text",
+      );
+      expect(result?.outcome).toBe("error");
+    });
   });
 });

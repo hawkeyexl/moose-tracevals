@@ -60,7 +60,7 @@ asks for trend data, he starts piping the JSON report and the history file somew
 loudly and specifically the first time a session violates a rule — with an exit code he can branch
 on and JSON he can forward.
 
-**Careful with:** Devin's journey must never require understanding criteria authoring or judge
+**Careful with:** Devin's journey must never require understanding evals authoring or judge
 calibration. He needs *trace*, *artifact*, and *outcome* only to the depth required to read a
 result. Introduce `needs-review` and `failOnNeedsReview` in the same breath — the first is a trap
 for him without the second.

@@ -9,7 +9,7 @@ import { Tabs, TabItem, Aside, LinkCard, CardGrid } from '@astrojs/starlight/com
 
 **Scope:** getting a dependable gate into automation. Reading results downstream (JSON, history,
 regressions) is covered in [Exit codes & reports](/moose-tracevals/ci/exit-codes-and-reports/).
-Deciding what the criteria assert is [Declare what to check](/moose-tracevals/declare/).
+Deciding what the evals assert is [Declare what to check](/moose-tracevals/declare/).
 
 The short version: **moose-tracevals can run in a build with no network call and no API key.** That is
 `--deterministic-only`, and it is a complete mode in its own right.
@@ -36,7 +36,7 @@ used to pass?*
 Two flags cover every offline case:
 
 - **`--deterministic-only`** makes no model call at all. Judged evals are reported as `skipped`
-  instead of failed, so an artifact with only judged criteria does not turn your build red for
+  instead of failed, so an artifact with only judged evals does not turn your build red for
   having been skipped.
 - **`--provider mock`** exercises the whole pipeline, judge path included, without a network call. Use it to smoke-test wiring, not to check adherence: it returns a canned verdict.
 

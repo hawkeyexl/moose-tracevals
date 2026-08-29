@@ -1,17 +1,17 @@
 /**
- * `moose-tracevals fill [paths...]` — propose eval criteria for a project's
+ * `moose-tracevals fill [paths...]` — propose evals for a project's
  * instruction artifacts and append the survivors to their frontmatter.
  *
  * Authoring, not evaluation: `run` never calls this, and everything written is
- * the same declared-criteria contract a human would type by hand. Project
- * rules are proposed but never written — criteria inside a file the agent
+ * the same declared-evals contract a human would type by hand. Project
+ * rules are proposed but never written — evals inside a file the agent
  * reads before acting would be teaching to the test (ADR 01005).
  */
 import { writeFile } from "node:fs/promises";
 import { relative, resolve } from "node:path";
 import pc from "picocolors";
 import { discoverArtifacts, type DiscoveredArtifact } from "../artifacts/discover.js";
-import { appendArtifactCriteria, type NewCriterion } from "../criteria/write.js";
+import { appendArtifactEvals, type NewEvalEntry } from "../evals/write.js";
 import { loadConfig } from "../core/config.js";
 import { TracevalsError } from "../types.js";
 import {
@@ -29,7 +29,7 @@ import { FillCache, fillCacheKey } from "../fill/cache.js";
 import { artifactFacts } from "../fill/facts.js";
 import {
   gateProposals,
-  type ProposedCriterion,
+  type ProposedEval,
   type Rejection,
 } from "../fill/gate.js";
 import {
@@ -52,8 +52,8 @@ export interface FillOptions {
   /** Report proposals without writing. */
   dryRun?: boolean;
   confidence?: number;
-  /** Ceiling on an artifact's total criteria, existing ones included. */
-  maxCriteria?: number;
+  /** Ceiling on an artifact's total evals, existing ones included. */
+  maxEvals?: number;
   maxCostUsd?: number;
   noCache?: boolean;
   provider?: string;
@@ -81,10 +81,10 @@ export interface FillArtifactResult {
   artifact: string;
   type: string;
   status: FillStatus;
-  /** Criteria written, or that would be written in a dry run. */
-  written: ProposedCriterion[];
+  /** Evals written, or that would be written in a dry run. */
+  written: ProposedEval[];
   rejected: Rejection[];
-  capped: ProposedCriterion[];
+  capped: ProposedEval[];
   /** Instructions the model judged untestable as written. */
   needsSharpening: SharpeningNote[];
   cached: boolean;
@@ -105,22 +105,22 @@ export interface FillRun {
   rendered: string;
 }
 
-/** Proposals become inline criteria; confidence and rationale stay report-only. */
-function toCriterion(proposed: ProposedCriterion): NewCriterion {
-  const criterion: NewCriterion = {
-    name: proposed.name,
+/** Proposals become inline evals; confidence and rationale stay report-only. */
+function toEvalEntry(proposed: ProposedEval): NewEvalEntry {
+  const entry: NewEvalEntry = {
+    id: proposed.name,
     assertion: proposed.assertion,
-    // New criteria start as regression: they describe behavior the artifact
+    // New evals start as regression: they describe behavior the artifact
     // already asks for, not a boundary being probed.
     type: "regression",
     grader: proposed.grader,
-    // The published schema takes lists; the model proposes one of each.
+    // The vocabulary takes one anchor or a list; the model proposes one of each.
     examples: { pass: [proposed.examples.pass], fail: [proposed.examples.fail] },
   };
-  if (proposed.options !== undefined) criterion.options = proposed.options;
-  if (proposed.evidence !== undefined) criterion.evidence = proposed.evidence;
-  if (proposed.severity !== undefined) criterion.severity = proposed.severity;
-  return criterion;
+  if (proposed.options !== undefined) entry.options = proposed.options;
+  if (proposed.evidence !== undefined) entry.evidence = proposed.evidence;
+  if (proposed.severity !== undefined) entry.severity = proposed.severity;
+  return entry;
 }
 
 export async function runFill(options: FillOptions = {}): Promise<FillRun> {
@@ -129,7 +129,7 @@ export async function runFill(options: FillOptions = {}): Promise<FillRun> {
   const config = await loadConfig(options.configDir ?? cwd);
 
   const threshold = options.confidence ?? config.fill.confidenceThreshold;
-  const maxCriteria = options.maxCriteria ?? config.fill.maxCriteriaPerArtifact;
+  const maxEvals = options.maxEvals ?? config.fill.maxEvalsPerArtifact;
   const temperature = config.fill.temperature;
   const maxCostUsd = options.maxCostUsd ?? config.fill.maxCostUsd;
   const cache = new FillCache(
@@ -234,7 +234,7 @@ export async function runFill(options: FillOptions = {}): Promise<FillRun> {
       provider: identity.name,
       model: identity.model,
       temperature,
-      maxCriteria,
+      maxEvals,
       artifactType: artifact.type,
       path: artifact.path,
       body: artifact.content,
@@ -254,7 +254,7 @@ export async function runFill(options: FillOptions = {}): Promise<FillRun> {
           user: buildFillUser({
             artifact,
             existingNames: discovered.existingNames,
-            maxCriteria,
+            maxEvals,
             facts,
             knownSkills,
           }),
@@ -284,13 +284,13 @@ export async function runFill(options: FillOptions = {}): Promise<FillRun> {
       }
     }
 
-    const gated = gateProposals(raw.criteria as ProposedCriterion[], {
+    const gated = gateProposals(raw.evals as ProposedEval[], {
       artifactType: artifact.type,
       threshold,
       existingNames: discovered.existingNames,
       // The cap is a ceiling on the artifact's total, not on one run's
       // additions, so repeated fills cannot grow it without bound.
-      maxCriteria: Math.max(0, maxCriteria - discovered.existingNames.length),
+      maxEvals: Math.max(0, maxEvals - discovered.existingNames.length),
       vocabulary,
     });
     const result: FillArtifactResult = {
@@ -304,17 +304,28 @@ export async function runFill(options: FillOptions = {}): Promise<FillRun> {
 
     if (gated.accepted.length === 0) return result;
     // Project rules are read by the agent under test before it acts, so
-    // writing criteria there would leak the rubric into the system prompt.
+    // writing evals there would leak the rubric into the system prompt.
     if (artifact.type === "project-rules") {
       return { ...result, status: "propose-only" };
     }
     if (options.dryRun === true) return { ...result, status: "proposed" };
 
     try {
-      const updated = appendArtifactCriteria(
+      const updated = appendArtifactEvals(
         artifact.content,
         artifact.path,
-        gated.accepted.map(toCriterion),
+        gated.accepted.map(toEvalEntry),
+        // Machines propose; humans retire the trail. Recording which model
+        // proposed what, at what confidence, is what lets a reviewer tell an
+        // unreviewed suggestion from an eval someone actually signed off on.
+        {
+          generatedBy: identity.model
+            ? `${identity.name}:${identity.model}`
+            : identity.name,
+          confidence: Object.fromEntries(
+            gated.accepted.map((c) => [c.name, c.confidence]),
+          ),
+        },
       );
       await writeFile(artifact.path, updated);
     } catch (err) {
@@ -339,8 +350,8 @@ const STATUS_LABEL: Record<FillStatus, string> = {
   error: "error",
 };
 
-function names(criteria: ProposedCriterion[]): string {
-  return criteria
+function names(entries: ProposedEval[]): string {
+  return entries
     .map((c) => `${c.name} ${c.confidence.toFixed(2)}`)
     .join(", ");
 }
@@ -392,11 +403,11 @@ export function renderFill(
     }
     const belowThreshold = result.rejected.filter((r) => r.reason === "low-confidence");
     if (belowThreshold.length > 0) {
-      lines.push(dim(`          below ${report.threshold}: ${names(belowThreshold.map((r) => r.criterion))}`));
+      lines.push(dim(`          below ${report.threshold}: ${names(belowThreshold.map((r) => r.proposal))}`));
     }
     for (const rejection of result.rejected) {
       if (rejection.reason === "low-confidence") continue;
-      lines.push(dim(`          ${rejection.reason}: ${rejection.criterion.name}${rejection.detail ? ` — ${rejection.detail}` : ""}`));
+      lines.push(dim(`          ${rejection.reason}: ${rejection.proposal.name}${rejection.detail ? ` — ${rejection.detail}` : ""}`));
     }
     if (result.capped.length > 0) {
       lines.push(dim(`          over per-artifact cap: ${names(result.capped)}`));
@@ -415,8 +426,8 @@ export function renderFill(
   const total = report.results.reduce((n, r) => n + r.written.length, 0);
   lines.push(
     report.dryRun
-      ? `Threshold ${report.threshold} · ${total} criteria proposed, none written (dry run)`
-      : `Threshold ${report.threshold} · ${total} criteria written`,
+      ? `Threshold ${report.threshold} · ${total} evals proposed, none written (dry run)`
+      : `Threshold ${report.threshold} · ${total} evals written`,
   );
   return lines.join("\n");
 }

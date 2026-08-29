@@ -74,7 +74,7 @@ export interface TracevalsConfig {
   fill: {
     /** Minimum self-reported confidence a proposal needs to be written. */
     confidenceThreshold: number;
-    maxCriteriaPerArtifact: number;
+    maxEvalsPerArtifact: number;
     temperature: number;
     cacheDir: string;
     maxCostUsd?: number;
@@ -137,7 +137,7 @@ export function parseConfig(raw: unknown): TracevalsConfig {
     fill: {
       // 0.7 matches the manuscript's calibration bar for judged agreement.
       confidenceThreshold: r.fill?.confidenceThreshold ?? 0.7,
-      maxCriteriaPerArtifact: r.fill?.maxCriteriaPerArtifact ?? 8,
+      maxEvalsPerArtifact: r.fill?.maxEvalsPerArtifact ?? 8,
       temperature: r.fill?.temperature ?? 0,
       // Separate from the judge cache: different key scheme and value shape.
       cacheDir: r.fill?.cacheDir ?? ".moose-tracevals/cache/fill",

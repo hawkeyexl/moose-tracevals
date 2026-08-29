@@ -1,6 +1,6 @@
 ---
-title: Fill in criteria across a project
-description: Use fill to propose criteria for every skill, agent, and rules file in a project — understand the gate that gets applied, and review the diff before anything is written.
+title: Fill in evals across a project
+description: Use fill to propose evals for every skill, agent, and rules file in a project — understand the gate that gets applied, and review the diff before anything is written.
 sidebar:
   order: 2
 ---
@@ -12,13 +12,13 @@ the vocabulary from [Declare what to check](/moose-tracevals/declare/) and is ab
 
 ## What `fill` does
 
-`fill` scans a project for instruction artifacts, asks a model to extract the criteria each
+`fill` scans a project for instruction artifacts, asks a model to extract the evals each
 artifact's own instructions already imply, and appends the ones that survive a gate. It needs no
 trace.
 
 This is the only command that touches your files, so here is exactly what it refuses to do:
 
-- **It never modifies an existing criterion.** A name collision fails the run.
+- **It never modifies an existing eval.** A name collision fails the run.
 - **It only rewrites the frontmatter block.** Everything from the closing `---` onward is
   byte-identical, including CRLF line endings and a byte-order mark if you had one.
 - **It never writes project rules.** See [below](#project-rules-are-never-written).
@@ -43,13 +43,13 @@ proposed  .claude/skills/fix-bug/SKILL.md  +1 (reads-before-editing 0.90) — dr
 proposed  AGENTS.md  +1 (reads-before-editing 0.90) — project rules are never written; copy what you want
 proposed  CLAUDE.md  +1 (reads-before-editing 0.90) — project rules are never written; copy what you want
 
-Threshold 0.7 · 4 criteria proposed, none written (dry run)
+Threshold 0.7 · 4 evals proposed, none written (dry run)
 ```
 
 {/* Doc Detective inline tests: run the documented fill workflow against the
     committed fixture project. --dry-run is load-bearing here: CI separately
     asserts the fixture corpus is byte-identical afterwards. */}
-{/* test {"testId":"fill-dry-run","description":"A dry-run fill proposes criteria and writes nothing."} */}
+{/* test {"testId":"fill-dry-run","description":"A dry-run fill proposes evals and writes nothing."} */}
 {/* step {"description":"The dry run succeeds and reports the confidence threshold.","runShell":{"command":"moose-tracevals fill test/fixtures/project --provider mock --dry-run --no-cache","exitCodes":[0],"stdio":"none written (dry run)"}} */}
 {/* step {"description":"Project rules are proposed but never written.","runShell":{"command":"moose-tracevals fill test/fixtures/project --provider mock --dry-run --no-cache","exitCodes":[0],"stdio":"project rules are never written"}} */}
 {/* step {"description":"A below-threshold proposal is reported rather than silently dropped.","runShell":{"command":"moose-tracevals fill test/fixtures/project --provider mock --dry-run --no-cache","exitCodes":[0],"stdio":"below 0.7"}} */}
@@ -62,7 +62,7 @@ Each line is one artifact. Reading left to right:
 - **`proposed` / `filled` / `skipped` / `no-op` / `error`**: what happened to this artifact.
   `proposed` means nothing was written, either because you passed `--dry-run` or because it is a
   project-rules file.
-- **`+1 (reads-before-editing 0.90)`**: how many criteria were accepted, with each name and the
+- **`+1 (reads-before-editing 0.90)`**: how many evals were accepted, with each name and the
   model's self-reported confidence.
 - **`below 0.7: …`**: proposals rejected for confidence, named so you can see what you are missing.
 - **`needs sharpening: …`**: an instruction too vague to test. See
@@ -71,23 +71,23 @@ Each line is one artifact. Reading left to right:
 ## Why a proposal was rejected
 
 Here is where intuition misleads. Confidence *feels* like the filter, so lowering the threshold
-feels like it should let more criteria through. It does not. Confidence is the **last** of six
+feels like it should let more evals through. It does not. Confidence is the **last** of six
 gates, and **no confidence score overrides any of the five before it**.
 
 Proposals are checked in this order:
 
 <Steps>
 
-1. **`duplicate-name`**: a criterion by that name already exists on the artifact.
+1. **`duplicate-name`**: an eval by that name already exists on the artifact.
 
 2. **`grader-not-allowed`**: the grader's scope does not fit this artifact type. Each type has an
    allowlist:
 
    | Artifact type | Graders it may use |
    |---|---|
-   | skill | `llm`, `tool-usage`, `file-access`, `regex` |
-   | agent | `llm`, `tool-usage`, `file-access` |
-   | project rules | `llm`, `skill-invoked`, `tool-usage` |
+   | skill | `ai`, `tool-usage`, `file-access`, `regex` |
+   | agent | `ai`, `tool-usage`, `file-access` |
+   | project rules | `ai`, `skill-invoked`, `tool-usage` |
 
    Two exclusions are deliberate. `cost`, `turn-count`, and `json-output` are **whole-session**
    graders: a budget declared inside one skill would silently constrain the entire session, so they
@@ -103,18 +103,18 @@ Proposals are checked in this order:
 
 5. **`low-confidence`**: and only now, below `--confidence` (default `0.7`).
 
-6. **Cap.** Survivors are sorted by confidence and truncated to `--max-criteria` (default `8`).
-   The cap counts **existing criteria too**, so an artifact already carrying eight gets none. The
+6. **Cap.** Survivors are sorted by confidence and truncated to `--max-evals` (default `8`).
+   The cap counts **existing evals too**, so an artifact already carrying eight gets none. The
    rest are reported as `over per-artifact cap`, so nothing disappears quietly.
 
 </Steps>
 
 That ordering is the point: a high-confidence proposal naming a tool your project does not have is
-still rejected. Confidence can only lose you a criterion, never win you one.
+still rejected. Confidence can only lose you an eval, never win you one.
 
 <Aside type="tip" title="Re-gating is free">
 The cache stores the raw, **pre-gating** proposal. Re-running with a different `--confidence` or
-`--max-criteria` re-gates the cached proposals without another model call.
+`--max-evals` re-gates the cached proposals without another model call.
 </Aside>
 
 ## Instructions that cannot be tested
@@ -122,7 +122,7 @@ The cache stores the raw, **pre-gating** proposal. Re-running with a different `
 The `needs sharpening` notes are the most valuable thing on this page and the easiest to skim past.
 
 When `fill` meets an instruction too vague to decide, such as *"Produce high-quality work."*, it
-says so instead of converting it into an assertion that can never fail. A soft criterion inflates
+says so instead of converting it into an assertion that can never fail. A soft eval inflates
 your pass rate and hides the fact that nothing is being checked.
 
 **Treat these as a to-do list for the artifact.** The fix is upstream: rewrite the instruction so a
@@ -143,36 +143,36 @@ model's opinion of its own proposal; you are the last gate.
 Useful knobs:
 
 ```bash
-npx moose-tracevals fill --confidence 0.85 --max-criteria 4 --dry-run
+npx moose-tracevals fill --confidence 0.85 --max-evals 4 --dry-run
 ```
 
 Confidence and rationale are **report-only**: shown to you, never written into the artifact. Newly
-written criteria are always `type: regression`, the conservative default; see
-[capability vs regression](/moose-tracevals/reference/criteria-schema/).
+written evals are always `type: regression`, the conservative default; see
+[capability vs regression](/moose-tracevals/reference/evals-schema/).
 
 ## Project rules are never written
 
 `CLAUDE.md`, `AGENTS.md`, and `GEMINI.md` get proposals printed for you to copy by hand. They are
 never written automatically. That is a design decision, and here is the reasoning.
 
-Project rules are read by the agent **before it acts**. A criterion written into that file would
+Project rules are read by the agent **before it acts**. An eval written into that file would
 tell the agent exactly what it is about to be measured on, which is teaching to the test. The
 measurement stops meaning anything the moment the subject can read it.
 
 So the proposals are printed, and you decide which ones to carry over by hand. The reasoning is
-recorded in [ADR 01005](https://github.com/hawkeyexl/moose-tracevals/blob/main/adrs/01005-fill-proposes-criteria-at-authoring-time.md).
+recorded in [ADR 01005](https://github.com/hawkeyexl/moose-tracevals/blob/main/adrs/01005-fill-proposes-evals-at-authoring-time.md).
 
 ## Where to go next
 
 <CardGrid>
   <LinkCard
-    title="Check your new criteria fire"
+    title="Check your new evals fire"
     description="Run against a session you know violated the rule, and confirm the failure names what actually happened."
     href="/moose-tracevals/get-started/"
   />
   <LinkCard
     title="Every fill flag"
-    description="--confidence, --max-criteria, --max-cost-usd, --no-cache, --provider, and the JSON report shape."
+    description="--confidence, --max-evals, --max-cost-usd, --no-cache, --provider, and the JSON report shape."
     href="/moose-tracevals/reference/cli/"
   />
 </CardGrid>

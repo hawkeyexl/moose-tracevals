@@ -1,35 +1,59 @@
 ---
 title: Grader reference
-description: All seven deterministic graders, with their options, defaults, validation rules, and the exact message each one emits when it fails.
+description: Every grader kind — the open enum, the seven deterministic ones with their options and messages, and the ai, human, and command families.
 sidebar:
   order: 4
 ---
 
 import { Aside } from '@astrojs/starlight/components';
 
-**Scope:** the deterministic graders: every kind, its options, and what it emits. The judged
-grader (`llm`) is covered in [How the judge decides](/moose-tracevals/judge/). Source of truth:
-`src/graders/`.
+**Scope:** every grader kind, its options, and what it emits. How the judged grader decides is
+[How the judge decides](/moose-tracevals/judge/). Source of truth: `src/graders/`.
 
 A deterministic grader decides its question **from the trace alone**: no model call, no cost, and
 the same answer every time. Prefer one over the judge whenever it can answer the same question.
 
+## The grader vocabulary is an open enum
+
+`grader` accepts **any kebab-case name**. Nothing in the schema branches on the value, so the
+schema does not police it — the **grader registry does, at run time**. That is deliberate: adding a
+grader never needs a new schema version.
+
+The accepted cost is that a name the registry does not know passes validation and fails during the
+run instead, naming every kind it does know:
+
+```
+  ERROR  fix-bug › no-shell
+         unknown grader kind "ai"; the grader registry knows command, cost, file-access,
+         json-output, regex, skill-invoked, tool-usage, turn-count, "ai", and "human"
+```
+
+`ai` is the most likely one you will hit: it was the pre-1.0 spelling of `ai`.
+
+| Kind | Decided by | Cost |
+|---|---|---|
+| `ai` (default) | The ensemble judge | An inference call per run |
+| `human` | A person, per session | None |
+| `command` | An executable you name, over the trace | Whatever it costs to run |
+| `tool-usage`, `skill-invoked`, `file-access`, `turn-count`, `cost`, `regex`, `json-output` | The trace alone | None |
+
 ## Shared behavior
 
-**Options are validated before grading.** Every grader validates its own options, so a malformed
-criterion produces an `error` outcome that names the offending option:
+**Options are validated before grading.** Every option-configured grader validates its own options,
+so a malformed eval produces an `error` outcome that names the offending option:
 
 ```
   ERROR  fix-bug › forbidden-tool
          tool-usage: options.expect must be one of: used, not-used
 ```
 
-Validation happens twice: at run time, and again when `fill` proposes a criterion. That second pass
-is why a grader that cannot validate its options can never be proposed.
+Validation happens twice: at run time, and again when `fill` proposes an eval. That second pass is
+why a grader that cannot validate its options can never be proposed — which is exactly how `command`
+is kept out of `fill`.
 
 **Only `error` severity fails an eval.** A finding at `warning` or `info` is reported and the eval
-passes. Severity is set per criterion; see the
-[criteria schema](/moose-tracevals/reference/criteria-schema/).
+passes. Severity is set per eval; see the
+[evals schema](/moose-tracevals/reference/evals-schema/).
 
 ### Shared validation messages
 
@@ -59,15 +83,15 @@ Whether a tool was used, avoided, or used within count bounds.
 | `includeSidechains` | boolean | `false` | Count tool calls made inside spawned subagents. |
 
 ```yaml
-- name: forbidden-tool
+- id: forbidden-tool
   assertion: The session never ran shell commands; this skill is edit-only.
   grader: tool-usage
   options: { tool: Bash, expect: not-used }
 ```
 
 **Sidechains.** By default only the main session's tool calls are counted. A subagent's calls are
-sidechain calls, so a criterion on an *agent definition* usually wants `includeSidechains: true`.
-`fill` sets it automatically when proposing a `tool-usage` criterion on an agent.
+sidechain calls, so an eval on an *agent definition* usually wants `includeSidechains: true`.
+`fill` sets it automatically when proposing a `tool-usage` eval on an agent.
 
 **Failure messages**
 
@@ -121,12 +145,12 @@ Whether a file was read, written, or edited.
 | `op` | `read` \| `write` \| `edit` | any op | Restrict to one operation. |
 | `expect` | `accessed` \| `not-accessed` | `accessed` | Direction of the assertion. |
 
-**Matching is suffix-based, separator-normalized, and case-insensitive**, so a criterion written on
+**Matching is suffix-based, separator-normalized, and case-insensitive**, so an eval written on
 one platform works on another. `src/app.ts` matches
 `C:\work\demo\src\app.ts` and `/home/you/demo/src/app.ts` alike.
 
 ```yaml
-- name: touches-migrations
+- id: touches-migrations
   assertion: The session must not edit database migrations.
   grader: file-access
   options: { path: db/migrations, op: edit, expect: not-accessed }
@@ -238,7 +262,7 @@ Whether the session's final assistant message is JSON matching a schema.
 | `schema` | object | **required** | A JSON Schema the output must validate against. |
 
 ```yaml
-- name: emits-report
+- id: emits-report
   assertion: The session's final message is a report object.
   grader: json-output
   options:
@@ -263,9 +287,83 @@ Whether the session's final assistant message is JSON matching a schema.
 time. A schema that fails to compile becomes an options error instead of a crash.
 
 Also a whole-session grader: it looks at the last assistant message of the entire session, so a
-criterion declared on one of several artifacts still measures the same final output.
+eval declared on one of several artifacts still measures the same final output.
 
 ---
+
+## `ai`
+
+The default. The assertion goes to the ensemble judge, which reads the rendered trace and votes.
+Takes no `options`; it is steered by `assertion`, `evidence`, and `examples` instead. An eval may
+name `provider:` to be judged by a specific configured provider rather than the run's default — a
+provider name the run cannot construct is that eval's own `error`, never a silent fall back to the
+default model.
+
+Skipped entirely under `--deterministic-only`.
+
+## `human`
+
+Queues the eval for a person. It always reports `needs-review`, never `pass` or `fail`.
+
+Unlike the page-side vocabulary this shares its shape with, a `human` verdict is **judged per
+session and never cached**: every trace is new, so there is nothing a previous verdict could still
+be true about. It costs nothing and needs no provider, so it reports in `--deterministic-only` runs
+too.
+
+Whether a `needs-review` outcome fails the run is a config decision — see `failOnNeedsReview` in the
+[configuration reference](/moose-tracevals/reference/configuration/).
+
+## `command`
+
+Runs an executable over the trace and grades by exit code.
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `command` | array of strings | — | argv. `{trace}` is replaced in every element with the trace's path. |
+| `success-exit-codes` | array of integers | `[0]` | Exit codes that count as a pass. |
+| `timeout-ms` | integer | `30000` | How long the command may run. |
+| `generated-assertion-hash` | string | — | sha256 of `assertion` when the command was generated. Never legal without `command`. |
+
+These live on the eval entry, not in `options`, and the schema enforces that they only appear
+alongside `grader: command`.
+
+```yaml
+- id: no-force-push
+  assertion: The session never force-pushed.
+  grader: command
+  command: ["node", "tracevals/no-force-push.mjs", "{trace}"]
+  timeout-ms: 15000
+```
+
+The command runs with its working directory set to the project root artifact resolution walked
+from, so a repo-relative script path resolves the way you wrote it.
+
+<Aside type="caution" title="This runs code from the artifact">
+A command eval executes a program named in an artifact's frontmatter, and artifacts are resolved
+from **the trace's own project tree** — so running an eval over someone else's trace can run code
+that repository declares. This is on by default ([ADR 01011](https://github.com/hawkeyexl/moose-tracevals/blob/main/adrs/01011-execute-command-graded-evals.md)).
+
+Two properties bound it: argv is spawned with **no shell**, so `;`, `&&`, and `$(...)` in an
+artifact reach the process as literal argument text; and `timeout-ms` always has a finite value, so
+a hung check fails its own eval rather than the run.
+</Aside>
+
+Four states are an `error` rather than a verdict, because none of them can honestly be called a
+pass:
+
+| State | Message |
+|---|---|
+| `grader: command` with no `command` | `command-graded eval has no \`command\`…` |
+| `generated-assertion-hash` no longer matches the assertion | `assertion has changed since the command was generated…` |
+| The executable cannot be spawned | `could not run command: …` |
+| The command overruns its timeout | `command timed out after <n>ms: …` |
+
+The hash is the second half of a generation contract: a tool that writes a check script from an
+assertion also writes the hash, so a later edit to the assertion is detectable. moose-tracevals does
+not generate check scripts — it reports the mismatch and leaves the regeneration to you.
+
+`fill` never proposes a command grader. Writing an executable into an artifact is a decision a human
+makes.
 
 ## Custom graders
 

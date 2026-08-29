@@ -80,7 +80,7 @@ jq -r '.evalResults[] | select(.consensus)
 
 If most of your reviews show unanimous votes with mean confidence just under the threshold, the
 threshold is too high for your model. If they show split votes, the *assertions* are ambiguous and
-no threshold will fix them — go sharpen the criteria instead.
+no threshold will fix them — go sharpen the evals instead.
 
 ## Cap what it can spend
 
@@ -151,7 +151,7 @@ question.
 
 <CardGrid>
   <LinkCard
-    title="Evolve the criteria standard"
+    title="Evolve the evals standard"
     description="Pin a schema version, separate probes from regression guards, and roll out a convention in stages."
     href="/moose-tracevals/judge/schema-versioning/"
   />

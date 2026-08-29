@@ -1,44 +1,69 @@
 ---
-title: Evolve the criteria standard
-description: Pin a published schema version, separate capability probes from regression guards, and roll out a new convention across many repositories without breaking the build.
+title: Evolve the eval standard
+description: Treat the metadata.evals block as a shared contract, separate capability probes from regression guards, and roll out a new convention across many repositories without breaking the build.
 sidebar:
   order: 3
 ---
 
 import { Steps, Aside, LinkCard, CardGrid } from '@astrojs/starlight/components';
 
-**Scope:** the criteria block as a versioned contract, and changing it safely. The block's fields
-are in the [criteria schema reference](/moose-tracevals/reference/criteria-schema/); tuning how a judged
-criterion is *decided* is [Calibrate the judge](/moose-tracevals/judge/calibrate/).
+**Scope:** the evals block as a shared contract, and changing it safely. The block's fields are in
+the [evals schema reference](/moose-tracevals/reference/evals-schema/); tuning how a judged eval is
+*decided* is [Calibrate the judge](/moose-tracevals/judge/calibrate/).
 
-## The block is a published contract
+## The block is a shared contract, not ours alone
 
-The shape of `metadata.evals` is not an implementation detail. It has a resolvable `$id`, it ships
-inside the package, and **two versions coexist** so a consumer can pin one:
+The shape of `metadata.evals` is not an implementation detail, and it is not this tool's to change.
+It implements **`docmeta:artifact-evals:1.0.0-proposal.1`**, a common vocabulary published by
+[docmeta](https://github.com/hawkeyexl/docmeta) that any session-grading tool can implement.
+moose-tracevals ships a byte-identical copy of the schema and implements behavior against it.
+
+Two consequences for you:
+
+- **A shape change is an upstream conversation.** If a field is missing, the place to argue for it is
+  docmeta's proposal, not this repo. What lands there lands for every implementer at once.
+- **Your artifacts are portable.** An artifact carrying evals is not locked to this runner.
 
 ```js
-import schema from "moose-tracevals/schemas/artifact-evals-0.2.json" with { type: "json" };
+import schema from "moose-tracevals/schemas/artifact-evals-1.0.0-proposal.1.json" with { type: "json" };
 ```
 
-| Version | Adds | Use it when |
+<Aside title="Do I need to pin anything?">
+Not to author evals — moose-tracevals validates against the copy it ships. Importing the schema
+matters when *your own tooling* reads or generates these blocks and you need the shape to hold still.
+</Aside>
+
+<Aside type="caution" title="`-proposal.1` is a prerelease, and the hyphen is load-bearing">
+The vocabulary is under community review. `1.0.0-proposal.1` is a semver **prerelease**: it sorts
+*below* the `1.0.0` it will register as, and standard range matching excludes it, so nobody depends
+on a draft by accident. Spelled `+proposal.1` it would be build metadata and compare **equal** to the
+release — the opposite of what a draft wants.
+</Aside>
+
+## What a version bump will mean
+
+docmeta versions these vocabularies with three-segment semver, and each segment is a claim about
+*validation behavior* rather than a mood:
+
+| Segment | Means | Example |
 |---|---|---|
-| `0.2` | `type: capability \| regression` | Default. You want probes reported separately from guards. |
-| `0.1` | — | You have tooling pinned to it. Still shipped; identical apart from `type`. |
+| MAJOR | a block that used to validate now fails | a new required field, a removed field, a narrowed enum |
+| MINOR | a block that used to fail may now pass; every old one still validates | a new optional field, a widened enum |
+| PATCH | **no** validation-behavior change at all | a corrected `description` |
 
-`0.1` → `0.2` is **additive**: every valid `0.1` block is a valid `0.2` block, so upgrading is a
-no-op for existing artifacts. A released version is never edited in place — a change ships as the
-next version, which is what makes pinning meaningful.
+So a bump tells you directly whether your corpus is at risk: only MAJOR can break an artifact that
+validates today.
 
-<Aside title="Which do I pin?">
-If you are only authoring criteria, you do not pin anything — moose-tracevals validates against the
-current schema and both versions parse. Pinning matters when *your own tooling* reads or generates
-these blocks and you need the shape to hold still.
+<Aside title="Adding a grader is not a schema change">
+The `grader` field is an **open enum** — any kebab-case name validates, and the
+[grader registry](/moose-tracevals/reference/graders/) is what rejects an unknown one at run time.
+A new grader therefore never needs a new schema version. The cost is that a misspelled or retired
+name (`llm`, the pre-1.0 spelling of `ai`) passes validation and fails during the run instead.
 </Aside>
 
 ## Separate probes from guards
 
-`type` is the whole reason `0.2` exists, and it answers a question that otherwise makes a pass rate
-meaningless:
+`type` answers a question that otherwise makes a pass rate meaningless:
 
 | Value | Meaning | A failure means |
 |---|---|---|
@@ -46,24 +71,24 @@ meaningless:
 | `capability` | Probes the edge of what the agent can do. **Expected to fail sometimes.** | Information about where the boundary is. |
 
 ```yaml
-- name: handles-nested-monorepo
+- id: handles-nested-monorepo
   assertion: The session located the correct package in a nested workspace without being told.
   type: capability
-  grader: llm
+  grader: ai
 ```
 
-**Neither changes enforcement.** A failing `capability` criterion still fails its eval and still
-contributes to a non-zero exit code. That restraint is deliberate: a criterion that could not fail
-the build would just be a comment. What the field buys you is the ability to read a report and a
-history log and know that a red probe is not a regression.
+**Neither changes enforcement.** A failing `capability` eval still fails and still contributes to a
+non-zero exit code. That restraint is deliberate: an eval that could not fail the build would just be
+a comment. What the field buys you is the ability to read a report and a history log and know that a
+red probe is not a regression.
 
-New criteria default to `regression`, including everything `fill` writes — the conservative choice,
+New evals default to `regression`, including everything `fill` writes — the conservative choice,
 since mislabelling a real guard as a probe is the more expensive mistake.
 
 <Aside type="caution" title="`capability` is reported, not excused">
 If you want probes to stop blocking a pipeline, that is a severity decision, not a `type` decision.
-Set `severity: warning` so the finding reports and the eval passes. Use `type` for what the
-criterion *is*, and `severity` for what should happen when it fails.
+Set `severity: warning` so the finding reports and the eval passes. Use `type` for what the eval
+*is*, and `severity` for what should happen when it fails.
 </Aside>
 
 ## Roll out a convention in stages
@@ -73,10 +98,10 @@ assertion: **never flip a whole corpus to `error` at once.**
 
 <Steps>
 
-1. **Introduce it at `warning`.** The criterion reports on every run and fails nothing:
+1. **Introduce it at `warning`.** The eval reports on every run and fails nothing:
 
    ```yaml
-   - name: cites-a-test-run
+   - id: cites-a-test-run
      assertion: The session ran the test suite before declaring the fix complete.
      severity: warning
    ```
@@ -89,21 +114,21 @@ assertion: **never flip a whole corpus to `error` at once.**
            | group_by(.outcome) | map({(.[0].outcome): length}) | add'
    ```
 
-3. **Fix the artifacts, not the criterion.** A rule failing everywhere usually means the
-   instructions never said it clearly. This is the step that does the work.
+3. **Fix the artifacts, not the eval.** A rule failing everywhere usually means the instructions
+   never said it clearly. This is the step that does the work.
 
 4. **Promote to `error`** once the corpus is ready. Now it gates.
 
 </Steps>
 
-The same ratchet works in reverse for tightening an existing assertion: add the sharper criterion
-under a new name at `warning`, let both run, and remove the old one when the new one is clean.
+The same ratchet works in reverse for tightening an existing assertion: add the sharper eval under a
+new id at `warning`, let both run, and remove the old one when the new one is clean.
 
 <Aside title="Why not just tighten in place?">
 Editing an assertion changes the eval plan, which changes the cache key, which re-judges every
 session against a rule that half your artifacts have never been written for. You get a wall of red
-that tells you nothing about whether behavior changed. Adding a second criterion keeps the old
-signal intact while the new one settles.
+that tells you nothing about whether behavior changed. Adding a second eval keeps the old signal
+intact while the new one settles.
 </Aside>
 
 ## A malformed block fails loudly
@@ -114,28 +139,33 @@ Pointer to the offending field and a source line number.
 
 ```
 ERROR  fix-bug › evals-block-valid
-       invalid metadata.evals block: /criteria/1/grader (line 12): must be equal to one of the allowed values
+       invalid metadata.evals block: /metadata/evals/1/grader (line 12): must be string
 ```
 
-Additional properties are rejected at every level, so a misspelled field is an error rather than a
-key that quietly does nothing. When you roll out a convention and something breaks, you get the
-file, the pointer, and the line.
+Eval entries are closed, so a misspelled field inside one is an error rather than a key that quietly
+does nothing. `metadata` itself must stay open — it is the host tool's extension bag — so the `eval`
+prefix is reserved at run time instead: `eval-skpi` is rejected the same way. When you roll out a
+convention and something breaks, you get the file, the pointer, and the line.
 
-## Keep names stable
+## Keep ids stable
 
-Criterion names are the join key for history: a regression is defined as *this artifact and this
-eval name went from pass to fail*. Renaming a criterion therefore reads as one eval `removed` and
-another `added`, and the trend line resets.
+Eval ids are the join key for history: a regression is defined as *this artifact and this eval id
+went from pass to fail*. Renaming an eval therefore reads as one eval `removed` and another `added`,
+and the trend line resets.
 
-Rename when the meaning genuinely changed. Otherwise leave the name alone and edit the assertion.
+This is exactly why `id` is **required** on the object form. The retired 0.2 shape let a name be
+derived from list position, so reordering entries silently reset every trend line that depended on
+them.
+
+Rename when the meaning genuinely changed. Otherwise leave the id alone and edit the assertion.
 
 ## Where to go next
 
 <CardGrid>
   <LinkCard
-    title="Every criteria field"
-    description="The full metadata.evals block, both published schema versions, and what each field does."
-    href="/moose-tracevals/reference/criteria-schema/"
+    title="Every eval field"
+    description="The full metadata.evals block, the docmeta vocabulary behind it, and what each field does."
+    href="/moose-tracevals/reference/evals-schema/"
   />
   <LinkCard
     title="Track it over time"
