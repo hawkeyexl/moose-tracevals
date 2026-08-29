@@ -172,6 +172,44 @@ describe("tool-usage grader", () => {
     expect(read.findings).toEqual([]);
   });
 
+  it("counts an agent's own calls without asking for includeSidechains", async () => {
+    // Every call inside an agent branch is `sidechain: true`, so the default
+    // `includeSidechains: false` emptied the window and made an agent-artifact
+    // eval structurally unable to fail. The window *is* the branch here, so
+    // sidechain calls are the subject, not noise from someone else's turns.
+    const branched = makeTrace({
+      agentSpawns: [{ subagentType: "reviewer", index: 0, toolUseId: "toolu_r" }],
+      subagentBranches: [
+        {
+          branchId: "toolu_r",
+          agentType: "reviewer",
+          origin: "sidecar",
+          spawnDepth: 1,
+          spawnIndex: 0,
+          startIndex: 1,
+          endIndex: 3,
+        },
+      ],
+      toolCalls: [
+        { name: "Agent", input: {}, sidechain: false, index: 0 },
+        { name: "Edit", input: {}, sidechain: true, branchId: "toolu_r", index: 1 },
+        { name: "Read", input: {}, sidechain: true, branchId: "toolu_r", index: 2 },
+      ],
+    });
+    const result = await grader.grade({
+      trace: branched,
+      plan: makePlan({
+        artifact: makeArtifact({ name: "reviewer", type: "agent" }),
+        grader: "tool-usage",
+        options: { tool: "Edit", expect: "not-used" },
+      }),
+    });
+    expect(result.skipped).toBeUndefined();
+    expect(result.findings, "the reviewer edited and still passed").toHaveLength(
+      1,
+    );
+  });
+
   it("skips an agent that spawned no branch instead of passing it", async () => {
     const spawnOnly = makeTrace({
       agentSpawns: [{ subagentType: "doc-writer", index: 0 }],
