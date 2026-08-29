@@ -4,7 +4,7 @@
  * only — no LLM guessing. Unresolved refs degrade to coverage entries and
  * warnings, never a crash (ADR 01003).
  */
-import { basename, dirname, join, resolve } from "node:path";
+import { basename, dirname, join, resolve, sep } from "node:path";
 import { homeDir } from "../trace/discover.js";
 import { coverAvailability } from "./availability.js";
 import { findGitRoot, findInTree, safeMtime, safeRead } from "./fs.js";
@@ -71,25 +71,87 @@ export async function resolveArtifacts(
     artifacts.push(artifact);
   };
 
+  /** Record a resolved skill once, however many refs reached it. */
+  const addSkill = (
+    name: string,
+    artifact: ResolvedArtifact,
+    tried: string[],
+  ): void => {
+    const refKey = `skill:${name}`;
+    if (seenRefs.has(refKey)) return;
+    seenRefs.add(refKey);
+    add(artifact);
+    coverage.push({
+      ref: name,
+      kind: "skill",
+      resolved: true,
+      path: artifact.path,
+      tried,
+    });
+  };
+
   for (const invocation of trace.skillInvocations) {
+    // A `<command-name>` injection is the slash-command mechanism, and a slash
+    // command is one of three things: a `.claude/commands/*.md` file, a skill
+    // surfaced under its slash form, or a built-in with no file anywhere. Only
+    // the filesystem can say which, so the shape of the reference decides
+    // nothing on its own (ADR 01023).
+    if (invocation.via === "command-injection") {
+      const refKey = `command:${invocation.name}`;
+      if (seenRefs.has(refKey)) continue;
+      seenRefs.add(refKey);
+
+      const command = await resolveSlashCommand(
+        invocation.name,
+        projectDir,
+        home,
+      );
+      if (command.artifact) {
+        add(command.artifact);
+        coverage.push({
+          ref: invocation.name,
+          kind: "slash-command",
+          resolved: true,
+          path: command.artifact.path,
+          tried: command.tried,
+        });
+        continue;
+      }
+
+      const skill = await resolveSkill(invocation.name, projectDir, home);
+      if (skill.artifact) {
+        addSkill(invocation.name, skill.artifact, skill.tried);
+        continue;
+      }
+
+      // No definition file in any place a command or a skill could live. Claude
+      // Code's own commands (`/model`, `/compact`) have no file by design, so
+      // this is reported rather than warned about — and reported as what it is
+      // rather than as a skill that went missing, which is the defect ADR 01016
+      // recorded. A hard-coded list of built-in names was rejected: it would go
+      // stale with every Claude Code release.
+      coverage.push({
+        ref: invocation.name,
+        kind: "slash-command",
+        resolved: false,
+        tried: [...command.tried, ...skill.tried],
+        note: "built-in slash command, or not installed here (no definition file)",
+      });
+      continue;
+    }
+
+    // A `Skill` tool call is unambiguous: it names a skill.
     const refKey = `skill:${invocation.name}`;
     if (seenRefs.has(refKey)) continue;
-    seenRefs.add(refKey);
     const { artifact, tried } = await resolveSkill(
       invocation.name,
       projectDir,
       home,
     );
     if (artifact) {
-      add(artifact);
-      coverage.push({
-        ref: invocation.name,
-        kind: "skill",
-        resolved: true,
-        path: artifact.path,
-        tried,
-      });
+      addSkill(invocation.name, artifact, tried);
     } else {
+      seenRefs.add(refKey);
       coverage.push({ ref: invocation.name, kind: "skill", resolved: false, tried });
       warnings.push(
         `skill "${invocation.name}" was invoked but no SKILL.md was found (${tried.length} location(s) tried)`,
@@ -304,6 +366,84 @@ async function resolveSkill(
   }
 
   return { artifact: null, tried };
+}
+
+// ── Slash commands ───────────────────────────────────────────────
+
+/**
+ * `.claude/commands/<name>.md`, in the three places Claude Code reads them:
+ * the project, the user's home, and the plugin store.
+ *
+ * Two shapes matter and neither is guessed at. Subdirectories under
+ * `commands/` **organize** rather than namespace — `commands/release/tag.md`
+ * is still invoked as `/tag` — so a plain name falls back to a recursive
+ * search after the direct hit misses. A `plugin:command` name is plugin
+ * namespacing and is looked up in the store by its short name, exactly as
+ * `resolveSkill` does for `plugin:skill`; project and user directories are not
+ * checked, because a namespace is not something a local file can claim.
+ */
+async function resolveSlashCommand(
+  name: string,
+  projectDir: string,
+  home: string,
+): Promise<{ artifact: ResolvedArtifact | null; tried: string[] }> {
+  const tried: string[] = [];
+  const [pluginName, shortName] = name.includes(":")
+    ? (name.split(":", 2) as [string, string])
+    : [null, name];
+
+  const made = (
+    path: string,
+    content: string,
+    origin: ResolvedArtifact["origin"],
+  ): { artifact: ResolvedArtifact; tried: string[] } => ({
+    artifact: { name, type: "slash-command", path, content, origin },
+    tried,
+  });
+
+  if (pluginName === null) {
+    const dirs: Array<{ dir: string; origin: ResolvedArtifact["origin"] }> = [
+      { dir: join(projectDir, ".claude", "commands"), origin: "project" },
+      { dir: join(home, ".claude", "commands"), origin: "user" },
+    ];
+    for (const { dir, origin } of dirs) {
+      const path = join(dir, `${shortName}.md`);
+      tried.push(path);
+      const content = await safeRead(path);
+      if (content !== null) return made(path, content, origin);
+    }
+    for (const { dir, origin } of dirs) {
+      tried.push(join(dir, "**", `${shortName}.md`));
+      const found = await findInTree(
+        dir,
+        (path) => basename(path) === `${shortName}.md`,
+      );
+      if (found === null) continue;
+      const content = await safeRead(found);
+      if (content !== null) return made(found, content, origin);
+    }
+    return { artifact: null, tried };
+  }
+
+  const pluginRoot = join(home, ".claude", "plugins");
+  tried.push(join(pluginRoot, "**", "commands", `${shortName}.md`));
+  const found = await findInTree(
+    pluginRoot,
+    (path) =>
+      basename(path) === `${shortName}.md` &&
+      segments(path).includes("commands") &&
+      path.includes(pluginName),
+  );
+  if (found !== null) {
+    const content = await safeRead(found);
+    if (content !== null) return made(found, content, "plugin");
+  }
+  return { artifact: null, tried };
+}
+
+/** Path segments, separator-normalized, for convention matching. */
+function segments(path: string): string[] {
+  return path.split(sep).join("/").split("/");
 }
 
 // ── Agents ───────────────────────────────────────────────────────

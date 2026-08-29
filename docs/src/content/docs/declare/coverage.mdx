@@ -1,6 +1,6 @@
 ---
 title: Account for every artifact
-description: Read the artifact coverage table, understand how skills, agents, and project rules are resolved from a trace, and close the gaps it reports.
+description: Read the artifact coverage table, understand how skills, agents, slash commands, and project rules are resolved from a trace, and close the gaps it reports.
 sidebar:
   order: 3
 ---
@@ -16,9 +16,11 @@ Every report ends with a coverage section, and it answers a question the eval li
 
 ```
 Artifact coverage
-  ✓ skill: fix-bug        /work/demo-project/.claude/skills/fix-bug/SKILL.md
-  ○ agent: Explore        built-in agent (no definition file)
-  ○ skill: my-plugin:foo  not found (3 location(s) tried)
+  ✓ skill: fix-bug           /work/demo-project/.claude/skills/fix-bug/SKILL.md
+  ○ agent: Explore           built-in agent (no definition file)
+  ○ skill: my-plugin:foo     not found (3 location(s) tried)
+  ✓ slash-command: ship-it   /work/demo-project/.claude/commands/ship-it.md
+  ○ slash-command: model     built-in slash command, or not installed here (no definition file)
   ✓ agent: doc-writer [not offered]  /work/demo-project/.claude/agents/doc-writer.md
   ✓ project-rules: project rules
 
@@ -35,15 +37,17 @@ Availability
 {/* step {"description":"A built-in agent is reported as unresolved with an explanatory note.","runShell":{"command":"moose-tracevals run test/fixtures/traces/claude-session.jsonl --project test/fixtures/project --deterministic-only","exitCodes":[1],"stdio":"built-in agent (no definition file)"}} */}
 {/* step {"description":"A resolved skill is reported with the file it resolved to.","runShell":{"command":"moose-tracevals run test/fixtures/traces/claude-session.jsonl --project test/fixtures/project --deterministic-only","exitCodes":[1],"stdio":"skill: fix-bug"}} */}
 {/* step {"description":"A checked-out fixture is newer than the fixture trace, so staleness is reported.","runShell":{"command":"moose-tracevals run test/fixtures/traces/claude-session.jsonl --project test/fixtures/project --deterministic-only","exitCodes":[1],"stdio":"modified after the session ended"}} */}
+{/* step {"description":"A built-in slash command is reported as one, not as a missing skill.","runShell":{"command":"moose-tracevals run test/fixtures/traces/claude-session.jsonl --project test/fixtures/project --deterministic-only","exitCodes":[1],"stdio":"built-in slash command"}} */}
 {/* test end */}
 
-## The five states
+## The six states
 
 | What you see | Meaning | What to do |
 |---|---|---|
 | `✓` with a path | Resolved and evaluated. | Nothing. |
 | `✓` with no path | Resolved to **several** files. Only project rules do this. | Nothing — see [below](#project-rules-resolve-as-one-entry). |
 | `○ built-in agent (no definition file)` | A built-in agent, which has no file anywhere. | Nothing. Expected. |
+| `○ built-in slash command, or not installed here` | A `/name` with no command file and no skill file anywhere. | Usually nothing — see [below](#slash-commands-are-one-of-three-things). |
 | `○ not found (<n> location(s) tried)` | The trace referenced it; no file matched. | [Close the gap](#fix-an-unresolved-reference). |
 | Absent from the list entirely | The session never referenced it. | Nothing. |
 
@@ -154,6 +158,31 @@ A `plugin:agent` reference looks up the short name.
 `claude`, `Explore`, `Plan`, `statusline-setup`, and `fork`. They appear as `○` with a note, and
 that is the finished state rather than a problem to fix.
 
+### Slash commands are one of three things
+
+When a session records `/name`, that reference can be any of three different things, and only the
+filesystem can say which. Resolution tries them in order:
+
+1. `<project>/.claude/commands/<name>.md`
+2. `<home>/.claude/commands/<name>.md`
+3. the same two directories searched recursively — a subdirectory under `commands/` **organizes**
+   without renaming, so `commands/release/tag.md` is still `/tag`
+4. failing all of those, the [skill order](#skills) above, because a skill can be invoked by typing
+   its slash form
+5. failing that too, it is a **built-in** — one of Claude Code's own commands (`/model`, `/compact`,
+   `/clear`), which has no file anywhere by design
+
+A `plugin:command` reference **skips steps 1–3** and goes straight to
+`<home>/.claude/plugins/**/commands/<name>.md`, matching on the short name with the plugin name
+required somewhere in the path — the same rule plugin skills follow.
+
+Step 5 is a note, not a warning, because a built-in is the expected outcome rather than a defect.
+The note says `built-in slash command, or not installed here` and the row still carries every
+location tried, so a command that genuinely *is* missing on this machine is still diagnosable from
+the `tried` list. Nothing here is checked against the availability roster: the transcript records no
+roster of slash commands, so calling one `not offered` would be a claim about evidence that was
+never collected.
+
 ### Project rules
 
 Every directory from the session's working directory **up to the project root** (the git root by
@@ -241,6 +270,8 @@ inferring one would manufacture a warning out of no evidence.
 
 When a flagged row matters, the fix is to evaluate against the artifact as it was — check out the
 commit the session ran on and re-run with `--project` pointed at that working tree.
+An unresolved **slash command** is the one exception: it gets its coverage row and its `tried` list
+but no warning, because the common case — a built-in — is not a gap to close.
 
 ## Project rules resolve as one entry
 

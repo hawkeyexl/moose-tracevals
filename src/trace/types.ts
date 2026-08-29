@@ -37,8 +37,18 @@ export interface ToolCall {
   branchId?: string;
 }
 
+/**
+ * One instruction set loading into the session.
+ *
+ * `via` is load-bearing rather than incidental. A `skill-tool` entry names a
+ * skill and nothing else. A `command-injection` entry names a **slash
+ * command**, which may turn out to be a `.claude/commands/*.md` file, a skill
+ * under its slash form, or one of Claude Code's built-ins — a question only
+ * the filesystem can settle, so the adapter records the reference and
+ * `resolveArtifacts` decides the kind (ADR 01023).
+ */
 export interface SkillInvocation {
-  /** Skill name; plugin skills keep their `plugin:skill` form. */
+  /** Skill or command name; plugin refs keep their `plugin:name` form. */
   name: string;
   via: "skill-tool" | "command-injection";
   args?: string;
