@@ -57,7 +57,8 @@ from the artifact's **type**; there is nothing to declare and no option to set.
 
 | Artifact type | Window |
 |---|---|
-| skill | From that skill's invocation until the next skill is invoked, or to the end of the session |
+| skill | From that skill's invocation until the next skill or slash command takes over, or to the end of the session |
+| slash command | The same rule: from each `/name` injection until the next injection takes over. A `Skill` tool call can close a command's window but never opens one |
 | agent | Only that `subagent_type`'s own branch, and anything it delegated inside it |
 | project rules | The whole session — `CLAUDE.md` governs everything |
 
@@ -86,6 +87,7 @@ judge shown the parent session would answer about work the artifact had no part 
 | Skip reason | Cause |
 |---|---|
 | `skill "<name>" was never invoked in this trace, so it governed no turns` | the skill resolved but the session never invoked it |
+| `slash command "/<name>" was never invoked in this trace, so it governed no turns` | the command file resolved but the session never ran it |
 | `agent "<name>" was spawned but recorded no subagent turns (…), so it governed no turns` | the spawn is in the trace but its transcript is not |
 | `agent "<name>" was never spawned in this trace, so it governed no turns` | no spawn for that `subagent_type` |
 

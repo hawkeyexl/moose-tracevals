@@ -43,8 +43,13 @@ non-sidechain user prompts.
 ## What gets evaluated
 
 **Artifact**
-: An instruction file a session used: a **skill** (`SKILL.md`), an **agent definition**, or a
-**project-rules** file (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`). The unit that evals attach to.
+: An instruction file a session used: a **skill** (`SKILL.md`), an **agent definition**, a **slash
+command** (`.claude/commands/*.md`), or a **project-rules** file (`CLAUDE.md`, `AGENTS.md`,
+`GEMINI.md`). The unit that evals attach to.
+
+**Slash command**
+: A frontmattered markdown file in `.claude/commands/` whose body Claude Code injects as a prompt
+when someone types `/name`. Graded over the span it governed, exactly like a skill.
 
 **Artifact resolution**
 : Mapping each reference in a trace to a file on disk, deterministically — trace content plus
@@ -57,6 +62,11 @@ every reporter. An unresolved reference is a coverage row plus a warning, never 
 **Built-in agent**
 : An agent that ships with the CLI and has no definition file: `general-purpose`, `claude`,
 `Explore`, `Plan`, `statusline-setup`, `fork`. Always shows as unresolved, by design.
+
+**Built-in slash command**
+: A `/name` that resolved to neither a command file nor a skill file anywhere — Claude Code's own
+`/model`, `/compact`, `/clear`. Inferred from the absence of a file rather than from a list of
+names, which would go stale every release. Shows as unresolved with a note and no warning.
 
 ---
 
