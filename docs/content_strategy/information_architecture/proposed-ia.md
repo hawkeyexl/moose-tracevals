@@ -96,7 +96,7 @@ ci/
   consume-results                    JSON report, --output, history, regression detection
 judge/
   index                              ensemble → consensus → zones → outcome
-  calibrate                          tuning runs/zones/temperature, cost budget, cache keys
+  calibrate                          the labels sidecar, `calibrate`, the sweep, cost budget, cache keys
   schema-versioning                  0.1 vs 0.2, capability vs regression, staged rollout
 triage/
   index                              one page: read a result, weigh it, decide
@@ -106,7 +106,7 @@ extend/
   custom-graders                     registerGrader and the two-part grader contract
 reference/
   index                              shelf hub
-  cli                                run / fill / list, every flag and default
+  cli                                run / calibrate / fill / list, every flag and default
   configuration                      every config key, including the ones with no CLI flag
   graders                            seven kinds: options, validation rules, failure messages
   evals-schema                    the metadata.evals block, both published versions
@@ -135,7 +135,7 @@ and that one describes its history.
 | `cuj-cover-every-artifact` | `declare/coverage` | `reference/traces`, `reference/report-and-exit-codes` |
 | `cuj-gate-ci` | `ci/` | `reference/configuration` |
 | `cuj-consume-results` | `ci/consume-results` | `reference/report-and-exit-codes`, `extend/` |
-| `cuj-calibrate-judge` | `judge/` | `reference/configuration` |
+| `cuj-calibrate-judge` | `judge/` | `reference/configuration`, `reference/cli` |
 | `cuj-evolve-evals` | `judge/schema-versioning` | `reference/evals-schema`, `triage/` |
 | `cuj-triage-failure` | `triage/` | `triage/faq` |
 | `cuj-extend` | `extend/` | `reference/graders`, `reference/api`, `reference/traces` |

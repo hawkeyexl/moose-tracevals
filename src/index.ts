@@ -116,8 +116,17 @@ export {
   type ProviderConfig,
 } from "./core/config.js";
 export { runEvals, type EngineOptions } from "./core/engine.js";
-export { render, renderBatch, type ReportFormat } from "./reporters/index.js";
+export {
+  render,
+  renderBatch,
+  renderCalibration,
+  type ReportFormat,
+} from "./reporters/index.js";
 export { renderBatchHuman, renderBatchMarkdown } from "./reporters/batch.js";
+export {
+  renderCalibrationHuman,
+  renderCalibrationMarkdown,
+} from "./reporters/calibration.js";
 export { aggregate, type BatchOutcome } from "./aggregate.js";
 export {
   prepareRun,
@@ -135,6 +144,29 @@ export {
   type BatchCommandOptions,
   type BatchCommandResult,
 } from "./commands/batch.js";
+export {
+  runCalibrate,
+  type CalibrateCommandOptions,
+  type CalibrateCommandResult,
+} from "./commands/calibrate.js";
+export * from "./calibrate/types.js";
+export {
+  DEFAULT_LABELS_FILE,
+  labelKey,
+  loadLabels,
+  parseLabels,
+} from "./calibrate/labels.js";
+export {
+  classify,
+  joinLabels,
+  rescore,
+  score,
+  type JoinedLabel,
+  type JoinResult,
+  type Rescored,
+  type ScoreInput,
+  type ScoreResult,
+} from "./calibrate/score.js";
 export {
   renderFill,
   runFill,

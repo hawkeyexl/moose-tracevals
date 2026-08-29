@@ -201,6 +201,62 @@ describe("parseConfig", () => {
       ).toThrow(TracevalsError);
     });
   });
+
+  // Calibration knobs (ADR 01022). The sweep grid is config rather than a
+  // flag because a corpus's useful range is a property of the corpus.
+  describe("calibrate section", () => {
+    it("fills the labels path and the sweep grid", () => {
+      const config = parseConfig({});
+      expect(config.calibrate.labels).toBe("tracevals/labels.yaml");
+      expect(config.calibrate.sweep.ensembleRuns).toEqual([1, 3, 5]);
+      expect(config.calibrate.sweep.autoPass).toEqual([
+        0.5, 0.6, 0.7, 0.8, 0.9, 0.95,
+      ]);
+      expect(config.calibrate.sweep.autoFail).toEqual([
+        0.5, 0.6, 0.7, 0.8, 0.9, 0.95,
+      ]);
+      // No threshold by default: a calibration run is a measurement, and a
+      // measurement that fails by default is one nobody runs.
+      expect(config.calibrate.maxFalsePass).toBeUndefined();
+      expect(config.calibrate.maxFalseFail).toBeUndefined();
+      expect(config.calibrate.maxReview).toBeUndefined();
+    });
+
+    it("keeps explicit values", () => {
+      const config = parseConfig({
+        calibrate: {
+          labels: "eval/ground-truth.yaml",
+          maxFalsePass: 0,
+          maxFalseFail: 2,
+          maxReview: 10,
+          sweep: { ensembleRuns: [1, 2], autoPass: [0.75], autoFail: [0.75] },
+        },
+      });
+      expect(config.calibrate.labels).toBe("eval/ground-truth.yaml");
+      expect(config.calibrate.maxFalsePass).toBe(0);
+      expect(config.calibrate.maxFalseFail).toBe(2);
+      expect(config.calibrate.maxReview).toBe(10);
+      expect(config.calibrate.sweep.ensembleRuns).toEqual([1, 2]);
+    });
+
+    it("rejects unknown keys, empty axes, and out-of-range thresholds", () => {
+      expect(() => parseConfig({ calibrate: { bogus: true } })).toThrow(
+        TracevalsError,
+      );
+      expect(() =>
+        parseConfig({ calibrate: { sweep: { ensembleRuns: [] } } }),
+      ).toThrow(TracevalsError);
+      expect(() =>
+        parseConfig({ calibrate: { sweep: { autoPass: [1.5] } } }),
+      ).toThrow(TracevalsError);
+      expect(() => parseConfig({ calibrate: { maxFalsePass: -1 } })).toThrow(
+        TracevalsError,
+      );
+      expect(() =>
+        parseConfig({ calibrate: { sweep: { ensembleRuns: [0] } } }),
+      ).toThrow(TracevalsError);
+    });
+  });
 });
 
 describe("loadConfig", () => {

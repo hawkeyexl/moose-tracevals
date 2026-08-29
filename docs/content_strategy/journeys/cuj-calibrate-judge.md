@@ -11,7 +11,11 @@ steps:
   - { stage: "Follow the consensus rule", doc: "/moose-tracevals/judge/#from-votes-to-consensus", exists: true, note: "errored runs count against consensus and can never produce a silent pass" }
   - { stage: "Locate the needs-review boundary", doc: "/moose-tracevals/judge/#confidence-zones", exists: true }
   - { stage: "Read the evidence behind a verdict", doc: "/moose-tracevals/judge/#what-the-judge-cites", exists: true }
+  - { stage: "Write down the verdicts already judged by hand", doc: "/moose-tracevals/judge/calibrate/#write-down-what-you-decided", exists: true, note: "a labels sidecar, per corpus rather than per artifact" }
+  - { stage: "Count false passes, false fails, and review volume", doc: "/moose-tracevals/judge/calibrate/#the-three-numbers", exists: true, note: "`moose-tracevals calibrate` computes what this journey used to ask a reader to count by eye" }
+  - { stage: "See which eval disagreed, not just how many", doc: "/moose-tracevals/judge/calibrate/#which-eval-disagreed", exists: true }
   - { stage: "Tune runs, zones, and temperature", doc: /moose-tracevals/judge/calibrate/, exists: true }
+  - { stage: "Try a different threshold without paying for it again", doc: "/moose-tracevals/judge/calibrate/#sweep-the-knobs-for-free", exists: true, note: "--sweep re-scores cached verdicts; a second sweep makes no model calls" }
   - { stage: "Cap spend per run", doc: /moose-tracevals/reference/configuration/, exists: true, note: "judge.maxCostUsd; and why a model with unknown pricing silently disables the budget" }
   - { stage: "Avoid stale cached verdicts", doc: /moose-tracevals/judge/calibrate/, exists: true }
   - { stage: "Choose a provider", doc: /moose-tracevals/reference/configuration/, exists: true }
@@ -55,7 +59,21 @@ precisely to prevent this, and anyone changing prompts needs to know that. And a
 only as good as the price table**: a model whose pricing is unknown is charged at zero, which
 quietly disables the ceiling that was supposed to protect the run.
 
+**The measurement, not the eyeball.** This journey used to end at a procedure: collect a dozen
+sessions you have judged by hand, run them, and count three things. Every part of that is
+mechanical, and the counting was the part most likely to be skipped — so the numbers that decide
+whether Sam trusts the tool were the numbers nobody had.
+`moose-tracevals calibrate` computes them from a labels sidecar and names which eval disagreed. `--sweep` answers "what would `autoPass: 0.9` have done?"
+over the same corpus at no further cost, which is what turns the knob table above from a description
+into a decision.
+
+Two properties of the command matter to this reader specifically, and the content states both.
+Disagreement is **exit 0** — a measurement that fails on its own findings is one nobody runs — and a
+labelled eval that never armed is kept out of the agreement denominator, because a check with no
+evidence is not evidence.
+
 **Coverage.** No gaps. `judge/` carries the arithmetic — ensemble, consensus, zones, and a worked
-example; `judge/calibrate/` carries the operating half: what each knob trades, how to tune against a
-corpus with known answers, the cost ceiling, and the two silent failure modes (a stale cache
-surviving a prompt revision, and a budget disabled by unknown model pricing).
+example; `judge/calibrate/` carries the operating half: the labels sidecar and what it refuses, the
+three numbers and the three more they need to be honest, the sweep and why it is free, what each
+knob trades, the cost ceiling, and the two silent failure modes (a stale cache surviving a prompt
+revision, and a budget disabled by unknown model pricing).
