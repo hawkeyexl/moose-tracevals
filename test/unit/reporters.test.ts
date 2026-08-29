@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { render } from "../../src/reporters/index.js";
-import type { RunReport } from "../../src/types.js";
+import { render, renderBatch } from "../../src/reporters/index.js";
+import { aggregate } from "../../src/aggregate.js";
+import type { BatchReport, RunReport } from "../../src/types.js";
 
 const report: RunReport = {
   trace: {
@@ -243,5 +244,162 @@ describe("reporters", () => {
       expect(markdown).toContain("| n/a | skill | deep-research |");
       expect(markdown).not.toContain("not found");
     });
+  });
+});
+
+/**
+ * The aggregate rendering (ADR 01018). Built from two runs of the same report
+ * with the second one's `forbidden-tool` passing, so every row has a rate
+ * strictly between 0 and 1 — the case a reporter that only prints counts would
+ * render identically to any other.
+ */
+describe("batch reporters", () => {
+  const passing: RunReport = {
+    ...report,
+    trace: { ...report.trace, file: "C:\\traces\\second.jsonl", sessionId: "def" },
+    evalResults: [
+      { ...report.evalResults[0]!, outcome: "pass", findings: [] },
+      report.evalResults[1]!,
+    ],
+    summary: { total: 2, pass: 2, fail: 0, error: 0, needsReview: 0, skipped: 0 },
+    exitCode: 0,
+  };
+
+  const batch: BatchReport = aggregate(
+    [
+      { file: "C:\\traces\\session.jsonl", report },
+      { file: "C:\\traces\\second.jsonl", report: passing },
+      { file: "C:\\traces\\broken.jsonl", error: "not JSONL", durationMs: 1 },
+    ],
+    { durationMs: 10 },
+  );
+
+  it("computes rates with skipped results out of the denominator", () => {
+    const row = batch.evals.find((e) => e.evalName === "forbidden-tool")!;
+    expect(row.passRate).toBe(0.5);
+    expect(row.traces).toBe(2);
+    // The outlier is named, not just counted.
+    expect(row.failingTraces).toEqual(["C:\\traces\\session.jsonl"]);
+  });
+
+  it("counts an unreadable trace against the batch without losing the rest", () => {
+    expect(batch.summary.tracesErrored).toBe(1);
+    expect(batch.summary.traces).toBe(3);
+    expect(batch.exitCode).toBe(1);
+    expect(batch.evals.length).toBeGreaterThan(0);
+  });
+
+  it("json round-trips the batch report", () => {
+    const parsed = JSON.parse(renderBatch(batch, "json")) as BatchReport;
+    expect(parsed.summary.traces).toBe(3);
+    expect(parsed.evals.some((e) => e.evalName === "forbidden-tool")).toBe(true);
+  });
+
+  it("human output shows rates, outliers, and the unreadable trace", () => {
+    const out = renderBatch(batch, "human");
+    expect(out).toContain("3 trace(s)");
+    expect(out).toContain("50%");
+    expect(out).toContain("forbidden-tool");
+    expect(out).toContain("session.jsonl");
+    expect(out).toContain("not JSONL");
+    expect(out).not.toContain("undefined");
+  });
+
+  it("markdown output includes both rate tables and the trace table", () => {
+    const out = renderBatch(batch, "markdown");
+    expect(out).toContain(
+      "| Rate | Artifact | Eval | Grader | Traces | Outcomes | Outliers |",
+    );
+    expect(out).toContain("## Artifact pass rates");
+    expect(out).toContain("## Traces");
+    expect(out).toContain("| error |");
+    expect(out).not.toContain("undefined");
+  });
+
+  it("renders a review-only row as an outlier rather than a bare 0%", () => {
+    const reviewed = aggregate(
+      [
+        {
+          file: "C:\\traces\\one.jsonl",
+          report: {
+            ...report,
+            evalResults: [
+              { ...report.evalResults[0]!, outcome: "needs-review", findings: [] },
+            ],
+            summary: {
+              total: 1,
+              pass: 0,
+              fail: 0,
+              error: 0,
+              needsReview: 1,
+              skipped: 0,
+            },
+          },
+        },
+      ],
+      { durationMs: 1 },
+    );
+    expect(renderBatch(reviewed, "markdown")).toContain("review: one.jsonl");
+    expect(renderBatch(reviewed, "human")).toContain("review: one.jsonl");
+  });
+
+  it("says nothing was graded rather than printing 0% for an all-skipped row", () => {
+    const skipped = aggregate(
+      [
+        {
+          file: "C:\\traces\\one.jsonl",
+          report: {
+            ...report,
+            evalResults: [
+              {
+                ...report.evalResults[0]!,
+                outcome: "skipped",
+                skipReason: "judge cost budget exhausted ($1)",
+                findings: [],
+              },
+            ],
+            summary: {
+              total: 1,
+              pass: 0,
+              fail: 0,
+              error: 0,
+              needsReview: 0,
+              skipped: 1,
+            },
+            exitCode: 0,
+          },
+        },
+      ],
+      { durationMs: 1 },
+    );
+    const row = skipped.evals[0]!;
+    expect(row.passRate).toBeNull();
+    expect(row.skipReasons).toEqual(["judge cost budget exhausted ($1)"]);
+    // An exhausted budget has to be visible in the report, not inferable from
+    // a missing row — it is the difference between "held" and "never checked".
+    expect(renderBatch(skipped, "human")).toContain("budget exhausted");
+    expect(renderBatch(skipped, "human")).toContain("—");
+  });
+
+  it("escapes pipes so an aggregate row keeps its column count", () => {
+    const piped = aggregate(
+      [
+        {
+          file: "C:\\traces\\one.jsonl",
+          report: {
+            ...report,
+            evalResults: [
+              { ...report.evalResults[0]!, evalName: "weird|name", findings: [] },
+            ],
+          },
+        },
+      ],
+      { durationMs: 1 },
+    );
+    const out = renderBatch(piped, "markdown");
+    const header = out.split("\n").find((l) => l.startsWith("| Rate | Artifact"))!;
+    const row = out.split("\n").find((l) => l.includes("weird"))!;
+    const cells = (line: string) => line.split(/(?<!\\)\|/).length - 2;
+    expect(cells(row)).toBe(cells(header));
   });
 });
