@@ -491,6 +491,61 @@ describe("batch reporters", () => {
     expect(out).not.toContain("undefined");
   });
 
+  /**
+   * An exhausted judge budget is the one skip a reader must not scroll past:
+   * it means the rates above it were computed over a corpus the tool stopped
+   * looking at. The warnings block at the foot of the report is where the
+   * detail belongs; the fact of it belongs beside the headline.
+   */
+  describe("a batch cut short by its own budget", () => {
+    const cutShort = aggregate(
+      [
+        {
+          file: "C:\traces\one.jsonl",
+          report: {
+            ...report,
+            evalResults: [
+              {
+                ...report.evalResults[0]!,
+                outcome: "skipped",
+                findings: [],
+                skipReason: "judge cost budget exhausted ($0.5)",
+              },
+            ],
+            summary: {
+              total: 1,
+              pass: 0,
+              fail: 0,
+              error: 0,
+              needsReview: 0,
+              skipped: 1,
+            },
+            exitCode: 0,
+          },
+        },
+      ],
+      { durationMs: 1 },
+    );
+
+    it("human flags it beside the headline, not only in the warnings", () => {
+      const out = renderBatch(cutShort, "human");
+      const head = out.slice(0, out.indexOf("Eval pass rates"));
+      expect(head).toContain("BUDGET EXHAUSTED");
+      expect(head).toContain("1 eval(s) across 1 trace(s)");
+    });
+
+    it("markdown carries it in the header block", () => {
+      const out = renderBatch(cutShort, "markdown");
+      expect(out).toContain("- **Budget**:");
+      expect(out).toContain("judge cost budget exhausted ($0.5)");
+    });
+
+    it("says nothing at all when the budget held", () => {
+      expect(renderBatch(batch, "human")).not.toContain("BUDGET EXHAUSTED");
+      expect(renderBatch(batch, "markdown")).not.toContain("- **Budget**:");
+    });
+  });
+
   it("renders a review-only row as an outlier rather than a bare 0%", () => {
     const reviewed = aggregate(
       [
@@ -696,6 +751,9 @@ const calibration: CalibrationReport = {
   durationMs: 12,
 };
 
+/** Split rendered output into lines, so a table header can be found by name. */
+const lines = (text: string): string[] => text.split(/\r?\n/);
+
 describe("calibration reporters", () => {
   it("leads with the two mistakes and the review volume, not a pass rate", () => {
     const text = renderCalibration(calibration, "human");
@@ -725,6 +783,61 @@ describe("calibration reporters", () => {
     const text = renderCalibration(calibration, "human");
     expect(text).toContain("no further model calls");
     expect(text).toContain("runs=3 autoPass=0.95 autoFail=0.8");
+  });
+
+  /**
+   * A sweep row is a claim about a setting, and a claim with no denominator is
+   * unreadable: two false passes out of two scored and two out of two hundred
+   * are different findings. `insufficient` is the other half — a cell scored
+   * from too few cached runs is a number that was quietly not measured.
+   */
+  it("shows the denominator behind every sweep row, and what it could not score", () => {
+    const text = renderCalibration(calibration, "human");
+    const header = lines(text).find(
+      (l) => l.includes("axis") && l.includes("false-pass"),
+    )!;
+    expect(header).toContain("scored");
+    expect(header).toContain("insuff");
+    const baseline = lines(text).find((l) =>
+      l.trimStart().startsWith("baseline"),
+    )!;
+    // scored 5, agree 3 — the same pair the headline reports as 3/5.
+    expect(baseline).toMatch(/\b5\b/);
+  });
+
+  it("markdown names the same two columns", () => {
+    const md = renderCalibration(calibration, "markdown");
+    const header = lines(md).find((l) => l.startsWith("| Axis |"))!;
+    expect(header).toContain("Scored");
+    expect(header).toContain("Insufficient");
+    const row = lines(md).find((l) => l.startsWith("| baseline |"))!;
+    const cells = (line: string) => line.split(/(?<!\\)\|/).length - 2;
+    expect(cells(row)).toBe(cells(header));
+  });
+
+  it("a run that scored nothing does not read as measured cleanly", () => {
+    const vacuous: CalibrationReport = {
+      ...calibration,
+      counts: calibrationCounts({
+        labels: 2,
+        scored: 0,
+        agree: 0,
+        falsePass: 0,
+        falseFail: 0,
+        skipped: 2,
+        reviewVolume: 0,
+        agreement: null,
+      }),
+      disagreements: [],
+      gates: [{ name: "falsePass", limit: 0, actual: 0, exceeded: false }],
+      warnings: ["no labelled eval produced evidence: 2 label(s)"],
+      exitCode: 1,
+    };
+    for (const format of ["human", "markdown"] as const) {
+      const text = renderCalibration(vacuous, format);
+      expect(text).not.toContain("Measured cleanly");
+      expect(text).toContain("nothing was scored");
+    }
   });
 
   it("reports a threshold that was exceeded", () => {

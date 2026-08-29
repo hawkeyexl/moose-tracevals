@@ -7,7 +7,27 @@
  * the session that produced it is a number nobody can act on.
  */
 import pc from "picocolors";
-import type { AggregateRow, BatchReport } from "../types.js";
+import type { BatchReportWithBudget } from "../aggregate.js";
+import type { AggregateRow } from "../types.js";
+
+/**
+ * `BatchReportWithBudget` rather than `BatchReport`: `budget` is optional, so
+ * a plain report is still accepted, and a report that carries one is rendered
+ * rather than silently dropped.
+ */
+type Report = BatchReportWithBudget;
+
+/**
+ * One line, and never a quiet one. An exhausted budget means the rates below
+ * it were computed over a corpus the tool stopped looking at, so it belongs
+ * beside the headline — the warnings block at the foot carries the same fact,
+ * but a reader scanning the rates would never reach it.
+ */
+function budgetLine(report: Report): string | undefined {
+  const b = report.budget;
+  if (b === undefined) return undefined;
+  return `${b.skippedEvals} eval(s) across ${b.traces} trace(s) were never judged — ${b.reason}`;
+}
 
 /** Escapes a value for a markdown table cell; see the note in markdown.ts. */
 const cell = (value: string): string => value.replace(/\|/g, "\\|");
@@ -58,7 +78,7 @@ function outliers(row: AggregateRow): string {
   return parts.join("; ");
 }
 
-export function renderBatchHuman(report: BatchReport): string {
+export function renderBatchHuman(report: Report): string {
   const lines: string[] = [];
   const s = report.summary;
   lines.push(pc.bold(`moose-tracevals — ${s.traces} trace(s)`));
@@ -67,6 +87,10 @@ export function renderBatchHuman(report: BatchReport): string {
       `${s.tracesPassed} passed · ${s.tracesFailed} failed · ${s.tracesErrored} unreadable`,
     ),
   );
+  const cutShort = budgetLine(report);
+  if (cutShort !== undefined) {
+    lines.push(pc.red(`${pc.bold("BUDGET EXHAUSTED")}  ${cutShort}`));
+  }
   lines.push("");
 
   lines.push(pc.bold("Eval pass rates"));
@@ -144,7 +168,7 @@ export function renderBatchHuman(report: BatchReport): string {
   return lines.join("\n");
 }
 
-export function renderBatchMarkdown(report: BatchReport): string {
+export function renderBatchMarkdown(report: Report): string {
   const lines: string[] = [];
   const s = report.summary;
   lines.push(`# moose-tracevals batch report`);
@@ -153,6 +177,8 @@ export function renderBatchMarkdown(report: BatchReport): string {
   lines.push(
     `- **Outcome**: ${s.tracesPassed} passed, ${s.tracesFailed} failed, ${s.tracesErrored} unreadable`,
   );
+  const cutShort = budgetLine(report);
+  if (cutShort !== undefined) lines.push(`- **Budget**: ${cutShort}`);
   lines.push("");
 
   lines.push(`## Eval pass rates`);
