@@ -1,6 +1,6 @@
 ---
 title: CLI reference
-description: Every moose-tracevals command, argument, and flag across run, fill, and list, with defaults, exit codes, and the environment variables that affect them.
+description: Every moose-tracevals command, argument, and flag across run, calibrate, fill, capture, and list, with defaults, exit codes, and the environment variables that affect them.
 sidebar:
   order: 2
 ---
@@ -21,6 +21,9 @@ Commands:
   fill [options] [paths...]        Propose evals for skills, agent definitions,
                                    and project rules, and write those above the
                                    confidence threshold
+  capture [options]                Record a session manifest: sha256 of every
+                                   instruction artifact plus the git SHA, read
+                                   from a Claude Code hook payload on stdin
   list [options]                   List discoverable traces (Claude Code session
                                    files)
   help [command]                   display help for command
@@ -45,6 +48,9 @@ Options:
 {/* step {"description":"fill exposes the documented flags.","runShell":{"command":"moose-tracevals fill --help","exitCodes":[0],"stdio":"--confidence <n>"}} */}
 {/* step {"description":"fill exposes the grader-plugin flag too.","runShell":{"command":"moose-tracevals fill --help","exitCodes":[0],"stdio":"--require <module>"}} */}
 {/* step {"description":"list exposes the documented flags.","runShell":{"command":"moose-tracevals list --help","exitCodes":[0],"stdio":"--all-projects"}} */}
+{/* step {"description":"capture is a command in its own right.","runShell":{"command":"moose-tracevals --help","exitCodes":[0],"stdio":"capture [options]"}} */}
+{/* step {"description":"capture exposes the documented flags.","runShell":{"command":"moose-tracevals capture --help","exitCodes":[0],"stdio":"--session-id <id>"}} */}
+{/* step {"description":"run exposes the manifest flag.","runShell":{"command":"moose-tracevals run --help","exitCodes":[0],"stdio":"--manifest <file>"}} */}
 {/* step {"description":"calibrate is a command in its own right.","runShell":{"command":"moose-tracevals --help","exitCodes":[0],"stdio":"calibrate [options] [traces...]"}} */}
 {/* step {"description":"calibrate exposes the labels flag.","runShell":{"command":"moose-tracevals calibrate --help","exitCodes":[0],"stdio":"--labels <file>"}} */}
 {/* step {"description":"calibrate exposes the sweep flag.","runShell":{"command":"moose-tracevals calibrate --help","exitCodes":[0],"stdio":"--sweep"}} */}
@@ -123,6 +129,7 @@ moose-tracevals: no traces matched (--all-projects, --since 7d); run `moose-trac
 | `--report-unused-artifacts` | — | `reportUnusedArtifacts` (`false`) | List every skill and agent the session was [offered and never used](/moose-tracevals/declare/coverage/#offered-used-and-never-on-the-menu), instead of only counting them. Never changes the exit code. |
 | `--fail-on-needs-review` / `--no-fail-on-needs-review` | — | config | Override [`failOnNeedsReview`](/moose-tracevals/reference/configuration/). Pass neither and the config value stands. |
 | `--require` | `<module>` | — | Load a grader plugin. **Repeatable**, and **added to** [`plugins`](/moose-tracevals/reference/configuration/#plugins) rather than replacing it. |
+| `--manifest` | `<file>` | searched | A [session manifest](#capture) to compare artifacts against. Single-trace only. Without it one is looked for automatically; **with** it, a file that is missing, unreadable, or recorded for a different session is exit `2` rather than a shrug. |
 
 ### Exit codes
 
@@ -241,6 +248,97 @@ Existing evals are never modified; a name collision fails the run. Only the YAML
 is rewritten; the body is byte-identical. Project rules (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`) are
 proposed but **never written**. See [Fill in evals](/moose-tracevals/declare/fill/).
 </Aside>
+
+## `capture`
+
+```
+moose-tracevals capture [options]
+```
+
+Records a **session manifest**: the sha256 of every instruction artifact in the project, plus the
+git SHA, at the moment a session starts. `run` reads it back and turns
+[staleness](/moose-tracevals/declare/coverage/#staleness) from an mtime guess into content identity.
+
+It is meant to be wired to a Claude Code `SessionStart` hook, and reads that hook's JSON payload on
+**stdin** — `session_id`, `cwd`, `transcript_path`, and `hook_event_name`. Run by hand, name the
+session yourself.
+
+{/* Doc Detective inline tests: capture really writes a manifest, and run really
+    sharpens staleness with it, both against this repository's fixtures. */}
+{/* test {"testId":"capture-manifest","description":"capture writes a manifest and run consumes it."} */}
+{/* step {"description":"A hand-run capture reports the manifest it wrote.","runShell":{"command":"moose-tracevals capture --session-id demo --project test/fixtures/project --out .tmp/docs-capture.json","exitCodes":[0],"stdio":"Captured session demo"}} */}
+{/* step {"description":"It hashes the project's instruction artifacts.","runShell":{"command":"moose-tracevals capture --session-id demo --project test/fixtures/project --out .tmp/docs-capture.json","exitCodes":[0],"stdio":"artifacts  6 hashed"}} */}
+{/* step {"description":"A manifest recorded for another session is refused outright.","runShell":{"command":"moose-tracevals run test/fixtures/traces/claude-session.jsonl --project test/fixtures/project --manifest .tmp/docs-capture.json --deterministic-only","exitCodes":[2],"stdio":"recorded for a different session"}} */}
+{/* test end */}
+
+```bash
+moose-tracevals capture --session-id demo --project test/fixtures/project --out .tmp/docs-capture.json
+```
+
+```
+Captured session demo
+  manifest   .tmp/docs-capture.json
+  artifacts  6 hashed
+  commit     cbcd42ef424cfe28748e2a610ee1ad02403b68d1 (main) — working tree dirty
+  device     e1dafb2151ca3cbc (win32)
+```
+
+### Options
+
+| Flag | Argument | Default | Description |
+|---|---|---|---|
+| `--project` | `<dir>` | the payload's `cwd` | Project root to scan, and the base every recorded path is relative to. |
+| `--session-id` | `<id>` | the payload's `session_id` | Names the manifest and is the key `run` joins on. |
+| `-o, --out` | `<file>` | `<project>/<capture.dir>/<id>.json` | Write somewhere else — how you put a manifest beside a trace you are about to upload. |
+| `-f, --format` | `<format>` | `human` | `human` or `json`. |
+
+### Exit codes
+
+| Code | Meaning |
+|---|---|
+| `0` | a manifest was written |
+| `2` | no session id could be determined, the payload on stdin was not a JSON object, or the manifest could not be written |
+
+<Aside title="In hook mode it writes nothing to stdout">
+Claude Code adds a `SessionStart` hook's **stdout to the model's context**. So whenever `capture`
+reads a payload from stdin, its report goes to **stderr** instead — otherwise the tool would be
+writing into the very session it is observing. Run by hand it behaves like every other command.
+</Aside>
+
+### Wire it up
+
+Install the bundled plugin, which pre-wires the hook — `plugin/.claude-plugin/plugin.json` and
+`plugin/hooks/hooks.json` ship in the package. Or add it to `settings.json` yourself:
+
+```json
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup",
+        "hooks": [
+          { "type": "command", "command": "npx --no moose-tracevals capture", "timeout": 60 }
+        ]
+      }
+    ]
+  }
+}
+```
+
+`startup` rather than every event: a manifest describes what the artifacts said when the session
+**began**, which is exactly the "then" that staleness compares against. `compact` and `clear` reset
+the model's context without re-reading a single artifact.
+
+### Where `run` looks for one
+
+Most specific first, and the first usable hit wins:
+
+1. `<trace>.manifest.json`, beside the trace file
+2. `<trace's directory>/<capture.dir>/<session-id>.json`
+3. `<project>/<capture.dir>/<session-id>.json` — where `capture` writes by default
+
+A manifest whose `sessionId` does not match the trace's is **refused**, and the run proceeds as if
+there were none: it is evidence about a different session.
 
 ## `list`
 
