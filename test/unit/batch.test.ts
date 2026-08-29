@@ -12,6 +12,7 @@ import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { MockProvider, mockVerdict } from "@hawkeyexl/inference";
 import { runBatch, parseSince } from "../../src/commands/batch.js";
+import { aggregate, type BatchOutcome } from "../../src/aggregate.js";
 import { makeTraceJudge } from "../../src/judge/trace-judge.js";
 import { TracevalsError } from "../../src/types.js";
 
@@ -214,6 +215,115 @@ describe("runBatch", () => {
       });
       // Once per trace that had judged evals — one instance, many calls.
       expect(calls.length).toBeGreaterThanOrEqual(1);
+    });
+  });
+
+  /**
+   * ADR 01018 shares one judge — and one budget — across the corpus. When that
+   * budget runs out on trace 4 of 50, the remaining traces are still reported,
+   * but every `ai` eval in them is `skipped`. Nothing failed and nothing
+   * errored, so a batch scored on those two counts alone exits 0 having
+   * judged almost none of the corpus. That is the same silent-green failure
+   * `resolveBatchTraces` already refuses for an empty selector.
+   */
+  describe("a batch cut short by its own budget", () => {
+    const BUDGET_SKIP = "judge cost budget exhausted ($0.5)";
+
+    const evalResult = (
+      evalName: string,
+      outcome: "pass" | "skipped",
+      skipReason?: string,
+    ) => ({
+      evalName,
+      artifact: "C:\proj\SKILL.md",
+      artifactName: "fix-bug",
+      artifactType: "skill" as const,
+      grader: outcome === "skipped" ? "ai" : "tool-usage",
+      implicit: false,
+      outcome,
+      ...(skipReason !== undefined ? { skipReason } : {}),
+      durationMs: 1,
+    });
+
+    /** A trace that passed every eval it was allowed to run. */
+    const outcome = (file: string, judged: boolean): BatchOutcome => ({
+      file,
+      report: {
+        trace: { file, source: "claude-code", cwd: "C:\proj", turnCount: 2 },
+        warnings: [],
+        coverage: [],
+        availability: {
+          recorded: false,
+          skills: { offered: 0, used: 0, unused: 0 },
+          agents: { offered: 0, used: 0, unused: 0 },
+          listed: false,
+        },
+        evalResults: [
+          evalResult("used-read", "pass"),
+          judged
+            ? evalResult("adherence", "pass")
+            : evalResult("adherence", "skipped", BUDGET_SKIP),
+        ],
+        summary: {
+          total: 2,
+          pass: judged ? 2 : 1,
+          fail: 0,
+          error: 0,
+          needsReview: 0,
+          skipped: judged ? 0 : 1,
+        },
+        exitCode: 0,
+        costUsd: judged ? 0.5 : 0,
+        durationMs: 1,
+      },
+    });
+
+    it("is never green: an unjudged corpus is not a clean one", () => {
+      const report = aggregate(
+        [outcome("a.jsonl", true), outcome("b.jsonl", false), outcome("c.jsonl", false)],
+        { durationMs: 5 },
+      );
+      // No trace failed and none errored — the old exit-code inputs are both 0.
+      expect(report.summary.tracesFailed).toBe(0);
+      expect(report.summary.tracesErrored).toBe(0);
+      expect(report.exitCode).toBe(1);
+    });
+
+    it("says how much of the corpus went unjudged, and on how many traces", () => {
+      const report = aggregate(
+        [outcome("a.jsonl", true), outcome("b.jsonl", false), outcome("c.jsonl", false)],
+        { durationMs: 5 },
+      );
+      expect(report.budget?.skippedEvals).toBe(2);
+      expect(report.budget?.traces).toBe(2);
+      expect(report.budget?.reason).toBe(BUDGET_SKIP);
+      // And in the warnings, which every reporter already renders.
+      expect(report.warnings.some((w) => /budget/.test(w))).toBe(true);
+    });
+
+    it("leaves a batch that stayed inside its budget exactly as it was", () => {
+      const report = aggregate([outcome("a.jsonl", true)], { durationMs: 5 });
+      expect(report.budget).toBeUndefined();
+      expect(report.exitCode).toBe(0);
+      expect(report.warnings).toEqual([]);
+    });
+
+    it("does not mistake an ordinary skip for an exhausted budget", () => {
+      const base = outcome("d.jsonl", false);
+      if (!("report" in base)) throw new Error("unreachable");
+      const plain: BatchOutcome = {
+        file: "d.jsonl",
+        report: {
+          ...base.report,
+          evalResults: [
+            evalResult("used-read", "pass"),
+            evalResult("adherence", "skipped", "trigger not met"),
+          ],
+        },
+      };
+      const report = aggregate([plain], { durationMs: 5 });
+      expect(report.budget).toBeUndefined();
+      expect(report.exitCode).toBe(0);
     });
   });
 

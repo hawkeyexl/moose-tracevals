@@ -1,6 +1,7 @@
 /** Report rendering. */
+import type { BatchReportWithBudget } from "../aggregate.js";
 import type { CalibrationReport } from "../calibrate/types.js";
-import type { BatchReport, RunReport } from "../types.js";
+import type { RunReport } from "../types.js";
 import { renderBatchHuman, renderBatchMarkdown } from "./batch.js";
 import {
   renderCalibrationHuman,
@@ -28,7 +29,10 @@ export function render(report: RunReport, format: ReportFormat): string {
  * shapes must stay distinguishable to a downstream consumer (ADR 01018).
  */
 export function renderBatch(
-  report: BatchReport,
+  // The widened shape: `budget` is optional, so a plain `BatchReport` still
+  // passes, and one carrying an exhausted budget is rendered rather than
+  // narrowed away (ADR 01018's aggregate owns the field).
+  report: BatchReportWithBudget,
   format: ReportFormat,
 ): string {
   switch (format) {
