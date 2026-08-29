@@ -28,3 +28,13 @@ Every **behavior change** in moose-tracevals ships with an ADR here. The ADR rec
 | [01012](01012-verify-quoted-paths-and-pin-the-vendored-schema.md) | Verify repo paths quoted in the docs, and pin the vendored schema's bytes | accepted |
 | [01013](01013-carry-position-and-branch-identity-in-the-trace-model.md) | Carry position and branch identity in the normalized trace model | accepted |
 | [01014](01014-merge-sidecar-subagent-transcripts-into-the-trace.md) | Merge sidecar subagent transcripts into the trace, spliced at the spawn | accepted |
+| [01015](01015-grade-each-artifact-against-the-window-it-governed.md) | Grade each artifact against the window it governed | accepted |
+| [01016](01016-read-the-availability-roster-and-check-the-artifact-that-never-fired.md) | Read the availability roster, and check the artifact that never fired | accepted |
+| [01017](01017-load-grader-plugins-named-in-the-config.md) | Load grader plugins named in the config, and append `--require` to that list | accepted |
+| [01018](01018-evaluate-many-traces-in-one-run.md) | Evaluate many traces in one run, and report rates rather than a verdict | accepted |
+| [01019](01019-add-an-opt-out-for-command-execution.md) | Add an opt-out for `command` execution, without reversing its default | accepted |
+| [01020](01020-redact-the-judge-digest-before-it-leaves-the-machine.md) | Redact the judge digest before it leaves the machine | accepted |
+| [01021](01021-warn-when-an-artifact-changed-after-the-session.md) | Warn when an artifact changed after the session ended | accepted |
+| [01022](01022-measure-the-judge-against-a-labels-sidecar.md) | Measure the judge against a labels sidecar, and sweep the knobs for free | accepted |
+| [01023](01023-give-slash-commands-their-own-artifact-type.md) | Give slash commands their own artifact type, and let the filesystem say what a `/name` is | accepted |
+| [01024](01024-capture-a-session-manifest-so-staleness-is-exact.md) | Capture a session manifest, and make staleness exact instead of a guess | accepted |
