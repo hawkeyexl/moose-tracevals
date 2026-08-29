@@ -45,6 +45,16 @@ export interface CoverageEntry {
    * exit code: this is an observation.
    */
   availability?: ArtifactAvailability;
+  /**
+   * The artifact on disk is newer than the session, so the evals being run may
+   * not be the instructions the session followed (ADR 01021). A heuristic —
+   * mtime is not content identity — and a warning only: it never becomes an
+   * eval outcome and never changes the exit code. Absent when the trace
+   * records no end time, since then there is nothing to compare against.
+   */
+  stale?: boolean;
+  /** The artifact's mtime, ISO-8601. Present whenever `stale` is. */
+  modifiedAt?: string;
 }
 
 /** Roster tallies for one artifact kind. */

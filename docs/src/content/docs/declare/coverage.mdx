@@ -34,6 +34,7 @@ Availability
 {/* test {"testId":"coverage-states","description":"The documented coverage states appear against the fixture corpus."} */}
 {/* step {"description":"A built-in agent is reported as unresolved with an explanatory note.","runShell":{"command":"moose-tracevals run test/fixtures/traces/claude-session.jsonl --project test/fixtures/project --deterministic-only","exitCodes":[1],"stdio":"built-in agent (no definition file)"}} */}
 {/* step {"description":"A resolved skill is reported with the file it resolved to.","runShell":{"command":"moose-tracevals run test/fixtures/traces/claude-session.jsonl --project test/fixtures/project --deterministic-only","exitCodes":[1],"stdio":"skill: fix-bug"}} */}
+{/* step {"description":"A checked-out fixture is newer than the fixture trace, so staleness is reported.","runShell":{"command":"moose-tracevals run test/fixtures/traces/claude-session.jsonl --project test/fixtures/project --deterministic-only","exitCodes":[1],"stdio":"modified after the session ended"}} */}
 {/* test end */}
 
 ## The five states
@@ -204,6 +205,42 @@ Each unresolved reference also emits a warning next to the table:
 Warnings
   ! skill "my-plugin:foo" was invoked but no SKILL.md was found (1 location(s) tried)
 ```
+
+## Staleness
+
+Evals are read from the artifact **as it is now**. The session followed it **as it was then**. Edit
+a `SKILL.md` after a session and you are grading that session against instructions it never saw — a
+`fail` on a rule that did not exist yet, or a `pass` on one whose wording has since changed.
+
+Every resolved artifact is compared against the session's end time, and one that is newer is marked:
+
+```
+Artifact coverage
+  ✓ skill: fix-bug /work/demo/.claude/skills/fix-bug/SKILL.md ⚠ modified after the session ended (2026-08-29T17:14:19.176Z)
+
+Warnings
+  ! 1 artifact(s) were modified after the session ended (fix-bug) — their evals may not be the instructions this session followed. mtime is a heuristic, not content identity.
+```
+
+In JSON, the entry carries `stale: true` and `modifiedAt`.
+
+<Aside type="caution" title="It is a heuristic, and a noisy one in CI">
+The comparison is **mtime**, which is not content identity. In particular, `git clone` and
+`git checkout` rewrite every mtime to *now* — so **a CI job that checks out the repository and then
+evaluates an older trace flags every artifact**. That is the heuristic working as designed, not a
+bug, and it is exactly why this is a warning.
+
+It **never becomes an eval outcome and never changes the exit code**. The artifact still resolves,
+its evals still run, and its verdicts are unaffected. All that changes is what the report says about
+how much to trust them
+([ADR 01021](https://github.com/hawkeyexl/moose-tracevals/blob/main/adrs/01021-warn-when-an-artifact-changed-after-the-session.md)).
+</Aside>
+
+A trace with no recorded end time is never flagged: there is nothing to compare against, and
+inferring one would manufacture a warning out of no evidence.
+
+When a flagged row matters, the fix is to evaluate against the artifact as it was — check out the
+commit the session ran on and re-run with `--project` pointed at that working tree.
 
 ## Project rules resolve as one entry
 

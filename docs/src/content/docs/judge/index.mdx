@@ -1,6 +1,6 @@
 ---
 title: How the judge decides
-description: Ensembles, consensus, and confidence zones. The arithmetic behind a judged verdict, and why an errored run can never produce a silent pass.
+description: Ensembles, consensus, and confidence zones — the arithmetic behind a judged verdict, why an errored run can never produce a silent pass, and exactly what a judged run sends to the provider.
 sidebar:
   order: 1
 ---
@@ -126,6 +126,65 @@ The prompt asks for exactly that: cited messages, tool calls, and instructions f
 It is also why an assertion written so a stranger could adjudicate it produces better verdicts than
 one written as a slogan.
 
+## What leaves the machine
+
+A judged eval sends one request per ensemble run to the configured provider. With
+`--deterministic-only`, **no provider is constructed and nothing is sent at all** — that is the only
+setting under which this section has no content.
+
+Otherwise, each request carries exactly this:
+
+| Part | Redacted? |
+|---|---|
+| The eval's `assertion`, `evidence`, and `examples` | No — text you authored |
+| The source artifact's body, capped at 8 000 characters | **No** — see below |
+| Session header: source, model, `cwd`, git branch, turn count, skill and agent names | Yes |
+| User prompts and assistant text, **within the eval's window** | Yes |
+| Tool **names** and tool **call inputs** | Yes |
+| Tool **results**, file contents, command stdout/stderr | **Not sent at all** |
+
+Two things are worth reading twice. Tool *results* are never rendered, so a file this session read
+does not travel with it. And an eval is judged against
+[the window its artifact governed](/moose-tracevals/reference/graders/), so a skill's request
+usually carries a fraction of the session rather than all of it.
+
+### Redaction
+
+Everything marked *Yes* above is filtered before it is sent. The built-in shapes are always on:
+
+- vendor API-key prefixes — `sk-…`, `AKIA…`, `gh[pousr]_…`, `xox…`, `AIza…`, and JWTs
+- `Authorization` values behind `Bearer`, `Basic`, and `Token`
+- `-----BEGIN … PRIVATE KEY-----` blocks
+- secret-named assignments in shell (`DATABASE_PASSWORD=…`) and JSON (`"apiKey": "…"`) form, plus
+  every `AWS_*`
+
+Add your own with [`judge.redact`](/moose-tracevals/reference/configuration/#judgeredact); they are
+applied **on top of** the built-ins, never instead of them.
+
+Matches are **replaced, not deleted**, with a labelled placeholder — `[redacted:api-key]`,
+`[redacted:auth-token]`, `[redacted:secret-value]` — so the judge can still see that a credential
+was used, which is often the adherence question. `Bearer [redacted:auth-token]` keeps the scheme;
+`AWS_SECRET_ACCESS_KEY=[redacted:secret-value]` keeps the variable name.
+
+Redaction runs **before** the truncation caps, so a `maxBlockChars` boundary can never land
+mid-secret and ship the surviving prefix.
+
+<Aside type="caution" title="Best-effort, not a guarantee">
+Pattern matching recognizes *shapes*. A secret that looks like ordinary prose — an internal
+hostname, a customer name, a password with no surrounding assignment — will not be caught, and no
+pattern list will catch it. **`--deterministic-only` is the only guarantee that nothing leaves the
+machine.**
+
+The **artifact body is deliberately not redacted**: it is your own instruction file, and its exact
+text is part of the cache key. A secret in a `SKILL.md` is a problem to fix in the `SKILL.md`
+([ADR 01020](https://github.com/hawkeyexl/moose-tracevals/blob/main/adrs/01020-redact-the-judge-digest-before-it-leaves-the-machine.md)).
+</Aside>
+
+Redaction and the cache work together without a knob: the digest is hashed into the cache key, so a
+redacted run gets its own entry and can never replay a verdict formed on unredacted text. A pattern
+that matches nothing leaves the digest byte-identical and still hits the existing entry, so adding a
+precautionary pattern costs nothing.
+
 ## What it costs
 
 - **Nothing, if you never invoke it.** `--deterministic-only` skips judged evals entirely, and
@@ -148,7 +207,7 @@ know, set `pricing` explicitly in your provider config. See
 <CardGrid>
   <LinkCard
     title="Configure runs, zones, and budgets"
-    description="Every judge key — ensembleRuns, temperature, zones, cacheDir, maxCostUsd — with its type and default."
+    description="Every judge key — ensembleRuns, temperature, zones, cacheDir, redact, maxCostUsd — with its type and default."
     href="/moose-tracevals/reference/configuration/"
   />
   <LinkCard
