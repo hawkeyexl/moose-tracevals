@@ -1,6 +1,6 @@
 /** skill-invoked: assert a skill was invoked (or not) during the session. */
 import type { TraceGrader } from "./types.js";
-import { evaluateWhen, validateWhen } from "./when.js";
+import { evaluateWhen, skippedTrigger, validateWhen } from "./when.js";
 import {
   fail,
   firstError,
@@ -37,9 +37,7 @@ export const skillInvokedGrader: TraceGrader = {
     // A trigger that never armed has not been satisfied: skipped, never a
     // pass (ADR 01016).
     const trigger = evaluateWhen(options, window);
-    if (!trigger.armed) {
-      return { findings: [], skipped: trigger.reason ?? "trigger not met" };
-    }
+    if (!trigger.armed) return skippedTrigger(trigger);
     const used = window.skillInvocations.some((s) => s.name === skill);
 
     if (expect === "used" && !used) {

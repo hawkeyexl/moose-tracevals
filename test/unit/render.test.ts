@@ -117,6 +117,34 @@ describe("renderTrace", () => {
     expect(out).toContain("message number 499");
     expect(out).toContain("truncated");
   });
+
+  it("keeps the cap when the header alone is larger than the budget", () => {
+    // `budget = maxTotalChars - header.length - 64` went non-positive once the
+    // header listed every skill, agent type and branch — and the old
+    // `budget > 0` guard then *skipped truncation entirely*, shipping the whole
+    // unclipped transcript to a third-party provider precisely when the user
+    // had asked for the tightest cap.
+    const skills = Array.from({ length: 120 }, (_, i) => ({
+      name: `skill-with-a-fairly-long-name-${i}`,
+      via: "skill-tool" as const,
+      index: 0,
+    }));
+    const events = Array.from({ length: 400 }, (_, i) => ({
+      kind: "assistant" as const,
+      text: `message number ${i} ${"y".repeat(200)}`,
+      raw: {},
+      index: i,
+    }));
+    const big = makeTrace({ events, skillInvocations: skills });
+    const cap = 1000; // the schema minimum for render.maxTotalChars
+    const out = renderTrace(big, { maxTotalChars: cap });
+    expect(out).toContain("truncated");
+    expect(
+      out.length,
+      `digest was ${out.length} chars for a ${cap}-char cap`,
+    ).toBeLessThanOrEqual(cap);
+  });
+
   it("renders only the window for a scoped eval", async () => {
     const parsed = await parseTraceFile(sidecarFixture);
     const whole = renderTrace(parsed);

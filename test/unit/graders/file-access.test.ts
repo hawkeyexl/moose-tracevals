@@ -87,6 +87,50 @@ describe("file-access grader", () => {
     expect(inside.findings).toHaveLength(1);
   });
 
+  it("anchors a literal path at a segment boundary", async () => {
+    // A bare `endsWith` matched `legacydb/migrations` for the spec
+    // `db/migrations`, which is a different directory — and `glob.ts`'s header
+    // already claims both matchers follow the segment-anchored rule.
+    const nearMiss = makeTrace({
+      skillInvocations: [{ name: "demo-skill", via: "skill-tool", index: 0 }],
+      fileAccesses: [
+        {
+          path: "C:\\work\\demo-project\\legacydb\\migrations\\001.sql",
+          op: "read",
+          index: 0,
+        },
+      ],
+    });
+    const result = await grader.grade({
+      trace: nearMiss,
+      plan: makePlan({
+        grader: "file-access",
+        options: { path: "db/migrations/001.sql", expect: "accessed" },
+      }),
+    });
+    expect(result.findings, "matched a different directory").toHaveLength(1);
+
+    // The anchored suffix the docs promise still matches.
+    const real = makeTrace({
+      skillInvocations: [{ name: "demo-skill", via: "skill-tool", index: 0 }],
+      fileAccesses: [
+        {
+          path: "C:\\work\\demo-project\\db\\migrations\\001.sql",
+          op: "read",
+          index: 0,
+        },
+      ],
+    });
+    const hit = await grader.grade({
+      trace: real,
+      plan: makePlan({
+        grader: "file-access",
+        options: { path: "db/migrations/001.sql", expect: "accessed" },
+      }),
+    });
+    expect(hit.findings).toEqual([]);
+  });
+
   it("skips, never passes, when the window is empty", async () => {
     const result = await grader.grade({
       trace,
