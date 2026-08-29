@@ -273,4 +273,80 @@ describe("windowFor", () => {
     // The nested agent's own brief is not one of Explore's turns.
     expect(window.userMessages).toEqual(["Survey the trace parser."]);
   });
+
+  it("does not let a subagent's Skill call close the main chain's window", () => {
+    // ADR 01015 defines the closing boundary as the next invocation *on the
+    // same chain*. Boundaries drawn from every invocation let a subagent that
+    // loaded its own skill truncate the parent's window, so a `not-used` eval
+    // passes on turns it never saw.
+    //
+    //   0 tool_call Bash
+    //   1 tool_call Skill alpha    <- alpha's window opens
+    //   2 tool_call Agent          (toolu_a)
+    //   3 assistant [branch]
+    //   4 tool_call Skill beta     [branch]  <- a different chain
+    //   5 tool_call Bash                     <- main chain again
+    //   6 tool_call Write
+    const branched = makeTrace({
+      events: [
+        { kind: "tool_call", toolName: "Bash", raw: {}, index: 0 },
+        { kind: "tool_call", toolName: "Skill", raw: {}, index: 1 },
+        { kind: "tool_call", toolName: "Agent", raw: {}, index: 2 },
+        {
+          kind: "assistant",
+          text: "looking",
+          sidechain: true,
+          branchId: "toolu_a",
+          raw: {},
+          index: 3,
+        },
+        {
+          kind: "tool_call",
+          toolName: "Skill",
+          sidechain: true,
+          branchId: "toolu_a",
+          raw: {},
+          index: 4,
+        },
+        { kind: "tool_call", toolName: "Bash", raw: {}, index: 5 },
+        { kind: "tool_call", toolName: "Write", raw: {}, index: 6 },
+      ],
+      toolCalls: [
+        { name: "Bash", input: {}, sidechain: false, index: 0 },
+        { name: "Skill", input: { skill: "alpha" }, sidechain: false, index: 1 },
+        { name: "Agent", input: {}, sidechain: false, index: 2 },
+        {
+          name: "Skill",
+          input: { skill: "beta" },
+          sidechain: true,
+          branchId: "toolu_a",
+          index: 4,
+        },
+        { name: "Bash", input: {}, sidechain: false, index: 5 },
+        { name: "Write", input: {}, sidechain: false, index: 6 },
+      ],
+      skillInvocations: [
+        { name: "alpha", via: "skill-tool", index: 1 },
+        // The chain is read off the event at this ordinal, which is the
+        // subagent's.
+        { name: "beta", via: "skill-tool", index: 4 },
+      ],
+      agentSpawns: [{ subagentType: "Explore", index: 2, toolUseId: "toolu_a" }],
+      subagentBranches: [
+        {
+          branchId: "toolu_a",
+          agentType: "Explore",
+          origin: "inline",
+          spawnDepth: 1,
+          spawnIndex: 2,
+          startIndex: 3,
+          endIndex: 5,
+        },
+      ],
+    });
+    const window = windowFor(branched, planFor("alpha", "skill"));
+    // alpha governs to the end: nothing on the main chain took over from it.
+    expect(window.events.map((e) => e.index)).toEqual([1, 2, 3, 4, 5, 6]);
+    expect(window.toolCalls.map((c) => c.name)).toContain("Write");
+  });
 });

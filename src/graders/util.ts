@@ -214,18 +214,24 @@ function injectionWindow(
       `${label} was never invoked in this trace, so it governed no turns`,
     );
   }
-  const boundaries = [...trace.skillInvocations.map((s) => s.index)].sort(
-    (a, b) => a - b,
-  );
+  // An instruction set injected inside a subagent branch governs that branch's
+  // chain; one injected on the main chain governs the main chain.
+  const chainOf = (index: number): string | undefined =>
+    trace.events[index]?.branchId;
+  const own = new Set<string | undefined>(opens.map(chainOf));
+  // **Boundaries are drawn from the opening chain only** (ADR 01015: the next
+  // invocation *on the same chain*). Drawn from every invocation, a subagent
+  // that loaded a skill of its own closed the parent's window at the spawn —
+  // so a `not-used` eval passed on turns it never saw, and the judge digest
+  // stopped where the subagent started.
+  const boundaries = trace.skillInvocations
+    .filter((s) => own.has(chainOf(s.index)))
+    .map((s) => s.index)
+    .sort((a, b) => a - b);
   const spans = opens.map((start) => ({
     start,
     end: boundaries.find((b) => b > start) ?? Number.POSITIVE_INFINITY,
   }));
-  // An instruction set injected inside a subagent branch governs that branch's
-  // chain; one injected on the main chain governs the main chain.
-  const own = new Set<string | undefined>(
-    opens.map((index) => trace.events[index]?.branchId),
-  );
   return materialize(trace, scope, label, spans, undefined, own);
 }
 

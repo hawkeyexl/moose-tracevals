@@ -234,6 +234,7 @@ export async function resolveArtifacts(
     new Map([[rulesEntry, rules.artifacts.map((a) => a.path)]]),
     warnings,
     projectRoot,
+    projectDir,
     options.manifest,
   );
 
@@ -283,6 +284,7 @@ async function annotateStaleness(
   extraPaths: Map<CoverageEntry, string[]>,
   warnings: string[],
   projectRoot: string,
+  projectDir: string,
   manifest?: SessionManifest,
 ): Promise<void> {
   // No session end means no ground for the *heuristic* to stand on, and
@@ -293,10 +295,21 @@ async function annotateStaleness(
   const haveEnd = Number.isFinite(endedAt);
   if (!haveEnd && manifest === undefined) return;
 
+  const base =
+    manifest === undefined
+      ? projectRoot
+      : joinBase(manifest, coverage, extraPaths, [
+          projectDir,
+          projectRoot,
+          manifest.root,
+        ]);
+
   /** Refs still resting on the mtime guess. */
   const guessed: string[] = [];
   /** Refs the manifest proved changed. */
   const changed: string[] = [];
+  /** Whether the manifest spoke to any row at all. */
+  let joined = false;
 
   for (const entry of coverage) {
     if (!entry.resolved) continue;
@@ -312,12 +325,13 @@ async function annotateStaleness(
         newest = mtime;
       }
       if (manifest === undefined) continue;
-      // Keyed on the project-relative path, so the manifest still joins after
-      // the repository has been checked out somewhere else. An artifact outside
-      // the project — a user-level or plugin skill — has no relative path, and
-      // `capture` is project-scoped, so it was never recordable in the first
-      // place. That is a different sentence from "it changed" and gets one.
-      const rel = relPosix(projectRoot, path);
+      // Keyed on the path relative to the base **both sides agree on**, so the
+      // manifest still joins after the repository has been checked out
+      // somewhere else. An artifact outside that base — a user-level or plugin
+      // skill — has no relative path, and `capture` is project-scoped, so it
+      // was never recordable in the first place. That is a different sentence
+      // from "it changed" and gets one.
+      const rel = relPosix(base, path);
       if (rel === null) {
         outside = true;
         continue;
@@ -341,6 +355,7 @@ async function annotateStaleness(
             } as const)
           : checkContent(manifest, digests);
     entry.contentCheck = check;
+    if (check.status !== "skipped") joined = true;
 
     if (check.status === "mismatch") {
       entry.stale = true;
@@ -373,6 +388,73 @@ async function annotateStaleness(
         `this session followed. mtime is a heuristic, not content identity.`,
     );
   }
+  // A manifest that speaks to nothing is a different problem from a manifest
+  // with a gap in it, and it degrades row by row into the same sentence — the
+  // one an absent manifest produces. Say it once, at the top.
+  //
+  // Only when it recorded something: a manifest with no artifacts in it — a
+  // project whose instruction files all live outside the capture scope — has
+  // nothing to match, which is not a join failure.
+  if (manifest !== undefined && manifest.artifacts.length > 0 && !joined) {
+    warnings.push(
+      `the session manifest matched no artifact in this run — it recorded ` +
+        `${manifest.artifacts.length} artifact(s) relative to "${manifest.root}", ` +
+        `and nothing resolved here lines up with them, so every hash check ` +
+        `fell back to the mtime heuristic. Check that --project names the ` +
+        `directory the session ran in.`,
+    );
+  }
+}
+
+/**
+ * Pick the base to key the manifest join on.
+ *
+ * `capture` writes each path relative to *its* project root — the session's
+ * cwd — while resolution keys on the git root when `--project` is absent. In a
+ * monorepo those are different directories, so one file gets two different
+ * relative paths and every hash check silently degraded to `skipped`: exactly
+ * the guesswork a manifest exists to remove, and quietly, row by row.
+ *
+ * Rather than pick a side, ask the data. Each candidate base is scored by how
+ * many resolved artifacts it turns into a path the manifest actually recorded,
+ * and the best score wins — with candidate order as the tiebreak, so a tie
+ * keeps today's behaviour. `manifest.root` joins the candidates because it is
+ * the capturing machine's own answer; it may have been redacted, or the
+ * repository may have moved since, in which case it simply scores zero.
+ */
+function joinBase(
+  manifest: SessionManifest,
+  coverage: CoverageEntry[],
+  extraPaths: Map<CoverageEntry, string[]>,
+  candidates: string[],
+): string {
+  const recorded = new Set(manifest.artifacts.map((a) => a.path));
+  const paths = coverage
+    .filter((entry) => entry.resolved)
+    .flatMap((entry) => extraPaths.get(entry) ?? (entry.path ? [entry.path] : []));
+
+  let best = candidates[0] as string;
+  let bestScore = -1;
+  for (const candidate of candidates) {
+    if (typeof candidate !== "string" || candidate.length === 0) continue;
+    let score = 0;
+    for (const path of paths) {
+      let rel: string | null;
+      try {
+        rel = relPosix(candidate, path);
+      } catch {
+        // A redacted `root` can be anything, including something `resolve`
+        // refuses. A candidate that cannot be used simply does not win.
+        continue;
+      }
+      if (rel !== null && recorded.has(rel)) score += 1;
+    }
+    if (score > bestScore) {
+      best = candidate;
+      bestScore = score;
+    }
+  }
+  return best;
 }
 
 // ── Skills ───────────────────────────────────────────────────────
@@ -385,9 +467,7 @@ async function resolveSkill(
   const tried: string[] = [];
   // `plugin:skill` refs look up the skill by its short name inside the
   // user plugin store; plain refs check project dirs then the user store.
-  const [pluginName, shortName] = name.includes(":")
-    ? (name.split(":", 2) as [string, string])
-    : [null, name];
+  const [pluginName, shortName] = splitPluginRef(name);
 
   const candidates: Array<{ path: string; origin: ResolvedArtifact["origin"] }> =
     [];
@@ -430,7 +510,7 @@ async function resolveSkill(
     (path) =>
       basename(path) === "SKILL.md" &&
       basename(dirname(path)) === shortName &&
-      (pluginName === null || path.includes(pluginName)),
+      (pluginName === null || hasPathSegment(path, pluginName)),
   );
   if (found) {
     const content = await safeRead(found);
@@ -465,9 +545,7 @@ async function resolveSlashCommand(
   home: string,
 ): Promise<{ artifact: ResolvedArtifact | null; tried: string[] }> {
   const tried: string[] = [];
-  const [pluginName, shortName] = name.includes(":")
-    ? (name.split(":", 2) as [string, string])
-    : [null, name];
+  const [pluginName, shortName] = splitPluginRef(name);
 
   const made = (
     path: string,
@@ -509,7 +587,7 @@ async function resolveSlashCommand(
     (path) =>
       basename(path) === `${shortName}.md` &&
       segments(path).includes("commands") &&
-      path.includes(pluginName),
+      hasPathSegment(path, pluginName),
   );
   if (found !== null) {
     const content = await safeRead(found);
@@ -523,6 +601,34 @@ function segments(path: string): string[] {
   return path.split(sep).join("/").split("/");
 }
 
+/**
+ * Split `plugin:name` into its two halves.
+ *
+ * On the **first** colon, keeping the remainder: `split(":", 2)` throws away
+ * everything past the second field, so `myplugin:release:tag` resolved as a
+ * lookup for `release` — a different artifact, reported as if it were the one
+ * asked for. The namespace is the part before the first colon; everything
+ * after it is the name, whatever it contains.
+ */
+function splitPluginRef(name: string): [string | null, string] {
+  const at = name.indexOf(":");
+  if (at === -1) return [null, name];
+  return [name.slice(0, at), name.slice(at + 1)];
+}
+
+/**
+ * True when `pluginName` is a *segment* of `path`.
+ *
+ * `path.includes(pluginName)` was unanchored over the whole absolute path, so
+ * a plugin named `docs` matched `~/.claude/plugins/other-plugin/commands/
+ * docs-helper/x.md` — and, on Windows, matched every path under a home
+ * directory of `C:\Users\docs\`. A plugin is a directory, so the test is
+ * whether the path passes through a directory of that name.
+ */
+function hasPathSegment(path: string, pluginName: string): boolean {
+  return segments(path).includes(pluginName);
+}
+
 // ── Agents ───────────────────────────────────────────────────────
 
 async function resolveAgent(
@@ -532,9 +638,7 @@ async function resolveAgent(
 ): Promise<{ artifact: ResolvedArtifact | null; tried: string[] }> {
   const tried: string[] = [];
   // Plugin agents are referenced as `plugin:agent`; the file is the short name.
-  const shortName = subagentType.includes(":")
-    ? (subagentType.split(":", 2)[1] as string)
-    : subagentType;
+  const shortName = splitPluginRef(subagentType)[1];
 
   const candidates: Array<{ path: string; origin: ResolvedArtifact["origin"] }> = [
     { path: join(projectDir, ".claude", "agents", `${shortName}.md`), origin: "project" },
