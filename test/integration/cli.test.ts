@@ -225,6 +225,108 @@ describe.skipIf(!built)("built CLI", () => {
     });
   });
 
+  // ADR 01018. The shape of the report is decided by *how* traces were
+  // selected, not by how many came back, so a script piping `--format json`
+  // gets something stable.
+  describe("batch runs", () => {
+    const home = { MOOSE_TRACEVALS_HOME: "test/fixtures/home" };
+    const both = [
+      "test/fixtures/traces/claude-session.jsonl",
+      "test/fixtures/traces/claude-session-sidecar.jsonl",
+    ];
+
+    it("one named trace still emits a single-trace RunReport", async () => {
+      const { stdout } = await runCli(
+        [
+          "run",
+          both[0]!,
+          "--project",
+          "test/fixtures/project",
+          "--deterministic-only",
+          "--format",
+          "json",
+        ],
+        home,
+      );
+      const report = JSON.parse(stdout);
+      expect(report.trace).toBeDefined();
+      expect(report.evalResults).toBeDefined();
+      expect(report.traces).toBeUndefined();
+    });
+
+    it("two named traces emit an aggregate report and exit 1", async () => {
+      const { code, stdout } = await runCli(
+        [
+          "run",
+          ...both,
+          "--project",
+          "test/fixtures/project",
+          "--deterministic-only",
+          "--format",
+          "json",
+        ],
+        home,
+      );
+      expect(code).toBe(1);
+      const report = JSON.parse(stdout);
+      expect(report.summary.traces).toBe(2);
+      expect(report.summary.tracesFailed).toBe(1);
+      const forbidden = report.evals.find(
+        (e: { evalName: string }) => e.evalName === "forbidden-tool",
+      );
+      expect(forbidden.passRate).toBe(0);
+      expect(forbidden.failingTraces).toHaveLength(1);
+    });
+
+    it("a discovery selector emits an aggregate report even for one trace", async () => {
+      const { code, stdout } = await runCli(
+        [
+          "run",
+          "--all-projects",
+          "--limit",
+          "1",
+          "--project",
+          "test/fixtures/project",
+          "--deterministic-only",
+          "--format",
+          "json",
+        ],
+        home,
+      );
+      expect(code).toBe(0);
+      const report = JSON.parse(stdout);
+      expect(report.summary.traces).toBe(1);
+      expect(Array.isArray(report.evals)).toBe(true);
+    });
+
+    it("exits 2 rather than green when a selector matches nothing", async () => {
+      const { code, stderr } = await runCli(
+        ["run", "--all-projects", "--deterministic-only"],
+        { MOOSE_TRACEVALS_HOME: "test/fixtures/project" },
+      );
+      expect(code).toBe(2);
+      expect(stderr).toMatch(/no traces matched/);
+    });
+
+    it("exits 2 when named traces are mixed with a selector", async () => {
+      const { code, stderr } = await runCli(
+        ["run", both[0]!, "--limit", "1", "--deterministic-only"],
+        home,
+      );
+      expect(code).toBe(2);
+      expect(stderr).toMatch(/not both/);
+    });
+
+    it("rejects a --since that is not a duration", async () => {
+      const { code, stderr } = await runCli(
+        ["run", "--since", "yesterday", "--deterministic-only"],
+        home,
+      );
+      expect(code).toBe(2);
+      expect(stderr).toMatch(/--since must be a duration/);
+    });
+  });
+
   it("legacy stream-json traces still parse", async () => {
     const { code, stdout } = await runCli(
       [

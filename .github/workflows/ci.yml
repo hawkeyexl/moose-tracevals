@@ -485,6 +485,160 @@ jobs:
             exit 1
           fi
 
+      # Adherence is a rate, not a verdict (ADR 01018). This proves the batch
+      # path through the built binary: the aggregate shape, a rate computed
+      # over a corpus engineered to fail on one trace and pass on the other, a
+      # single-trace run that did *not* change shape, an unreadable file
+      # degrading beside good ones, and the judge budget reaching the shared
+      # judge instead of being rebuilt per trace.
+      - name: Dogfood run (batch over many traces)
+        shell: bash
+        env:
+          MOOSE_TRACEVALS_HOME: test/fixtures/home
+        run: |
+          a=test/fixtures/traces/claude-session.jsonl
+          b=test/fixtures/traces/claude-session-sidecar.jsonl
+
+          # 1. Two named traces: exit 1 because one of them fails, and the
+          #    report is the aggregate shape.
+          set +e
+          node dist/cli.js run "$a" "$b" --project test/fixtures/project --deterministic-only --format json > moose-tracevals-batch.json
+          code=$?
+          set -e
+          if [ "$code" -ne 1 ]; then
+            echo "Expected exit 1 from a batch containing the failing fixture, got $code"
+            cat moose-tracevals-batch.json
+            exit 1
+          fi
+
+          # 2. One named trace must still be the single-trace report. Many
+          #    assertions above and every documented example depend on it.
+          node dist/cli.js run "$b" --project test/fixtures/project --deterministic-only --format json > moose-tracevals-batch-single.json
+
+          # 3. A file that is not a trace at all, batched with two that are.
+          mkdir -p .tmp && printf 'not a trace\n' > .tmp/bad-trace.jsonl
+          set +e
+          node dist/cli.js run .tmp/bad-trace.jsonl "$a" "$b" --project test/fixtures/project --deterministic-only --format json > moose-tracevals-batch-degraded.json
+          code=$?
+          set -e
+          if [ "$code" -ne 1 ]; then
+            echo "Expected exit 1 from a batch with an unreadable trace, got $code"; exit 1
+          fi
+
+          # 4. The judge budget must reach the one shared judge. Zero is the
+          #    only budget a mock provider can exhaust, but it still proves the
+          #    flag is plumbed through the batch rather than dropped.
+          set +e
+          node dist/cli.js run "$a" "$b" --project test/fixtures/project --provider mock --max-cost-usd 0 --format json > moose-tracevals-batch-budget.json
+          set -e
+
+          node -e '
+            const fs = require("fs");
+            const read = (f) => {
+              let raw = fs.readFileSync(f, "utf8");
+              if (raw.charCodeAt(0) === 0xfeff) raw = raw.slice(1);
+              return JSON.parse(raw);
+            };
+            const check = (label, actual, expected) => {
+              if (actual !== expected) {
+                console.error(`${label}: expected ${expected}, got ${actual}`);
+                process.exitCode = 1;
+              }
+            };
+
+            const batch = read("moose-tracevals-batch.json");
+            check("batch traces", batch.summary.traces, 2);
+            check("batch tracesFailed", batch.summary.tracesFailed, 1);
+            check("batch tracesPassed", batch.summary.tracesPassed, 1);
+            // The rate is the point. `forbidden-tool` fails on the one trace
+            // that resolved the skill, and the failing trace is named — a rate
+            // with no route back to a session is unactionable.
+            const forbidden = batch.evals.find((e) => e.evalName === "forbidden-tool");
+            check("forbidden-tool passRate", forbidden?.passRate, 0);
+            check("forbidden-tool outliers", forbidden?.failingTraces?.length, 1);
+            // Skipped results stay out of the denominator: an artifact nobody
+            // invoked must not report a perfect score.
+            const empty = batch.evals.find((e) => e.evalName === "doc-writer-wrote-docs");
+            check("all-skipped passRate", empty?.passRate, null);
+            if (!(empty?.skipReasons ?? []).some((r) => /no subagent turns/.test(r))) {
+              console.error("an all-skipped row must keep its reason:", JSON.stringify(empty));
+              process.exitCode = 1;
+            }
+            // Rows are sorted by key on both OS legs, so two runs compare.
+            const keys = batch.evals.map((e) => e.key);
+            if (keys.join(" ") !== [...keys].sort().join(" ")) {
+              console.error("aggregate rows are not deterministically ordered");
+              process.exitCode = 1;
+            }
+
+            // One named trace keeps the single-trace shape.
+            const single = read("moose-tracevals-batch-single.json");
+            if (single.traces !== undefined || single.trace === undefined) {
+              console.error("one named trace must still emit a RunReport");
+              process.exitCode = 1;
+            }
+
+            // An unreadable trace is an entry, never an abort.
+            const degraded = read("moose-tracevals-batch-degraded.json");
+            check("degraded traces", degraded.summary.traces, 3);
+            check("degraded tracesErrored", degraded.summary.tracesErrored, 1);
+            const bad = degraded.traces.find((t) => /bad-trace/.test(t.file));
+            if (!bad?.error) {
+              console.error("the unreadable trace must carry its error:", JSON.stringify(bad));
+              process.exitCode = 1;
+            }
+            if (!degraded.evals.some((e) => e.evalName === "forbidden-tool")) {
+              console.error("one bad trace must not cost the others their verdicts");
+              process.exitCode = 1;
+            }
+
+            // The budget reached the judge, and the exhaustion is *reported*
+            // rather than being an absent row.
+            const budget = read("moose-tracevals-batch-budget.json");
+            const skipped = budget.evals.filter((e) =>
+              (e.skipReasons ?? []).some((r) => /budget exhausted/.test(r)));
+            if (skipped.length === 0) {
+              console.error("expected budget-exhausted skips across the batch");
+              process.exitCode = 1;
+            }
+            if (budget.evals.some((e) => e.counts.pass > 0 && (e.graders ?? []).includes("ai"))) {
+              console.error("an exhausted budget must never produce a judged pass");
+              process.exitCode = 1;
+            }
+          '
+          rm -f .tmp/bad-trace.jsonl
+
+          # 5. Discovery selectors. A wide --since matches the fixture store
+          #    regardless of checkout time; an empty store must be loud.
+          node dist/cli.js run --all-projects --since 520w --limit 5 --project test/fixtures/project --deterministic-only --format json > moose-tracevals-batch-since.json
+          node -e '
+            let raw = require("fs").readFileSync("moose-tracevals-batch-since.json", "utf8");
+            if (raw.charCodeAt(0) === 0xfeff) raw = raw.slice(1);
+            const r = JSON.parse(raw);
+            if (r.summary.traces !== 2) {
+              console.error(`expected 2 discovered traces, got ${r.summary.traces}`);
+              process.exitCode = 1;
+            }
+            // A selector always yields the aggregate shape, even for one trace.
+            if (!Array.isArray(r.evals)) {
+              console.error("a discovery selector must emit a BatchReport");
+              process.exitCode = 1;
+            }
+          '
+          # A selector that matched nothing is operational, never a green gate.
+          set +e
+          MOOSE_TRACEVALS_HOME=test/fixtures/project node dist/cli.js run --all-projects --deterministic-only > /dev/null 2> moose-tracevals-batch-empty.txt
+          code=$?
+          set -e
+          if [ "$code" -ne 2 ]; then
+            echo "Expected exit 2 when a selector matches no traces, got $code"
+            cat moose-tracevals-batch-empty.txt
+            exit 1
+          fi
+          grep -q "no traces matched" moose-tracevals-batch-empty.txt || {
+            echo "missing the empty-selection message:"; cat moose-tracevals-batch-empty.txt; exit 1
+          }
+
       - name: Dogfood list (fixture session store)
         shell: bash
         env:

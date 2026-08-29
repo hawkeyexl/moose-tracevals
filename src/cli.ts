@@ -33,6 +33,9 @@ interface RunFlags {
   failOnNeedsReview?: boolean;
   require?: string[];
   reportUnusedArtifacts?: boolean;
+  allProjects?: boolean;
+  since?: string;
+  limit?: number;
 }
 
 /** Repeatable option collector — commander keeps only the last value otherwise. */
@@ -40,19 +43,8 @@ function collect(value: string, previous: string[] = []): string[] {
   return [...previous, value];
 }
 
-async function executeRun(trace: string | undefined, opts: RunFlags) {
-  if (trace === undefined) {
-    // The interactive picker needs a TTY; scripted callers must name a trace.
-    if (!process.stdout.isTTY || !process.stdin.isTTY) {
-      throw new TracevalsError(
-        "no trace given; pass a trace file or run `moose-tracevals list`",
-      );
-    }
-    const { pickTrace } = await import("./trace/picker.js");
-    trace = await pickTrace();
-  }
-  const { report, rendered } = await runRun({
-    tracePath: trace,
+async function executeRun(traces: string[], opts: RunFlags) {
+  const shared = {
     project: opts.project,
     provider: opts.provider,
     model: opts.model,
@@ -67,7 +59,45 @@ async function executeRun(trace: string | undefined, opts: RunFlags) {
     failOnNeedsReview: opts.failOnNeedsReview,
     ...(opts.require !== undefined ? { require: opts.require } : {}),
     reportUnusedArtifacts: opts.reportUnusedArtifacts,
-  });
+  };
+
+  // What decides the report shape is *how traces were selected*, not how many
+  // came back. One named trace is a `RunReport`, byte for byte as before; a
+  // discovery selector is a `BatchReport` even when it matches exactly one, so
+  // a script piping `--format json` gets a stable shape (ADR 01018).
+  const selecting =
+    opts.allProjects === true ||
+    opts.since !== undefined ||
+    opts.limit !== undefined;
+
+  if (traces.length > 1 || selecting) {
+    const { runBatch } = await import("./commands/batch.js");
+    const { report, rendered } = await runBatch({
+      ...shared,
+      ...(traces.length > 0 ? { traces } : {}),
+      ...(opts.allProjects !== undefined
+        ? { allProjects: opts.allProjects }
+        : {}),
+      ...(opts.since !== undefined ? { since: opts.since } : {}),
+      ...(opts.limit !== undefined ? { limit: opts.limit } : {}),
+    });
+    console.log(rendered);
+    process.exitCode = report.exitCode;
+    return;
+  }
+
+  let trace = traces[0];
+  if (trace === undefined) {
+    // The interactive picker needs a TTY; scripted callers must name a trace.
+    if (!process.stdout.isTTY || !process.stdin.isTTY) {
+      throw new TracevalsError(
+        "no trace given; pass a trace file or run `moose-tracevals list`",
+      );
+    }
+    const { pickTrace } = await import("./trace/picker.js");
+    trace = await pickTrace();
+  }
+  const { report, rendered } = await runRun({ ...shared, tracePath: trace });
   console.log(rendered);
   process.exitCode = report.exitCode;
 }
@@ -97,13 +127,18 @@ function addRunFlags(cmd: Command): Command {
       "--require <module>",
       "load a grader plugin; repeatable, and added to config plugins",
       collect,
-    );
+    )
+    .option("--all-projects", "evaluate every project's traces in the session store")
+    .option("--since <duration>", "only traces newer than e.g. 30m, 24h, 7d, 2w")
+    .option("--limit <n>", "maximum traces to evaluate", (v) => parseInt(v, 10));
 }
 
 addRunFlags(
   program
-    .command("run [trace]", { isDefault: true })
-    .description("Evaluate a trace against the skills and instructions it used"),
+    .command("run [traces...]", { isDefault: true })
+    .description(
+      "Evaluate one or more traces against the skills and instructions they used",
+    ),
 ).action(executeRun);
 
 program
