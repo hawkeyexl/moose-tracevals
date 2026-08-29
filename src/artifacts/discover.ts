@@ -20,7 +20,7 @@ import {
   sep,
 } from "node:path";
 import { stat } from "node:fs/promises";
-import { extractCriteria } from "../criteria/extract.js";
+import { extractEvals } from "../evals/extract.js";
 import { TracevalsError } from "../types.js";
 import { listInTree, safeRead } from "./fs.js";
 import { PROJECT_RULES_FILENAMES } from "./resolve.js";
@@ -147,7 +147,7 @@ async function readOne(
   };
 
   try {
-    const extracted = await extractCriteria(artifact);
+    const extracted = await extractEvals(artifact);
     if (extracted.errors.length > 0) {
       const first = extracted.errors[0];
       return {
@@ -161,7 +161,7 @@ async function readOne(
     return {
       artifact,
       status: "ok",
-      existingNames: extracted.criteria.map((c) => c.name),
+      existingNames: extracted.evals.map((e) => e.id),
       skip: extracted.skip,
     };
   } catch (err) {

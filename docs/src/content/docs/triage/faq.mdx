@@ -19,13 +19,13 @@ budget. A grader can also skip itself when the trace lacks the data it needs. No
 build.
 
 **What is `adheres-to-artifact (implicit)`?**
-The eval an artifact gets when it declares no criteria of its own: *did the session follow this
+The eval an artifact gets when it declares no evals of its own: *did the session follow this
 file's instructions?* It is judged against the artifact's full text. Nobody wrote it; you get it for
 free.
 
-**Why are there more evals than criteria I recognise?**
+**Why are there more evals than evals I recognise?**
 Every artifact the session touched contributes, including project rules and any skill or subagent
-it used. Artifacts with no declared criteria each add one implicit eval.
+it used. Artifacts with no declared evals each add one implicit eval.
 
 **An artifact I expected is missing from the results.**
 Check the coverage table below the evals. It lists every artifact the session *referenced* and
@@ -42,7 +42,7 @@ action.
 Check its `observed` line first — it cites what the judge claims it saw. If that citation does not
 match the session, the verdict is unsound and worth saying so to whoever owns the artifact. If the
 citation is accurate but the conclusion is not, the assertion is probably ambiguous, which is a
-criterion problem rather than a session problem.
+eval problem rather than a session problem.
 
 **Votes were split. Which one counts?**
 None of them auto-resolve. A verdict only lands as pass or fail when **every** run agreed and
@@ -56,7 +56,7 @@ against consensus and can only push a result toward review, never toward a silen
 **Why did it pass when I would have failed it?**
 An auto-pass needs unanimity *and* mean confidence above the threshold, so a pass is not a weak
 signal. If you disagree, the assertion likely does not say what you meant — that is worth fixing at
-the criterion, because it will keep passing otherwise.
+the eval, because it will keep passing otherwise.
 
 ## About re-running
 
@@ -86,20 +86,20 @@ npx moose-tracevals run <trace-file> --project ./my-repo --deterministic-only
 
 **Who fixes this?**
 The coverage table printed the artifact's file path, and that file is in version control — `git log`
-on it names the owner. Bring them the artifact name, the criterion name, and for a judged verdict
+on it names the owner. Bring them the artifact name, the eval name, and for a judged verdict
 the vote split plus the cited observation.
 
-**I think the criterion is wrong, not the session.**
-That is a legitimate and common answer. A criterion no session could satisfy is a defect in the
-artifact, and you may be the first person to notice. Raise it as a criterion bug rather than
+**I think the eval is wrong, not the session.**
+That is a legitimate and common answer. An eval no session could satisfy is a defect in the
+artifact, and you may be the first person to notice. Raise it as an eval bug rather than
 changing your work to satisfy it.
 
 **The build is red and I cannot fix it right now.**
 `needs-review` counting as a failure is configurable (`failOnNeedsReview: false`), and severity is
-per criterion — but both are decisions for whoever owns the gate, not a workaround to apply under
+per eval — but both are decisions for whoever owns the gate, not a workaround to apply under
 time pressure.
 
 <Aside title="Still stuck?">
 The two pages worth opening next are [How the judge decides](/moose-tracevals/judge/) if the verdict is
-what puzzles you, and [Declare what to check](/moose-tracevals/declare/) if the *criterion* is.
+what puzzles you, and [Declare what to check](/moose-tracevals/declare/) if the *eval* is.
 </Aside>

@@ -23,3 +23,5 @@ Every **behavior change** in moose-tracevals ships with an ADR here. The ADR rec
 | [01007](01007-ship-a-cuj-first-documentation-site.md) | Ship a CUJ-first documentation site, with a committed content strategy and mechanical drift gates | accepted |
 | [01008](01008-rename-the-project-to-moose-tracevals.md) | Rename the project to `moose-tracevals` and publish it unscoped | accepted |
 | [01009](01009-share-one-moose-config-file-across-the-family.md) | Read settings from a `tracevals:` section of a shared `moose.config.yaml` | accepted |
+| [01010](01010-adopt-the-docmeta-artifact-evals-vocabulary.md) | Adopt `docmeta:artifact-evals` as the eval vocabulary, and stop publishing our own | accepted |
+| [01011](01011-execute-command-graded-evals.md) | Execute `command`-graded evals, on by default | accepted |

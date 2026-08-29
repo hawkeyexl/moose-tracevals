@@ -11,7 +11,7 @@ steps:
   - { stage: "Understand how artifacts are resolved from a trace", doc: /moose-tracevals/reference/traces/, exists: true }
   - { stage: "Fix an unresolved reference", doc: "/moose-tracevals/declare/coverage/#fix-an-unresolved-reference", exists: true }
   - { stage: "Know what the implicit eval covers", doc: "/moose-tracevals/declare/#the-implicit-eval", exists: true }
-  - { stage: "Skip an artifact deliberately", doc: /moose-tracevals/reference/criteria-schema/, exists: true, note: "the skip flag" }
+  - { stage: "Skip an artifact deliberately", doc: /moose-tracevals/reference/evals-schema/, exists: true, note: "the skip flag" }
   - { stage: "Confirm coverage in the report", doc: /moose-tracevals/reference/report-and-exit-codes/, exists: true }
 ---
 
@@ -19,7 +19,7 @@ steps:
 
 **Scope:** accounting for the *denominator*: every skill, agent definition, and project-rules file
 a session touched, including the ones that could not be found. Declaring what to check on a
-resolved artifact is [`cuj-declare-criteria`](cuj-declare-criteria.md).
+resolved artifact is [`cuj-declare-evals`](cuj-declare-evals.md).
 
 **Trigger.** A report shows three evals where the reader expected five, or a skill they know the
 session invoked does not appear anywhere in the output.
@@ -33,7 +33,7 @@ documentation explains.
 The reader needs to be able to close a small, closed set of loops:
 
 - **Resolved and evaluated.** The normal case.
-- **Resolved, no declared criteria.** Still evaluated, via the implicit whole-artifact eval. Nothing
+- **Resolved, no declared evals.** Still evaluated, via the implicit whole-artifact eval. Nothing
   to fix, but knowing it stops an author reading silence as absence.
 - **Unresolved.** The reference was found in the trace but no file was. The coverage entry records
   every location that was tried, which is usually enough to diagnose it — a project-relative path,

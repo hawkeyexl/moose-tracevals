@@ -21,7 +21,7 @@ features_emphasized:
 
 **Scope:** people who run moose-tracevals as a gate in automation across repositories they do not
 author. It does not cover writing the instruction artifacts (see
-[`aud-artifact-authors`](artifact-authors.md)) or deciding what the criteria should assert (see
+[`aud-artifact-authors`](artifact-authors.md)) or deciding what the evals should assert (see
 [`aud-eval-standard`](eval-standard.md)) — this audience plumbs a check whose content someone else
 owns.
 
@@ -70,7 +70,7 @@ for reporting.
   semantics; JSON processing on the command line; environment-variable-based configuration;
   npm/npx installation.
 - **Subject dependencies:** they need *trace*, *artifact*, and *eval outcome* defined, but only to
-  the depth required to read a report — they do not need to understand criteria authoring to install
+  the depth required to read a report — they do not need to understand evals authoring to install
   the gate. The `needs-review` outcome and `failOnNeedsReview` must be introduced together, because
   the first is meaningless to them without the second. Judge calibration is explicitly **not** a
   dependency: their recommended path avoids the judge entirely.

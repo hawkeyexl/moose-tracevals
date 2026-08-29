@@ -1,31 +1,41 @@
 /**
- * Eval planning: turn resolved artifacts + extracted criteria into a flat
- * list of evals to run. Artifacts without declared criteria get one implicit
+ * Eval planning: turn resolved artifacts + extracted evals into a flat list of
+ * evals to run. Artifacts without declared evals get one implicit
  * whole-artifact adherence eval (ADR 01002).
  */
 import type { ResolvedArtifact } from "../artifacts/types.js";
 import {
-  extractCriteria,
-  type Criterion,
+  extractEvals,
+  type EvalEntry,
   type Severity,
-} from "../criteria/extract.js";
+} from "../evals/extract.js";
 
 export interface EvalPlan {
   artifact: ResolvedArtifact;
   evalName: string;
   assertion: string;
-  /** "llm" or a deterministic grader kind. */
+  /** "ai", "human", "command", or a deterministic grader kind. */
   grader: string;
   options?: Record<string, unknown>;
   severity: Severity;
   evidence?: string;
-  examples?: Criterion["examples"];
+  examples?: EvalEntry["examples"];
+  /** Overrides the configured judge provider for this eval only. */
+  provider?: string;
+  /** Command-graded evals: argv, with `{trace}` substituted at grade time. */
+  command?: string[];
+  successExitCodes?: number[];
+  timeoutMs?: number;
+  /** sha256 of `assertion` when the check script was generated. */
+  generatedAssertionHash?: string;
   /** True for the zero-config whole-artifact adherence eval. */
   implicit: boolean;
   /** Set when the artifact's evals block failed schema validation. */
   error?: string;
-  /** Set when the artifact opted out via `skip: true`. */
+  /** Set when the artifact or the entry opted out. */
   skipped?: boolean;
+  /** Why it was skipped, when it was. */
+  skipReason?: string;
 }
 
 export const IMPLICIT_EVAL_NAME = "adheres-to-artifact";
@@ -35,7 +45,7 @@ export async function planEvals(
 ): Promise<EvalPlan[]> {
   const plans: EvalPlan[] = [];
   for (const artifact of artifacts) {
-    const extracted = await extractCriteria(artifact);
+    const extracted = await extractEvals(artifact);
 
     if (extracted.errors.length > 0) {
       const detail = extracted.errors
@@ -48,7 +58,7 @@ export async function planEvals(
         artifact,
         evalName: "evals-block-valid",
         assertion: "The artifact's metadata.evals block matches the schema.",
-        grader: "llm",
+        grader: "ai",
         severity: "error",
         implicit: false,
         error: `invalid metadata.evals block: ${detail}`,
@@ -60,41 +70,53 @@ export async function planEvals(
       plans.push({
         artifact,
         evalName: IMPLICIT_EVAL_NAME,
-        assertion: "Artifact skipped via metadata.evals.skip.",
-        grader: "llm",
+        assertion: "Artifact skipped via metadata.eval-skip.",
+        grader: "ai",
         severity: "error",
         implicit: true,
         skipped: true,
+        skipReason: "artifact skipped via metadata.eval-skip",
       });
       continue;
     }
 
-    if (extracted.criteria.length === 0) {
+    if (extracted.evals.length === 0) {
       plans.push({
         artifact,
         evalName: IMPLICIT_EVAL_NAME,
         assertion:
           `The session adhered to the instructions in this ${artifact.type} ` +
           `("${artifact.name}"). Cite the specific instructions followed or violated.`,
-        grader: "llm",
+        grader: "ai",
         severity: "error",
         implicit: true,
       });
       continue;
     }
 
-    for (const criterion of extracted.criteria) {
+    for (const entry of extracted.evals) {
       const plan: EvalPlan = {
         artifact,
-        evalName: criterion.name,
-        assertion: criterion.assertion,
-        grader: criterion.grader,
-        severity: criterion.severity,
+        evalName: entry.id,
+        assertion: entry.assertion,
+        grader: entry.grader,
+        severity: entry.severity,
         implicit: false,
       };
-      if (criterion.options) plan.options = criterion.options;
-      if (criterion.evidence) plan.evidence = criterion.evidence;
-      if (criterion.examples) plan.examples = criterion.examples;
+      if (entry.options) plan.options = entry.options;
+      if (entry.evidence) plan.evidence = entry.evidence;
+      if (entry.examples) plan.examples = entry.examples;
+      if (entry.provider) plan.provider = entry.provider;
+      if (entry.command) plan.command = entry.command;
+      if (entry.successExitCodes) plan.successExitCodes = entry.successExitCodes;
+      if (entry.timeoutMs !== undefined) plan.timeoutMs = entry.timeoutMs;
+      if (entry.generatedAssertionHash !== undefined) {
+        plan.generatedAssertionHash = entry.generatedAssertionHash;
+      }
+      if (entry.skip) {
+        plan.skipped = true;
+        plan.skipReason = "eval skipped via its own skip: true";
+      }
       plans.push(plan);
     }
   }

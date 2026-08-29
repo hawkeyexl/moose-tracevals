@@ -3,7 +3,7 @@
  * host tool already treats as schema — an agent's `tools:` grant, a skill's
  * `name`/`description`.
  *
- * These are grounding inputs, not criteria. Minting a criterion directly from
+ * These are grounding inputs, not evals. Minting an eval directly from
  * them produces evals that cannot fail: a `tools:` list is an allowlist rather
  * than a requirement, and a skill asserting its own invocation is only ever
  * graded in sessions that invoked it (ADR 01005).

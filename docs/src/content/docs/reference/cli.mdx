@@ -14,7 +14,7 @@ moose-tracevals [options] [command]
 
 Commands:
   run [options] [trace]      Evaluate a trace against the skills and instructions it used
-  fill [options] [paths...]  Propose eval criteria for skills, agent definitions, and
+  fill [options] [paths...]  Propose eval evals for skills, agent definitions, and
                              project rules, and write those above the confidence threshold
   list [options]             List discoverable traces (Claude Code session files)
   help [command]             display help for command
@@ -91,7 +91,7 @@ moose-tracevals: no trace given; pass a trace file or run `moose-tracevals list`
 moose-tracevals fill [options] [paths...]
 ```
 
-Proposes eval criteria for the instruction artifacts in a project and writes those that survive the
+Proposes eval evals for the instruction artifacts in a project and writes those that survive the
 gate. **The only command that writes.** `run` never calls it.
 
 ### Arguments
@@ -113,7 +113,7 @@ moose-tracevals: no such file or directory: ./nope
 | `--project` | `<dir>` | current directory | Project root to scan. |
 | `--dry-run` | — | off | Report proposals without writing them. **Recommended first invocation.** |
 | `--confidence` | `<n>` | `fill.confidenceThreshold` (`0.7`) | Minimum confidence to write, `0`–`1`. |
-| `--max-criteria` | `<n>` | `fill.maxCriteriaPerArtifact` (`8`) | Maximum criteria per artifact, **including existing ones**. |
+| `--max-evals` | `<n>` | `fill.maxEvalsPerArtifact` (`8`) | Maximum evals per artifact, **including existing ones**. |
 | `--max-cost-usd` | `<usd>` | `fill.maxCostUsd` (unset) | Proposal cost budget. |
 | `--no-cache` | — | cache on | Bypass the proposal cache. |
 | `--provider` | `<name>` | `provider.default` | `claude-cli`, `anthropic`, `openai`, `mock`. |
@@ -135,9 +135,9 @@ moose-tracevals: --confidence must be a number between 0 and 1, got 1.5
 | `2` | operational error, including an out-of-range numeric flag |
 
 <Aside title="What fill never does">
-Existing criteria are never modified; a name collision fails the run. Only the YAML frontmatter block
+Existing evals are never modified; a name collision fails the run. Only the YAML frontmatter block
 is rewritten; the body is byte-identical. Project rules (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`) are
-proposed but **never written**. See [Fill in criteria](/moose-tracevals/declare/fill/).
+proposed but **never written**. See [Fill in evals](/moose-tracevals/declare/fill/).
 </Aside>
 
 ## `list`

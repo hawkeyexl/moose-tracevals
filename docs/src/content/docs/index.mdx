@@ -35,7 +35,7 @@ whether the session **adhered to the instructions in those artifacts**.
   />
   <LinkCard
     title="Check one specific instruction"
-    description="Declare a criterion in an artifact's frontmatter and make it fail when it should."
+    description="Declare an eval in an artifact's frontmatter and make it fail when it should."
     href="/moose-tracevals/declare/"
   />
   <LinkCard
@@ -77,9 +77,9 @@ npx moose-tracevals run ./session.jsonl --deterministic-only
   FAIL   fix-bug › forbidden-tool
          [error] tool Bash was used 1 time(s) but must not be
   SKIP   CLAUDE.md › adheres-to-artifact (implicit)
-         llm evals skipped (deterministic-only run)
+         ai evals skipped (deterministic-only run)
 
-7 eval(s): 1 pass, 1 fail, 0 error, 0 needs-review, 5 skipped
+9 eval(s): 2 pass, 1 fail, 0 error, 1 needs-review, 5 skipped
 ```
 
 The skill said *"this skill is edit-only"*. The session ran a shell command. Nobody had to notice.
@@ -95,7 +95,7 @@ whether or not it is already a dependency of your project.
 trace (~/.claude/projects/<project>/*.jsonl, or a file you name)
   |
   v
-parse ──> resolve artifacts used ──> extract criteria ──> plan evals
+parse ──> resolve artifacts used ──> extract evals ──> plan evals
               (skills, agents,          (metadata.evals
                CLAUDE.md/AGENTS.md)      frontmatter)
   |
@@ -116,7 +116,7 @@ report (human / json / markdown) + artifact coverage + history
     guessed by a model. An artifact that cannot be found becomes a coverage note, never a crash.
   </Card>
   <Card title="Useful with zero configuration" icon="approve-check">
-    An artifact that declares no criteria still gets one judged eval: *did the session adhere to
+    An artifact that declares no evals still gets one judged eval: *did the session adhere to
     this?* Your first run says something before you have authored anything.
   </Card>
   <Card title="A judge you can audit" icon="seti:lock">

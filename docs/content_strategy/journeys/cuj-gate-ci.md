@@ -21,7 +21,7 @@ steps:
 
 **Scope:** getting a dependable gate into automation. Reading the results downstream is
 [`cuj-consume-results`](cuj-consume-results.md); deciding what the checks assert belongs to
-[`cuj-declare-criteria`](cuj-declare-criteria.md) and is somebody else's job.
+[`cuj-declare-evals`](cuj-declare-evals.md) and is somebody else's job.
 
 **Trigger.** Agent-assisted work has moved past experiment, and the platform team has been asked
 whether any of it can be verified before merge.

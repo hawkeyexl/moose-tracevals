@@ -1,42 +1,42 @@
 ---
-id: cuj-evolve-criteria
+id: cuj-evolve-evals
 type: cuj
-title: Evolve the criteria standard without breaking what exists
+title: Evolve the evals standard without breaking what exists
 personas: [persona-eval-owner]
-trigger: "The criteria block needs to change — a new field, a tightened rule, or a convention the team should adopt — and artifacts across many repositories already declare criteria against the current shape."
+trigger: "The evals block needs to change — a new field, a tightened rule, or a convention the team should adopt — and artifacts across many repositories already declare evals against the current shape."
 entry_point: /moose-tracevals/judge/schema-versioning/
-success_criteria: "The reader can pin a schema version, adopt a new field incrementally, and distinguish an expected-to-fail probe from a regression guard in reports."
+success_criteria: "The reader knows the block implements a shared docmeta vocabulary and where a shape change belongs, can adopt a new convention incrementally, and can distinguish an expected-to-fail probe from a regression guard in reports."
 steps:
-  - { stage: "See the criteria block as a versioned contract", doc: /moose-tracevals/reference/criteria-schema/, exists: true }
-  - { stage: "Pin a schema version", doc: /moose-tracevals/judge/schema-versioning/, exists: true }
+  - { stage: "See the evals block as a shared, versioned contract", doc: /moose-tracevals/reference/evals-schema/, exists: true }
+  - { stage: "Learn where a shape change belongs, and what a version bump claims", doc: /moose-tracevals/judge/schema-versioning/, exists: true }
   - { stage: "Adopt capability vs regression", doc: "/moose-tracevals/judge/schema-versioning/#separate-probes-from-guards", exists: true }
   - { stage: "Roll out a new convention incrementally", doc: "/moose-tracevals/judge/schema-versioning/#roll-out-a-convention-in-stages", exists: true }
-  - { stage: "Handle a malformed criteria block", doc: /moose-tracevals/triage/, exists: true, note: "an invalid block is an error with a line number, never silently ignored" }
+  - { stage: "Handle a malformed evals block", doc: /moose-tracevals/triage/, exists: true, note: "an invalid block is an error with a line number, never silently ignored" }
   - { stage: "Keep the vocabulary consistent across artifacts", doc: /moose-tracevals/reference/graders/, exists: true }
 ---
 
-# CUJ: Evolve the criteria standard without breaking what exists
+# CUJ: Evolve the evals standard without breaking what exists
 
-**Scope:** the criteria block as a versioned contract, and changing it safely over time. Tuning how
-a judged criterion is *decided* is [`cuj-calibrate-judge`](cuj-calibrate-judge.md).
+**Scope:** the evals block as a versioned contract, and changing it safely over time. Tuning how
+a judged eval is *decided* is [`cuj-calibrate-judge`](cuj-calibrate-judge.md).
 
 **Trigger.** The standard needs to change: a field the team wants to start using, a rule to tighten,
-or a convention to spread across repositories where artifacts already declare criteria against
+or a convention to spread across repositories where artifacts already declare evals against
 today's shape.
 
-**Narrative.** The organizing idea is that **the criteria block is a published contract, not an
+**Narrative.** The organizing idea is that **the evals block is a published contract, not an
 internal format.** It has a resolvable schema URL, it ships with the package, and two versions
 coexist so a consumer can pin one. That framing is what turns "we changed the schema" from a
 breaking event into a versioned migration — and it needs stating, because a reader who assumes the
 block is an implementation detail will be surprised in the worst possible way.
 
 The concrete change available today is the reason this journey exists. Version 0.2 adds exactly one
-field, `type`, distinguishing a **capability** probe — a criterion deliberately testing the edge of
+field, `type`, distinguishing a **capability** probe — an eval deliberately testing the edge of
 what an agent can do, expected to fail sometimes — from a **regression** guard protecting behavior
 that already works. Both appear in reports; neither changes enforcement. That restraint is the
 interesting part and should be explained rather than glossed: a probe that fails is information, and
 treating it identically to a regression would make the pass rate meaningless in the other direction.
-Newly written criteria default to `regression`, which is the conservative choice and worth saying
+Newly written evals default to `regression`, which is the conservative choice and worth saying
 out loud.
 
 The transferable technique is the **staged ratchet**: introduce a convention at a severity that
@@ -45,7 +45,7 @@ corpus is ready. It is the same move whether the change is a new field, a new gr
 a tightened assertion, and it is what makes a standard evolvable across repositories that do not
 all move at the same speed.
 
-One safety property belongs here rather than in triage: a malformed criteria block is surfaced as
+One safety property belongs here rather than in triage: a malformed evals block is surfaced as
 an error with a source line number, never silently ignored. For someone rolling out a change across
 many repositories, "you will be told exactly where it broke" is the property that makes the rollout
 survivable.

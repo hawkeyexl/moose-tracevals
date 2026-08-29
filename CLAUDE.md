@@ -58,12 +58,12 @@ Every **behavior change** ships with an ADR in [MADR 4.0.0](https://adr.github.i
 
 ## Fixtures (required)
 
-When you add or change a **user-facing feature** (a grader kind, a criteria field, a CLI flag, a report format), also exercise it end-to-end through the real CLI against the fixture corpus — and cover every meaningfully distinct shape, not just the happy path.
+When you add or change a **user-facing feature** (a grader kind, an eval field, a CLI flag, a report format), also exercise it end-to-end through the real CLI against the fixture corpus — and cover every meaningfully distinct shape, not just the happy path.
 
 The corpus is deliberately **not** all-passing, so the CI dogfood gate is meaningful:
 
 - `test/fixtures/traces/` — captured trace files (a real Claude Code session file and a legacy `claude -p` stream-json transcript). Sanitized: no secrets, shortened content.
-- `test/fixtures/project/` — a fake project tree (`.claude/skills/`, `.claude/agents/`, `CLAUDE.md`, `AGENTS.md`) whose artifacts declare criteria engineered so at least one deterministic eval **fails** against the fixture trace.
+- `test/fixtures/project/` — a fake project tree (`.claude/skills/`, `.claude/agents/`, `CLAUDE.md`, `AGENTS.md`, plus a `tracevals/` check script) whose artifacts declare evals engineered so at least one deterministic eval **fails** against the fixture trace. Between them the artifacts cover every distinct block shape: object entries, the string shorthand, the single-string block, `metadata.eval-skip` (on the plugin skill in `test/fixtures/home/`), and the `ai` / `human` / `command` / deterministic grader families.
 
 CI runs the built CLI against this corpus and asserts specific outcomes; a fixture change that flips one of them must update `.github/workflows/ci.yml` in the same commit.
 
@@ -108,7 +108,7 @@ Only the **first line** is parsed as the header.
 - Don't use `--no-verify` to skip a failing hook — fix the cause.
 - Don't add commitizen, standard-version, release-please, or changesets — they conflict with semantic-release.
 - Don't use `npm ci` (see "Environment setup").
-- Don't register `schemas/artifact-evals-*.json` as a built-in inside docmeta — schemas are published by the tool that owns them (decision inherited from docevals; a docmeta built-in was tried there and reversed).
+- Don't re-fork the eval vocabulary. `docmeta:artifact-evals` is **docmeta's** — `schemas/artifact-evals-1.0.0-proposal.1.json` is a byte-identical vendored copy of docmeta's draft, keeping docmeta's `$id`. Behavior (graders, the runtime, the reports) is ours; the shape is not. A change to the shape belongs upstream in docmeta, and the local copy is then re-synced. This reverses the older "schemas are published by the tool that owns them" rule — see [ADR 01010](adrs/01010-adopt-the-docmeta-artifact-evals-vocabulary.md).
 - Don't add `@anthropic-ai/sdk` as a direct dependency — it arrives transitively via `@hawkeyexl/inference`'s provider layer.
 - Don't reimplement provider construction, ensemble/consensus math, response caching, or token pricing here — that all lives in `@hawkeyexl/inference`. Three copies of it drifted apart once already; a fix belongs upstream.
 
@@ -157,13 +157,13 @@ Before drafting or editing any page under `docs/src/content/docs/**`:
 
 ## Architecture
 
-Pipeline: **select trace → parse (adapter) → resolve artifacts → extract criteria → plan evals → deterministic graders → LLM judge → aggregate → report (+ history)**.
+Pipeline: **select trace → parse (adapter) → resolve artifacts → extract evals → plan evals → deterministic graders → AI judge → aggregate → report (+ history)**.
 
 - `src/trace/` — trace adapters behind a normalized `Trace` model. `claude.ts` parses both Claude Code session files (`~/.claude/projects/<slug>/*.jsonl`) and legacy `claude -p` stream-json. `discover.ts` scans the session store (`MOOSE_TRACEVALS_HOME` overrides the home dir for tests). The `TraceSource` union is the seam for future adapters (Codex is deferred, not rejected — see ADR 01003).
 - `src/artifacts/` — deterministic resolution of every skill/agent/project-rule artifact the trace used: `Skill` tool calls and `<command-name>` injections → `SKILL.md`; `Agent` spawns (`subagent_type`) → agent definitions; `CLAUDE.md`/`AGENTS.md` at the trace cwd, `.claude/`, and parent dirs up to the git root. Unresolved refs go to the report's coverage table, never crash the run.
-- `src/criteria/` — reads the `metadata.evals` frontmatter block from artifacts via docmeta `extractFrontmatter`, validated against `schemas/artifact-evals-0.2.json` (a **published artifact** — ships in the package, pinned by `test/unit/schema.test.ts`; 0.1 still ships for pinned consumers). Artifacts without declared criteria get one implicit whole-artifact adherence eval (ADR 01002).
+- `src/evals/` — reads the `metadata.evals` block from artifacts via docmeta `extractFrontmatter`, validating the **whole front matter** against the vendored `schemas/artifact-evals-1.0.0-proposal.1.json` (the schema is document-rooted; `metadata` stays open so other tools' members pass untouched). Because the schema cannot reject unknown members of an open bag, `extract.ts` reserves the `eval` prefix at run time: an unrecognized `metadata.eval*` key is an error, not an inert typo. Artifacts without declared evals get one implicit whole-artifact adherence eval (ADR 01002).
 - `src/graders/` — deterministic `TraceGrader` registry: `tool-usage`, `skill-invoked`, `file-access`, `turn-count`, `cost`, `regex`, `json-output`. Each implements `validateOptions()` so options are ground-checked without a trace (ADR 01004).
-- `src/fill/` + `src/commands/fill.ts` — authoring: propose criteria for artifacts found by `src/artifacts/discover.ts` (the static inverse of `resolve.ts`), gate them on grader allowlist → option validation → target grounding → confidence, then append via `src/criteria/write.ts`. Project rules are proposed but never written (ADR 01005).
+- `src/fill/` + `src/commands/fill.ts` — authoring: propose evals for artifacts found by `src/artifacts/discover.ts` (the static inverse of `resolve.ts`), gate them on grader allowlist → option validation → target grounding → confidence, then append via `src/evals/write.ts` along with a `metadata.eval-provenance` entry naming the model and its per-eval confidence. Project rules are proposed but never written (ADR 01005).
 - `src/judge/` — trace-adherence LLM judge built on `@hawkeyexl/inference` (`makeProvider`, `runEnsemble`, `computeConsensus`, `zoneFor`, `JsonCache`). What stays local is what is moose-tracevals-specific: the prompts, the trace-worded verdict schema, the cache-key composition, the per-plan cost budget, and the `JudgedEval` shape. N-run ensemble at temperature 0, content-addressed cache under `.moose-tracevals/cache`. `provider.ts` maps the config's provider section onto the library's `ProviderSpec` (ADR 01006).
 - `src/core/engine.ts` — orchestration; the judge and graders are injected so the engine tests offline.
 - `src/reporters/` — human / json / markdown, each with an artifact-coverage section.
@@ -176,7 +176,9 @@ Pipeline: **select trace → parse (adapter) → resolve artifacts → extract c
 - Bump `PROMPT_VERSION` (`src/judge/prompt.ts`) whenever judge prompts change, and `FILL_PROMPT_VERSION` (`src/fill/prompt.ts`) whenever the fill prompt or proposal schema changes — both are cache-key components, and a stale cache silently replays old output.
 - Evaluation is **read-only**: `run` never mutates trace files or the artifacts it evaluates. `fill` is the one write path — an explicitly-invoked authoring command that `run` never calls, appends only, and never writes project rules (ADR 01005). Trace files are never written by anything.
 - Artifact resolution is deterministic: trace content + filesystem lookup, no LLM guessing. Unresolved or absent artifacts degrade to warnings and coverage notes, never a crash; zero artifacts → skipped evals, exit 0.
-- `schemas/artifact-evals-*.json` are published artifacts — keep each `$id` a resolvable URL, never edit a released version in place (add the next one), and pin behavior in `test/unit/schema.test.ts`.
+- `schemas/artifact-evals-1.0.0-proposal.1.json` is a **vendored copy**, not ours to edit: keep it byte-identical to docmeta's draft, `$id` included, and re-sync rather than patch. `test/unit/schema.test.ts` is a case-for-case port of docmeta's own ladder, so drift fails there. The `-proposal.N` suffix is a semver **prerelease** and the hyphen is load-bearing — `+proposal.1` would be build metadata and compare *equal* to the 1.0.0 release.
+- The grader vocabulary is an **open enum**: any kebab name validates, and the registry is the authority that rejects one. Adding a grader therefore never needs a schema version — and the accepted cost is that a stale name (`llm`, the pre-1.0 spelling of `ai`) passes the schema and fails at the registry instead.
+- `command`-graded evals **execute a program named in an artifact**, on by default (ADR 01011). argv is spawned with `shell: false` and `timeout-ms` always has a finite default; a command that cannot run, times out, or whose `generated-assertion-hash` no longer matches its assertion is an `error`, never a pass.
 
 ## Config ↔ CLI flags (required pattern)
 

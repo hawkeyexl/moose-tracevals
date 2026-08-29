@@ -7,7 +7,7 @@ sidebar:
 
 import { Aside, LinkCard, CardGrid } from '@astrojs/starlight/components';
 
-**Scope:** adding a deterministic grader kind. The seven built-ins and their options are in the
+**Scope:** adding a deterministic grader kind. The seven deterministic built-ins and their options are in the
 [grader reference](/moose-tracevals/reference/graders/) — read one of those first, since they are the
 reference implementations.
 
@@ -26,8 +26,8 @@ consequence that is invisible in the type signature.
 
 <Aside type="caution" title="A grader without `validateOptions` can never be proposed by `fill`">
 `validateOptions` is optional so that consumer-registered graders stay source-compatible — but
-`fill` refuses to propose a criterion it cannot ground-check. A grader missing it works fine when a
-human writes the criterion by hand and is silently invisible to the authoring path.
+`fill` refuses to propose an eval it cannot ground-check. A grader missing it works fine when a
+human writes the eval by hand and is silently invisible to the authoring path.
 
 If you want `fill` to be able to suggest your grader, implement both.
 </Aside>
@@ -86,7 +86,7 @@ registerGrader(stayedInScope);
 Then declare it like any built-in:
 
 ```yaml
-- name: stayed-in-scope
+- id: stayed-in-scope
   assertion: The session only modified files under packages/api.
   grader: stayed-in-scope
   options:
@@ -104,14 +104,14 @@ Registering a `kind` that already exists replaces it, which is how you would ove
 
 | Return | Outcome | Use it when |
 |---|---|---|
-| `{ findings: [] }` | `pass` | The criterion held. |
-| `{ findings: [ … ] }` | `fail`, if any finding is `error` severity | The criterion was violated. |
+| `{ findings: [] }` | `pass` | The eval held. |
+| `{ findings: [ … ] }` | `fail`, if any finding is `error` severity | The eval was violated. |
 | `{ findings: [], skipped: "reason" }` | `skipped` | The trace lacks the data you need. |
 | `{ findings: [], error: "reason" }` | `error` | The options are unusable. |
 
 Four conventions worth copying from the built-ins:
 
-**Use `plan.severity` on findings, not a hard-coded one.** Severity is the criterion author's
+**Use `plan.severity` on findings, not a hard-coded one.** Severity is the eval author's
 decision. Hard-coding `error` takes it away from them.
 
 **Skip rather than pass when you cannot tell.** A check that silently passes because the data was

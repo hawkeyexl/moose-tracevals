@@ -35,6 +35,12 @@ const verdictSchema = verdictSchemaJson as Record<string, unknown>;
 
 export interface TraceJudgeOptions {
   provider: InferenceProvider;
+  /**
+   * Construct the provider an eval names with `provider:`, plus its pricing.
+   * Without this hook such an eval errors rather than being judged silently by
+   * the default model — an eval that names a provider is asking for that one.
+   */
+  providerFor?: (name: string) => { provider: InferenceProvider; pricing?: Pricing };
   /** Ensemble size; default 3. */
   runs?: number;
   /** Default 0; nonzero adds verdict noise. */
@@ -57,9 +63,11 @@ export interface JudgedEval {
   artifactName: string;
   grader: string;
   implicit: boolean;
-  outcome: "pass" | "fail" | "needs-review" | "skipped";
+  outcome: "pass" | "fail" | "needs-review" | "skipped" | "error";
   consensus?: ConsensusResult;
   skipReason?: string;
+  /** Set when the eval could not be judged at all. */
+  error?: string;
   costUsd: number;
   durationMs: number;
 }
@@ -95,6 +103,33 @@ export function makeTraceJudge(options: TraceJudgeOptions): TraceJudge {
         implicit: plan.implicit,
       };
 
+      // An eval may name its own provider. Resolve it before the budget gate
+      // so a typo is reported as the eval's own error rather than hidden
+      // behind an exhausted budget.
+      let evalProvider = provider;
+      let evalPricing = pricing;
+      if (plan.provider !== undefined && plan.provider !== provider.provider()) {
+        const resolved = resolveOverride(plan.provider, options);
+        if ("error" in resolved) {
+          results.push({
+            ...base,
+            outcome: "error",
+            error: resolved.error,
+            costUsd: 0,
+            durationMs: Date.now() - start,
+          });
+          continue;
+        }
+        evalProvider = resolved.provider;
+        // Through pricingFor, exactly as the default provider's pricing is
+        // resolved above: the config override is a fallback for models the
+        // library's table does not know, not a replacement for it. Assigning
+        // the raw override would leave an unpriced override provider at
+        // pricing `undefined`, and costOfRuns returns 0 for that — silently
+        // exempting the eval from maxCostUsd.
+        evalPricing = pricingFor(evalProvider.modelName(), resolved.pricing);
+      }
+
       if (options.maxCostUsd !== undefined && spentUsd >= options.maxCostUsd) {
         results.push({
           ...base,
@@ -107,7 +142,7 @@ export function makeTraceJudge(options: TraceJudgeOptions): TraceJudge {
       }
 
       const runs = await runEnsemble({
-        provider,
+        provider: evalProvider,
         system: JUDGE_SYSTEM_PROMPT,
         user: buildUserContent(plan, renderedTrace),
         runs: runsPerEval,
@@ -115,8 +150,8 @@ export function makeTraceJudge(options: TraceJudgeOptions): TraceJudge {
         schema: verdictSchema,
         cache,
         cacheKey: cacheKey(
-          provider.provider(),
-          provider.modelName(),
+          evalProvider.provider(),
+          evalProvider.modelName(),
           runsPerEval,
           temperature,
           renderedTrace,
@@ -128,7 +163,7 @@ export function makeTraceJudge(options: TraceJudgeOptions): TraceJudge {
       const consensusBase = computeConsensus(runs);
       const zone = zoneFor(consensusBase, zones);
       const consensus: ConsensusResult = { ...consensusBase, zone };
-      const costUsd = costOfRuns(runs, pricing);
+      const costUsd = costOfRuns(runs, evalPricing);
       spentUsd += costUsd;
 
       results.push({
@@ -146,4 +181,27 @@ export function makeTraceJudge(options: TraceJudgeOptions): TraceJudge {
     }
     return results;
   };
+}
+
+/**
+ * Build the provider an eval named, or say why it could not be built. Kept
+ * out of the loop so the failure is one shape: never a throw that costs the
+ * report every other verdict, never a silent fall back to the default model.
+ */
+function resolveOverride(
+  name: string,
+  options: TraceJudgeOptions,
+): { provider: InferenceProvider; pricing?: Pricing } | { error: string } {
+  if (options.providerFor === undefined) {
+    return {
+      error: `eval names provider "${name}", but this run cannot construct providers by name`,
+    };
+  }
+  try {
+    return options.providerFor(name);
+  } catch (err) {
+    return {
+      error: `could not construct provider "${name}" for this eval: ${err instanceof Error ? err.message : String(err)}`,
+    };
+  }
 }

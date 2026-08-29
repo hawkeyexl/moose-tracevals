@@ -2,6 +2,17 @@ import { describe, expect, it } from "vitest";
 import { graderFor, listGraderKinds } from "../../../src/graders/registry.js";
 import { makePlan, makeTrace } from "../../helpers.js";
 
+/**
+ * Kinds whose whole configuration is the entry itself rather than `options`.
+ * `command` carries its argv, exit codes, and timeout on the eval entry, where
+ * the schema pins them — so there is nothing for `validateOptions` to check,
+ * and omitting the hook is also what stops `fill` proposing it (ADR 01011).
+ */
+const NO_OPTIONS = new Set(["command"]);
+
+const optionConfigured = (): string[] =>
+  listGraderKinds().filter((kind) => !NO_OPTIONS.has(kind));
+
 /** Options accepted by every kind, so the "valid" leg of each table is honest. */
 const VALID: Record<string, Record<string, unknown>> = {
   "tool-usage": { tool: "Read" },
@@ -14,8 +25,8 @@ const VALID: Record<string, Record<string, unknown>> = {
 };
 
 describe("grader option validation", () => {
-  it("is implemented by every registered kind", () => {
-    for (const kind of listGraderKinds()) {
+  it("is implemented by every option-configured kind", () => {
+    for (const kind of optionConfigured()) {
       expect(
         graderFor(kind)?.validateOptions,
         `${kind} must implement validateOptions`,
@@ -24,7 +35,7 @@ describe("grader option validation", () => {
   });
 
   it("accepts each kind's minimal valid options", () => {
-    for (const kind of listGraderKinds()) {
+    for (const kind of optionConfigured()) {
       const options = VALID[kind];
       expect(options, `no VALID entry for ${kind}`).toBeDefined();
       expect(
@@ -37,7 +48,7 @@ describe("grader option validation", () => {
   it("requires every kind's required options", () => {
     // turn-count and cost have no single required key, but a criterion with no
     // bound at all is vacuous — it can never fail — so it is rejected too.
-    for (const kind of listGraderKinds()) {
+    for (const kind of optionConfigured()) {
       expect(
         graderFor(kind)?.validateOptions?.({}),
         `${kind} accepted empty options`,
@@ -162,6 +173,18 @@ describe("grader option validation", () => {
       expect(validate({ schema: [] })).toContain("schema");
       expect(validate({ schema: null })).toContain("schema");
     });
+  });
+
+  it("exempts only the kinds that genuinely take no options", () => {
+    // Guards the exemption itself: a new grader must not join NO_OPTIONS by
+    // accident, and a kind that disappears must not leave a stale entry.
+    for (const kind of NO_OPTIONS) {
+      expect(graderFor(kind), `${kind} is not registered`).toBeDefined();
+      expect(
+        graderFor(kind)?.validateOptions,
+        `${kind} takes options after all — drop it from NO_OPTIONS`,
+      ).toBeUndefined();
+    }
   });
 
   it("is enforced by grade(), not just callable on its own", async () => {

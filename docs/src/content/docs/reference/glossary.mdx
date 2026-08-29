@@ -1,6 +1,6 @@
 ---
 title: Glossary
-description: Definitions of the terms moose-tracevals uses — trace, artifact, criterion, grader, plan, finding, outcome, consensus, zone, sidechain, and the rest.
+description: Definitions of the terms moose-tracevals uses — trace, artifact, eval, grader, plan, finding, outcome, consensus, zone, sidechain, and the rest.
 sidebar:
   order: 9
 ---
@@ -11,7 +11,7 @@ order.
 
 ## The pipeline, in one line
 
-**trace** → **artifacts** → **criteria** → **plans** → **graders** / **judge** → **outcomes** →
+**trace** → **artifacts** → **evals** → **plans** → **graders** / **judge** → **outcomes** →
 **report**
 
 ---
@@ -44,7 +44,7 @@ non-sidechain user prompts.
 
 **Artifact**
 : An instruction file a session used: a **skill** (`SKILL.md`), an **agent definition**, or a
-**project-rules** file (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`). The unit that criteria attach to.
+**project-rules** file (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`). The unit that evals attach to.
 
 **Artifact resolution**
 : Mapping each reference in a trace to a file on disk, deterministically — trace content plus
@@ -62,16 +62,16 @@ every reporter. An unresolved reference is a coverage row plus a warning, never 
 
 ## What is asserted
 
-**Criterion**
+**Eval**
 : One named check declared in an artifact's `metadata.evals` frontmatter. Either a string
 (shorthand for a judged assertion) or an object selecting a grader. See the
-[criteria schema](/moose-tracevals/reference/criteria-schema/).
+[evals schema](/moose-tracevals/reference/evals-schema/).
 
 **Assertion**
-: The sentence a criterion asserts held during the session. The thing a grader or the judge decides.
+: The sentence an eval asserts held during the session. The thing a grader or the judge decides.
 
 **Implicit eval**
-: The single judged eval an artifact gets when it declares **no** criteria, named
+: The single judged eval an artifact gets when it declares **no** evals, named
 `adheres-to-artifact`. Why a first run says something with zero configuration.
 
 **Severity**
@@ -83,7 +83,7 @@ pass. Defaults to `error`.
 *expected* to fail sometimes). Reported, never enforced. Added in artifact-evals `0.2`.
 
 **Eval plan**
-: The internal pairing of one criterion with one artifact, ready to be graded. Its fingerprint —
+: The internal pairing of one eval with one artifact, ready to be graded. Its fingerprint —
 assertion, evidence, examples, and artifact content — is part of the judge cache key.
 
 ---
@@ -91,8 +91,10 @@ assertion, evidence, examples, and artifact content — is part of the judge cac
 ## How it is decided
 
 **Grader**
-: The mechanism that decides a criterion. `llm` uses the ensemble judge; the other seven kinds are
-deterministic. See the [grader reference](/moose-tracevals/reference/graders/).
+: The mechanism that decides an eval. `ai` uses the ensemble judge, `human` queues it for a person,
+`command` runs an executable over the trace, and the remaining seven kinds are deterministic. The
+name is an open enum, validated against the grader registry at run time rather than by the schema.
+See the [grader reference](/moose-tracevals/reference/graders/).
 
 **Deterministic grader**
 : One that decides from the trace alone — no model call, no cost, same answer every time.
@@ -111,7 +113,7 @@ silently constrains everything.
 through confidence zones. See [How the judge decides](/moose-tracevals/judge/).
 
 **Ensemble**
-: The N independent judge runs for one criterion. Three by default (`judge.ensembleRuns`).
+: The N independent judge runs for one eval. Three by default (`judge.ensembleRuns`).
 
 **Verdict**
 : One run's structured answer: `claim`, `observed`, `match` (`pass` / `fail` / `partial`),
@@ -139,7 +141,7 @@ reported but does not route the outcome.
 
 | Outcome | Meaning | Fails the run? |
 |---|---|---|
-| `pass` | the criterion held | no |
+| `pass` | the eval held | no |
 | `fail` | violated by an `error`-severity finding | yes |
 | `error` | the check itself broke | yes |
 | `needs-review` | the judge did not reach confident agreement | yes, by default |
@@ -161,7 +163,7 @@ the previous one for the same session.
 ## Authoring and extending
 
 **`fill`**
-: The authoring command that proposes criteria for a project's artifacts and writes those that
+: The authoring command that proposes evals for a project's artifacts and writes those that
 survive the gate. **The only command that writes.** Never writes project rules.
 
 **Gate**

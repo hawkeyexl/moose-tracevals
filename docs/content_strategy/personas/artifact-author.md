@@ -19,13 +19,13 @@ pains:
   - no feedback loop between instructions and behavior
   - silent drift after a model or prompt change
   - half her instructions are untestable and she cannot tell which half
-  - authoring criteria by hand is slow enough to stall adoption
+  - authoring evals by hand is slow enough to stall adoption
   - will not install a tool that edits her files without a diff
 content_types: [quickstart, task-guide, worked-example, reference-lookup]
 journeys:
   - cuj-first-eval
-  - cuj-declare-criteria
-  - cuj-fill-criteria
+  - cuj-declare-evals
+  - cuj-fill-evals
   - cuj-cover-every-artifact
 lead: true
 ---
@@ -53,21 +53,21 @@ be told when a rule she added months ago quietly stops being followed.
   followed after a model change and produce no signal at all.
 - She suspects a good fraction of what she wrote cannot be checked by anything. Being told *which*
   parts is more useful to her than being given a soft assertion that always passes.
-- Hand-writing criteria for eleven artifacts is the step most likely to end her adoption right
+- Hand-writing evals for eleven artifacts is the step most likely to end her adoption right
   after her first successful run.
 
 **How she uses moose-tracevals:** she runs it against a session that already happened — no
 instrumentation, no re-running work — and reads the report. Once convinced, she runs `fill
---dry-run` across the project, reviews what it proposes, and keeps the criteria that are honest.
+--dry-run` across the project, reviews what it proposes, and keeps the evals that are honest.
 Later she wires it into CI, at which point she hands the pipeline half to Devin. She returns when
 she adds a skill or when a report surprises her.
 
-**What success looks like for her:** an artifact she edited last week shows a criterion that fails,
+**What success looks like for her:** an artifact she edited last week shows an eval that fails,
 and the failure names the tool call that broke the rule. That is the moment the tool stops being a
 demo.
 
 **Why she is the lead persona:** she is the primary adopter and the only persona who touches every
-layer — install, artifact resolution, criteria authoring, grader choice, reporting, and eventually
+layer — install, artifact resolution, evals authoring, grader choice, reporting, and eventually
 CI. Her backbone journey [`cuj-first-eval`](../journeys/cuj-first-eval.md) threads through all of
 them in a single line, and every other persona either serves her or intersects her.
 

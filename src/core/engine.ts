@@ -1,12 +1,12 @@
 /**
  * Orchestration: parse trace → resolve artifacts → plan evals → deterministic
- * graders → LLM judge → aggregate. The judge is injectable so the engine
+ * graders → AI judge → aggregate. The judge is injectable so the engine
  * tests fully offline.
  */
 import { parseTraceFile } from "../trace/claude.js";
 import { resolveArtifacts } from "../artifacts/resolve.js";
 import { planEvals, type EvalPlan } from "./plan.js";
-import { graderFor } from "../graders/registry.js";
+import { graderFor, listGraderKinds } from "../graders/registry.js";
 import { renderTrace } from "../judge/render.js";
 import type { TraceJudge } from "../judge/trace-judge.js";
 import type { TracevalsConfig } from "./config.js";
@@ -37,7 +37,7 @@ export async function runEvals(options: EngineOptions): Promise<RunReport> {
   const plans = await planEvals(resolved.artifacts);
 
   const results: EvalResult[] = [];
-  const llmPlans: EvalPlan[] = [];
+  const aiPlans: EvalPlan[] = [];
 
   for (const plan of plans) {
     const base = {
@@ -57,32 +57,54 @@ export async function runEvals(options: EngineOptions): Promise<RunReport> {
       results.push({
         ...base,
         outcome: "skipped",
-        skipReason: "artifact skipped via metadata.evals.skip",
+        skipReason: plan.skipReason ?? "eval skipped",
         durationMs: 0,
       });
       continue;
     }
-    if (plan.grader === "llm") {
-      llmPlans.push(plan);
+    if (plan.grader === "ai") {
+      aiPlans.push(plan);
+      continue;
+    }
+    // `human` is judged per session: every trace is new, so unlike the page
+    // side there is no verdict to cache and nothing to defer to a later run.
+    // It reports in deterministic-only runs too — a review queue is not an
+    // inference call.
+    if (plan.grader === "human") {
+      results.push({
+        ...base,
+        outcome: "needs-review",
+        skipReason: "awaiting human review",
+        durationMs: 0,
+      });
       continue;
     }
 
     const grader = graderFor(plan.grader);
     if (!grader) {
+      // The grader vocabulary is an open enum: any kebab name validates, and
+      // the registry is the authority that rejects it. This is where a stale
+      // `llm` — the pre-1.0 spelling of `ai` — surfaces.
       results.push({
         ...base,
         outcome: "error",
-        error: `unknown grader kind "${plan.grader}"`,
+        error: `unknown grader kind "${plan.grader}"; the grader registry knows ${listGraderKinds().sort().join(", ")}, "ai", and "human"`,
         durationMs: 0,
       });
       continue;
     }
     const graded = Date.now();
     // A grader that throws must fail its own eval, not the whole run: one
-    // malformed criterion should never cost the report every other verdict.
+    // malformed eval should never cost the report every other verdict.
     let result;
     try {
-      result = await grader.grade({ trace, plan });
+      result = await grader.grade({
+        trace,
+        plan,
+        ...(options.projectDir !== undefined
+          ? { projectRoot: options.projectDir }
+          : {}),
+      });
     } catch (err) {
       results.push({
         ...base,
@@ -121,12 +143,12 @@ export async function runEvals(options: EngineOptions): Promise<RunReport> {
     });
   }
 
-  if (llmPlans.length > 0) {
+  if (aiPlans.length > 0) {
     if (options.deterministicOnly || options.judge === undefined) {
       const skipReason = options.deterministicOnly
-        ? "llm evals skipped (deterministic-only run)"
-        : "llm evals skipped (no judge provided)";
-      for (const plan of llmPlans) {
+        ? "ai evals skipped (deterministic-only run)"
+        : "ai evals skipped (no judge provided)";
+      for (const plan of aiPlans) {
         results.push({
           evalName: plan.evalName,
           artifact: plan.artifact.path,
@@ -141,9 +163,9 @@ export async function runEvals(options: EngineOptions): Promise<RunReport> {
       }
     } else {
       const rendered = renderTrace(trace, config.render);
-      const judged = await options.judge(llmPlans, rendered);
+      const judged = await options.judge(aiPlans, rendered);
       judged.forEach((j, i) => {
-        const plan = llmPlans[i];
+        const plan = aiPlans[i];
         results.push({
           evalName: j.evalName,
           artifact: j.artifact,
@@ -154,6 +176,7 @@ export async function runEvals(options: EngineOptions): Promise<RunReport> {
           outcome: j.outcome,
           ...(j.consensus !== undefined ? { consensus: j.consensus } : {}),
           ...(j.skipReason !== undefined ? { skipReason: j.skipReason } : {}),
+          ...(j.error !== undefined ? { error: j.error } : {}),
           costUsd: j.costUsd,
           durationMs: j.durationMs,
         });

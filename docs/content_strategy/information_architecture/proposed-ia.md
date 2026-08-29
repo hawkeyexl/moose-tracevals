@@ -44,19 +44,19 @@ Home — router + a proof that runs offline
 │
 ├─ Get started            (universal on-ramp)     → cuj-first-eval
 │
-├─ Declare what to check  (Priya)                 → cuj-declare-criteria, cuj-fill-criteria,
+├─ Declare what to check  (Priya)                 → cuj-declare-evals, cuj-fill-evals,
 │                                                    cuj-cover-every-artifact
 │
 ├─ Run it in CI           (Devin)                 → cuj-gate-ci, cuj-consume-results
 │
-├─ Trust the judge        (Sam)                   → cuj-calibrate-judge, cuj-evolve-criteria
+├─ Trust the judge        (Sam)                   → cuj-calibrate-judge, cuj-evolve-evals
 │
 ├─ Read a failing eval    (Theo)                  → cuj-triage-failure   (highest traffic)
 │
 ├─ Build on moose-tracevals    (Rin)                   → cuj-extend
 │
 └─ Reference (lookup shelf)                       → CLI · Configuration · Graders ·
-                                                     Criteria schema · Reports & exit codes ·
+                                                     Evals schema · Reports & exit codes ·
                                                      Traces · API · Glossary
 ```
 
@@ -87,7 +87,7 @@ has outgrown its pages.
 get-started/
   index                              install → find a session → first run → read the report
 declare/
-  index                              instruction → criterion; judged or deterministic; severity
+  index                              instruction → eval; judged or deterministic; severity
   fill                               propose across a project, the gate, review the diff
   coverage                           the coverage table, resolution order, unresolved refs, skip
 ci/
@@ -109,11 +109,11 @@ reference/
   cli                                run / fill / list, every flag and default
   configuration                      every config key, including the ones with no CLI flag
   graders                            seven kinds: options, validation rules, failure messages
-  criteria-schema                    the metadata.evals block, both published versions
+  evals-schema                    the metadata.evals block, both published versions
   report-and-exit-codes              human / json / markdown shapes, exit codes, history
   traces                             formats, discovery, project slug, MOOSE_TRACEVALS_HOME
   api                                the export surface, mapped
-  glossary                           trace, artifact, criterion, plan, consensus, zone…
+  glossary                           trace, artifact, eval, plan, consensus, zone…
 ```
 
 **24 pages, all written.** Every one of the ten journeys now reaches its stated `success_criteria`
@@ -130,13 +130,13 @@ and that one describes its history.
 | CUJ | Primary section | Also uses |
 |---|---|---|
 | `cuj-first-eval` | `get-started/` | `/`, `declare/coverage`, `reference/cli` |
-| `cuj-declare-criteria` | `declare/` | `reference/graders`, `reference/criteria-schema` |
-| `cuj-fill-criteria` | `declare/fill` | `reference/cli` |
+| `cuj-declare-evals` | `declare/` | `reference/graders`, `reference/evals-schema` |
+| `cuj-fill-evals` | `declare/fill` | `reference/cli` |
 | `cuj-cover-every-artifact` | `declare/coverage` | `reference/traces`, `reference/report-and-exit-codes` |
 | `cuj-gate-ci` | `ci/` | `reference/configuration` |
 | `cuj-consume-results` | `ci/consume-results` | `reference/report-and-exit-codes`, `extend/` |
 | `cuj-calibrate-judge` | `judge/` | `reference/configuration` |
-| `cuj-evolve-criteria` | `judge/schema-versioning` | `reference/criteria-schema`, `triage/` |
+| `cuj-evolve-evals` | `judge/schema-versioning` | `reference/evals-schema`, `triage/` |
 | `cuj-triage-failure` | `triage/` | `triage/faq` |
 | `cuj-extend` | `extend/` | `reference/graders`, `reference/api`, `reference/traces` |
 
@@ -150,7 +150,7 @@ Every journey has a primary home, and no page belongs to zero journeys.
 - **Commands are shown as the installed binary**, not as `node dist/cli.js` — a form that only works
   inside a clone of this repository and is unusable by anyone consuming the published package.
 - **Six substantial surfaces get their first documentation**: artifact coverage, the report
-  structure, history and regressions, judge calibration, criteria-schema versioning, and the
+  structure, history and regressions, judge calibration, evals-schema versioning, and the
   programmatic API.
 
 ## Conventions for pages in this structure

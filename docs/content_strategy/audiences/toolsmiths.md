@@ -53,11 +53,11 @@ results structurally, or teach it to read a trace format it does not know yet.
 ## Defining pains
 
 - **A large public surface with no map.** The package exports a substantial API across traces,
-  artifacts, criteria, graders, judge, config, engine, reporters, and commands. Nothing says which
+  artifacts, evals, graders, judge, config, engine, reporters, and commands. Nothing says which
   parts are the intended entry points and which are internals that happen to be reachable.
 - **An undocumented extension point.** `registerGrader()` is exported and is exactly what a custom
   check needs, but a grader has a two-part contract, grading *and* option validation, and omitting
-  the second half means the criterion can never be proposed by `fill`. None of that is discoverable
+  the second half means the eval can never be proposed by `fill`. None of that is discoverable
   from the type alone.
 - **An adapter seam whose shape is implied.** Support for other trace formats is a deferred design
   decision, and someone attempting it needs to know what the normalized model requires and what
@@ -78,7 +78,7 @@ results structurally, or teach it to read a trace format it does not know yet.
 - **Prerequisites they bring:** TypeScript, ESM module resolution, npm package consumption, JSON
   Schema, and dependency injection for test seams. They will read a type signature as
   documentation.
-- **Subject dependencies:** the entire domain vocabulary (*trace*, *artifact*, *criterion*, *plan*,
+- **Subject dependencies:** the entire domain vocabulary (*trace*, *artifact*, *eval*, *plan*,
   *grader*, *finding*, *outcome*) must already be established. This audience's content sits
   at the top of the dependency stack and should assume the journey pages, linking back rather than
   restating. A custom grader cannot be explained before the built-in graders are.

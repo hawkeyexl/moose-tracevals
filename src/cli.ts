@@ -86,7 +86,7 @@ addRunFlags(
 program
   .command("fill [paths...]")
   .description(
-    "Propose eval criteria for skills, agent definitions, and project rules, and write those above the confidence threshold",
+    "Propose evals for skills, agent definitions, and project rules, and write those above the confidence threshold",
   )
   .option("--project <dir>", "project root to scan (default: current directory)")
   .option("--dry-run", "report proposals without writing them")
@@ -96,8 +96,8 @@ program
     (v) => parseFloat(v),
   )
   .option(
-    "--max-criteria <n>",
-    "maximum criteria per artifact, including existing ones",
+    "--max-evals <n>",
+    "maximum evals per artifact, including existing ones",
     (v) => parseInt(v, 10),
   )
   .option("--max-cost-usd <usd>", "proposal cost budget", (v) => parseFloat(v))
@@ -109,7 +109,7 @@ program
     project?: string;
     dryRun?: boolean;
     confidence?: number;
-    maxCriteria?: number;
+    maxEvals?: number;
     maxCostUsd?: number;
     cache?: boolean;
     provider?: string;
@@ -132,7 +132,7 @@ program
       }
     };
     numeric("--confidence", opts.confidence, 0, 1);
-    numeric("--max-criteria", opts.maxCriteria, 1, Number.MAX_SAFE_INTEGER);
+    numeric("--max-evals", opts.maxEvals, 1, Number.MAX_SAFE_INTEGER);
     numeric("--max-cost-usd", opts.maxCostUsd, 0, Number.MAX_SAFE_INTEGER);
 
     const { report, rendered } = await runFill({
@@ -140,7 +140,7 @@ program
       ...(opts.project !== undefined ? { project: opts.project } : {}),
       ...(opts.dryRun !== undefined ? { dryRun: opts.dryRun } : {}),
       ...(opts.confidence !== undefined ? { confidence: opts.confidence } : {}),
-      ...(opts.maxCriteria !== undefined ? { maxCriteria: opts.maxCriteria } : {}),
+      ...(opts.maxEvals !== undefined ? { maxEvals: opts.maxEvals } : {}),
       ...(opts.maxCostUsd !== undefined ? { maxCostUsd: opts.maxCostUsd } : {}),
       ...(opts.cache === false ? { noCache: true } : {}),
       ...(opts.provider !== undefined ? { provider: opts.provider } : {}),

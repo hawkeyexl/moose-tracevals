@@ -25,9 +25,9 @@ in a pipeline, is in [Exit codes & reports](/moose-tracevals/ci/exit-codes-and-r
 
 | Outcome | Meaning | Fails the run? |
 |---|---|---|
-| `pass` | the criterion held | no |
-| `fail` | the criterion was violated by an `error`-severity finding | yes |
-| `error` | the check itself broke — invalid options, an invalid criteria block, an unknown grader kind | yes |
+| `pass` | the eval held | no |
+| `fail` | the eval was violated by an `error`-severity finding | yes |
+| `error` | the check itself broke — invalid options, an invalid evals block, an unknown grader kind | yes |
 | `needs-review` | the judge did not reach confident agreement | yes, by default |
 | `skipped` | the check did not run; the reason is always given | no |
 
@@ -73,11 +73,11 @@ The complete `RunReport`:
 
 | Field | Type | Notes |
 |---|---|---|
-| `evalName` | string | The criterion's name, or `adheres-to-artifact` / `evals-block-valid`. |
+| `evalName` | string | The eval's name, or `adheres-to-artifact` / `evals-block-valid`. |
 | `artifact` | string | Absolute path to the artifact file. |
 | `artifactName` | string | Its display name — `fix-bug`, `CLAUDE.md`. |
 | `artifactType` | string | `skill`, `agent`, or `project-rules`. |
-| `grader` | string | The grader kind, `llm` for judged. |
+| `grader` | string | The grader kind, `ai` for judged. |
 | `implicit` | boolean | `true` for the whole-artifact eval. |
 | `outcome` | string | One of the five outcomes above. |
 | `findings` | array? | Deterministic findings: `{ evalName, artifact, message, severity }`. |
@@ -143,8 +143,11 @@ claude-code · claude-opus-4-8 · 2 turn(s) · /work/demo-project
   PASS   fix-bug › used-read
   FAIL   fix-bug › forbidden-tool
          [error] tool Bash was used 1 time(s) but must not be
+  PASS   fix-bug › no-force-push
+  REVIEW fix-bug › refactor-preserved-intent
+         awaiting human review
   SKIP   CLAUDE.md › adheres-to-artifact (implicit)
-         llm evals skipped (deterministic-only run)
+         ai evals skipped (deterministic-only run)
 
 Artifact coverage
   ✓ skill: fix-bug   /work/demo-project/.claude/skills/fix-bug/SKILL.md
@@ -153,14 +156,14 @@ Artifact coverage
 Warnings
   ! 1 unparseable JSONL line(s) were skipped
 
-7 eval(s): 1 pass, 1 fail, 0 error, 0 needs-review, 5 skipped
+9 eval(s): 2 pass, 1 fail, 0 error, 1 needs-review, 5 skipped
 ```
 
 Outcome labels are `PASS`, `FAIL`, `ERROR`, `REVIEW`, `SKIP`. For a **non-passing judged** eval, two
 extra lines appear: the vote split and the first `observed`.
 
 ```
-  REVIEW fix-bug › criterion-3
+  REVIEW fix-bug › eval-5
          votes pass:1 fail:2 partial:0 error:0 · confidence 0.87
          The session edited src/app.ts at turn 2 without a preceding test run.
 ```

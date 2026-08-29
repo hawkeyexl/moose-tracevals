@@ -19,9 +19,9 @@ steps:
 
 # CUJ: Decide whether the judge can be trusted, then tune it
 
-**Scope:** the trustworthiness of judged evals and the knobs that govern them. What a criterion
-should assert in the first place is [`cuj-declare-criteria`](cuj-declare-criteria.md); the schema
-that carries it is [`cuj-evolve-criteria`](cuj-evolve-criteria.md).
+**Scope:** the trustworthiness of judged evals and the knobs that govern them. What an eval
+should assert in the first place is [`cuj-declare-evals`](cuj-declare-evals.md); the schema
+that carries it is [`cuj-evolve-evals`](cuj-evolve-evals.md).
 
 **Trigger.** Someone proposes letting a judged eval block a merge. Sam now has to decide whether an
 LLM verdict is evidence or decoration, and the answer determines whether judged evals are used at

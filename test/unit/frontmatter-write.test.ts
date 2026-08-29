@@ -1,16 +1,16 @@
 import { describe, expect, it } from "vitest";
 import { parse as parseYaml } from "yaml";
 import {
-  appendArtifactCriteria,
-  type NewCriterion,
-} from "../../src/criteria/write.js";
-import { extractCriteria } from "../../src/criteria/extract.js";
+  appendArtifactEvals,
+  type NewEvalEntry,
+} from "../../src/evals/write.js";
+import { extractEvals } from "../../src/evals/extract.js";
 import { TracevalsError } from "../../src/types.js";
 import { makeArtifact } from "../helpers.js";
 
-const ONE: NewCriterion[] = [
+const ONE: NewEvalEntry[] = [
   {
-    name: "reads-before-editing",
+    id: "reads-before-editing",
     assertion: "The session read a source file before editing it.",
     grader: "tool-usage",
     options: { tool: "Read", expect: "used" },
@@ -25,32 +25,31 @@ function frontmatterOf(content: string): Record<string, unknown> {
   return parseYaml(match![1]!) as Record<string, unknown>;
 }
 
-describe("appendArtifactCriteria", () => {
+describe("appendArtifactEvals", () => {
   it("synthesizes a block for an artifact with no frontmatter", async () => {
     // The common case: 3 of 5 fixture artifacts carry no frontmatter at all.
     const body = "# Demo Project Rules\n\n- Run tests before declaring done.\n";
-    const result = appendArtifactCriteria(body, "CLAUDE.md", ONE);
+    const result = appendArtifactEvals(body, "CLAUDE.md", ONE);
 
     expect(result.startsWith("---\n")).toBe(true);
     expect(result.endsWith(body)).toBe(true);
 
     const data = frontmatterOf(result);
+    // The list is the value of `evals`: the 0.2 `criteria` container is gone.
     expect(data).toEqual({
       metadata: {
-        evals: {
-          criteria: [
-            {
-              name: "reads-before-editing",
-              assertion: "The session read a source file before editing it.",
-              grader: "tool-usage",
-              options: { tool: "Read", expect: "used" },
-              examples: {
-                pass: ["Read then Edit"],
-                fail: ["Edit with no prior Read"],
-              },
+        evals: [
+          {
+            id: "reads-before-editing",
+            assertion: "The session read a source file before editing it.",
+            grader: "tool-usage",
+            options: { tool: "Read", expect: "used" },
+            examples: {
+              pass: ["Read then Edit"],
+              fail: ["Edit with no prior Read"],
             },
-          ],
-        },
+          },
+        ],
       },
     });
   });
@@ -65,32 +64,31 @@ describe("appendArtifactCriteria", () => {
       "You write docs.",
       "",
     ].join("\n");
-    const result = appendArtifactCriteria(source, "doc-writer.md", ONE);
+    const result = appendArtifactEvals(source, "doc-writer.md", ONE);
 
     expect(result.endsWith("\n\nYou write docs.\n")).toBe(true);
     const keys = Object.keys(frontmatterOf(result));
     expect(keys).toEqual(["name", "description", "metadata"]);
   });
 
-  it("appends to existing criteria without disturbing them or their comments", () => {
+  it("appends to existing evals without disturbing them or their comments", () => {
     const source = [
       "---",
       "name: fix-bug",
       "metadata:",
       "  evals:",
-      "    criteria:",
-      "      # keep this comment",
-      "      - name: used-read",
-      "        assertion: The session read a file.",
-      "        grader: tool-usage",
-      "        options:",
-      "          tool: Read",
+      "    # keep this comment",
+      "    - id: used-read",
+      "      assertion: The session read a file.",
+      "      grader: tool-usage",
+      "      options:",
+      "        tool: Read",
       "---",
       "body text",
       "",
     ].join("\n");
-    const result = appendArtifactCriteria(source, "SKILL.md", [
-      { name: "no-shell", assertion: "No shell commands were run." },
+    const result = appendArtifactEvals(source, "SKILL.md", [
+      { id: "no-shell", assertion: "No shell commands were run." },
     ]);
 
     expect(result).toContain("# keep this comment");
@@ -98,17 +96,16 @@ describe("appendArtifactCriteria", () => {
     expect(result).toContain("no-shell");
     expect(result.endsWith("body text\n")).toBe(true);
 
-    const criteria = (
-      frontmatterOf(result).metadata as { evals: { criteria: unknown[] } }
-    ).evals.criteria;
-    expect(criteria).toHaveLength(2);
+    const evals = (frontmatterOf(result).metadata as { evals: unknown[] })
+      .evals;
+    expect(evals).toHaveLength(2);
   });
 
   it("preserves a BOM and CRLF line endings", () => {
     // Built as a literal: this repo has no .gitattributes, so a fixture's
     // line endings would depend on the runner's core.autocrlf.
     const source = "﻿---\r\nname: fix-bug\r\n---\r\nbody\r\n";
-    const result = appendArtifactCriteria(source, "SKILL.md", ONE);
+    const result = appendArtifactEvals(source, "SKILL.md", ONE);
 
     expect(result.charCodeAt(0)).toBe(0xfeff);
     expect(result.endsWith("---\r\nbody\r\n")).toBe(true);
@@ -117,7 +114,7 @@ describe("appendArtifactCriteria", () => {
 
   it("preserves a `...` closing fence and content after it", () => {
     const source = "---\nname: x\n...\ntail\n";
-    const result = appendArtifactCriteria(source, "x.md", ONE);
+    const result = appendArtifactEvals(source, "x.md", ONE);
     expect(result.endsWith("...\ntail\n")).toBe(true);
   });
 
@@ -133,14 +130,14 @@ describe("appendArtifactCriteria", () => {
       "body",
       "",
     ].join("\n");
-    expect(() => appendArtifactCriteria(source, "SKILL.md", ONE)).toThrow(
+    expect(() => appendArtifactEvals(source, "SKILL.md", ONE)).toThrow(
       TracevalsError,
     );
   });
 
   it("refuses non-YAML frontmatter rather than adding a second block", () => {
     const toml = '+++\nname = "x"\n+++\nbody\n';
-    expect(() => appendArtifactCriteria(toml, "x.md", ONE)).toThrow(
+    expect(() => appendArtifactEvals(toml, "x.md", ONE)).toThrow(
       TracevalsError,
     );
   });
@@ -150,32 +147,28 @@ describe("appendArtifactCriteria", () => {
       "---",
       "metadata:",
       "  evals:",
-      "    criteria:",
-      "      - A plain shorthand assertion.",
+      "    - A plain shorthand assertion.",
       "---",
       "body",
       "",
     ].join("\n");
-    // Shorthand entries are unnamed, so appending a named criterion is fine.
-    const result = appendArtifactCriteria(source, "SKILL.md", ONE);
-    const criteria = (
-      frontmatterOf(result).metadata as { evals: { criteria: unknown[] } }
-    ).evals.criteria;
-    expect(criteria).toHaveLength(2);
+    // Shorthand entries are id-less, so appending an id'd eval is fine.
+    const result = appendArtifactEvals(source, "SKILL.md", ONE);
+    const evals = (frontmatterOf(result).metadata as { evals: unknown[] })
+      .evals;
+    expect(evals).toHaveLength(2);
   });
 
   it("produces output the real reader accepts", async () => {
-    // The assertion that matters: round-trip through extractCriteria, which
+    // The assertion that matters: round-trip through extractEvals, which
     // validates against the published schema.
-    const result = appendArtifactCriteria("# Rules\n", "CLAUDE.md", ONE);
-    const extracted = await extractCriteria(makeArtifact({ content: result }));
+    const result = appendArtifactEvals("# Rules\n", "CLAUDE.md", ONE);
+    const extracted = await extractEvals(makeArtifact({ content: result }));
 
     expect(extracted.errors).toEqual([]);
     expect(extracted.declared).toBe(true);
-    expect(extracted.criteria.map((c) => c.name)).toEqual([
-      "reads-before-editing",
-    ]);
-    expect(extracted.criteria[0]?.grader).toBe("tool-usage");
+    expect(extracted.evals.map((e) => e.id)).toEqual(["reads-before-editing"]);
+    expect(extracted.evals[0]?.grader).toBe("tool-usage");
   });
 
   it("fills in a metadata key that is present but empty", () => {
@@ -183,11 +176,10 @@ describe("appendArtifactCriteria", () => {
     // reports such a file as healthy, so the writer must not refuse it.
     for (const head of ["metadata:", "metadata:\n  evals:"]) {
       const source = `---\nname: x\n${head}\n---\nbody\n`;
-      const result = appendArtifactCriteria(source, "SKILL.md", ONE);
-      const criteria = (
-        frontmatterOf(result).metadata as { evals: { criteria: unknown[] } }
-      ).evals.criteria;
-      expect(criteria).toHaveLength(1);
+      const result = appendArtifactEvals(source, "SKILL.md", ONE);
+      const evals = (frontmatterOf(result).metadata as { evals: unknown[] })
+        .evals;
+      expect(evals).toHaveLength(1);
       expect(result.endsWith("body\n")).toBe(true);
     }
   });
@@ -196,7 +188,7 @@ describe("appendArtifactCriteria", () => {
     const description =
       "Use this skill when the user asks about provisioning infrastructure, databases, caching layers, or any third-party service credentials for their project.";
     const source = `---\nname: x\ndescription: ${description}\n---\nbody\n`;
-    const result = appendArtifactCriteria(source, "SKILL.md", ONE);
+    const result = appendArtifactEvals(source, "SKILL.md", ONE);
 
     expect(result).toContain(`description: ${description}`);
   });
@@ -205,13 +197,78 @@ describe("appendArtifactCriteria", () => {
     // A leading `---` that is really a thematic break, so the "block" is a
     // sequence. The yaml library throws its own error type here.
     const source = "---\n- one\n- two\n---\nbody\n";
-    expect(() => appendArtifactCriteria(source, "x.md", ONE)).toThrow(
+    expect(() => appendArtifactEvals(source, "x.md", ONE)).toThrow(
       TracevalsError,
     );
   });
 
   it("is idempotent in shape: appending nothing returns the source unchanged", () => {
     const source = "---\nname: x\n---\nbody\n";
-    expect(appendArtifactCriteria(source, "x.md", [])).toBe(source);
+    expect(appendArtifactEvals(source, "x.md", [])).toBe(source);
+  });
+
+  it("records provenance", () => {
+    const result = appendArtifactEvals("# Rules\n", "CLAUDE.md", ONE, {
+      generatedBy: "mock:mock-model",
+      confidence: { "reads-before-editing": 0.9 },
+    });
+    const provenance = (frontmatterOf(result).metadata as {
+      "eval-provenance": Array<Record<string, unknown>>;
+    })["eval-provenance"];
+    expect(provenance).toEqual([
+      {
+        "generated-by": "mock:mock-model",
+        evals: ["reads-before-editing"],
+        confidence: { "reads-before-editing": 0.9 },
+      },
+    ]);
+  });
+
+  it("fills in evals and confidence on a provenance entry that omits them", () => {
+    // Both keys are optional on the vocabulary's provenance entry, so a
+    // hand-written `- generated-by: x` is legal. Skipping the write there would
+    // leave an entry claiming nothing — worse than no entry at all.
+    const source = [
+      "---",
+      "name: a",
+      "metadata:",
+      "  eval-provenance:",
+      "    - generated-by: mock:mock-model",
+      "---",
+      "body",
+      "",
+    ].join("\n");
+    const result = appendArtifactEvals(source, "a.md", ONE, {
+      generatedBy: "mock:mock-model",
+      confidence: { "reads-before-editing": 0.9 },
+    });
+    const provenance = (frontmatterOf(result).metadata as {
+      "eval-provenance": Array<Record<string, unknown>>;
+    })["eval-provenance"];
+    expect(provenance).toHaveLength(1);
+    expect(provenance[0]).toEqual({
+      "generated-by": "mock:mock-model",
+      evals: ["reads-before-editing"],
+      confidence: { "reads-before-editing": 0.9 },
+    });
+  });
+
+  it("refuses a provenance entry whose evals is not a list", () => {
+    const source = [
+      "---",
+      "metadata:",
+      "  eval-provenance:",
+      "    - generated-by: mock:mock-model",
+      "      evals: not-a-list",
+      "---",
+      "body",
+      "",
+    ].join("\n");
+    expect(() =>
+      appendArtifactEvals(source, "a.md", ONE, {
+        generatedBy: "mock:mock-model",
+        confidence: { "reads-before-editing": 0.9 },
+      }),
+    ).toThrow(TracevalsError);
   });
 });

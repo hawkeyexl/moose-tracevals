@@ -1,6 +1,6 @@
 ---
 title: Reference
-description: Complete lookup reference for the moose-tracevals CLI, configuration file, deterministic graders, criteria schema, and report formats.
+description: Complete lookup reference for the moose-tracevals CLI, configuration file, deterministic graders, evals schema, and report formats.
 sidebar:
   order: 1
 ---
@@ -25,13 +25,13 @@ to reach for one. For that, start from a journey: [Get started](/moose-tracevals
   />
   <LinkCard
     title="Graders"
-    description="All seven deterministic kinds: options, validation rules, and exact failure messages."
+    description="Every kind: the ai, human, and command families, and the seven deterministic ones with their options and failure messages."
     href="/moose-tracevals/reference/graders/"
   />
   <LinkCard
-    title="Criteria schema"
+    title="Evals schema"
     description="The metadata.evals frontmatter block, field by field, across both published versions."
-    href="/moose-tracevals/reference/criteria-schema/"
+    href="/moose-tracevals/reference/evals-schema/"
   />
   <LinkCard
     title="Reports & exit codes"
@@ -47,5 +47,5 @@ to reach for one. For that, start from a journey: [Get started](/moose-tracevals
   bypassing it, so the default shown for a flag is the config default it would replace.
 - **Unknown configuration keys are errors.** The config schema rejects additional properties at
   every level, so a typo fails loudly instead of being ignored.
-- **Deterministic grader options are validated before grading.** A malformed criterion produces an
+- **Deterministic grader options are validated before grading.** A malformed eval produces an
   `error` outcome naming the offending option, never a silent pass.

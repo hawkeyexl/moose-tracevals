@@ -140,7 +140,7 @@ If none matched, the row reads `○ project-rules: project rules  no CLAUDE.md o
 
 ## What the implicit eval covers
 
-A resolved artifact that declares **no** criteria is still evaluated, through one judged eval named
+A resolved artifact that declares **no** evals is still evaluated, through one judged eval named
 `adheres-to-artifact`. So a `✓` row always means the artifact was checked, even when you have
 authored nothing for it.
 
@@ -149,7 +149,7 @@ that it was skipped.
 
 ## Skip an artifact deliberately
 
-To take an artifact out of evaluation without deleting its criteria:
+To take an artifact out of evaluation without deleting its evals:
 
 ```yaml
 metadata:
@@ -157,9 +157,9 @@ metadata:
     skip: true
 ```
 
-It is then reported as `skipped` with the reason `artifact skipped via metadata.evals.skip`, which
+It is then reported as `skipped` with the reason `artifact skipped via metadata.eval-skip`, which
 keeps it visible rather than silently absent. Full field reference in the
-[criteria schema](/moose-tracevals/reference/criteria-schema/).
+[evals schema](/moose-tracevals/reference/evals-schema/).
 
 ## Duplicate references collapse
 

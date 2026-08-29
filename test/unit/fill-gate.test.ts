@@ -2,12 +2,12 @@ import { describe, expect, it } from "vitest";
 import {
   ALLOWED_GRADERS,
   gateProposals,
-  type ProposedCriterion,
+  type ProposedEval,
 } from "../../src/fill/gate.js";
 import { artifactFacts } from "../../src/fill/facts.js";
 import { makeArtifact } from "../helpers.js";
 
-function proposal(over: Partial<ProposedCriterion> = {}): ProposedCriterion {
+function proposal(over: Partial<ProposedEval> = {}): ProposedEval {
   return {
     name: "reads-first",
     assertion: "The session read a file before editing.",
@@ -23,7 +23,7 @@ const base = {
   artifactType: "skill" as const,
   threshold: 0.7,
   existingNames: [] as string[],
-  maxCriteria: 8,
+  maxEvals: 8,
   vocabulary: { tools: new Set(["Read", "Edit", "Bash"]), skills: new Set(["fix-bug"]) },
 };
 
@@ -45,7 +45,7 @@ describe("gateProposals", () => {
 
   it("rejects a grader the artifact type may not carry", () => {
     // cost/turn-count/json-output are whole-session graders: wrong scope for a
-    // criterion that lives in one artifact among many.
+    // evalEntry that lives in one artifact among many.
     for (const grader of ["cost", "turn-count", "json-output"]) {
       const result = gateProposals([proposal({ grader, options: { maxUsd: 1 } })], base);
       expect(reasons(result), grader).toEqual(["grader-not-allowed"]);
@@ -72,7 +72,7 @@ describe("gateProposals", () => {
   });
 
   it("rejects targets that do not exist in the project", () => {
-    // A hallucinated tool name would produce a criterion that can never pass,
+    // A hallucinated tool name would produce a evalEntry that can never pass,
     // regardless of how confident the model claims to be.
     expect(
       reasons(gateProposals([proposal({ options: { tool: "FileEditor" }, confidence: 0.99 })], base)),
@@ -116,7 +116,7 @@ describe("gateProposals", () => {
   });
 
   it("forces includeSidechains for agent definitions", () => {
-    // A criterion in an agent definition describes what the subagent did, and
+    // A evalEntry in an agent definition describes what the subagent did, and
     // subagent tool calls are exactly the sidechain ones.
     const result = gateProposals([proposal()], { ...base, artifactType: "agent" });
     expect(result.accepted[0]?.options).toMatchObject({
@@ -133,7 +133,7 @@ describe("gateProposals", () => {
     const many = [0.95, 0.75, 0.85].map((confidence, i) =>
       proposal({ name: `c-${i}`, confidence }),
     );
-    const result = gateProposals(many, { ...base, maxCriteria: 2 });
+    const result = gateProposals(many, { ...base, maxEvals: 2 });
     expect(result.accepted.map((c) => c.confidence)).toEqual([0.95, 0.85]);
     expect(result.capped.map((c) => c.confidence)).toEqual([0.75]);
   });
@@ -141,7 +141,7 @@ describe("gateProposals", () => {
   it("reports low confidence separately from being capped", () => {
     const result = gateProposals(
       [proposal({ name: "a", confidence: 0.9 }), proposal({ name: "b", confidence: 0.2 })],
-      { ...base, maxCriteria: 1 },
+      { ...base, maxEvals: 1 },
     );
     expect(result.accepted.map((c) => c.name)).toEqual(["a"]);
     expect(reasons(result)).toEqual(["low-confidence"]);
@@ -149,14 +149,14 @@ describe("gateProposals", () => {
   });
 
   it("exposes the allowlist it enforces", () => {
-    expect(ALLOWED_GRADERS.skill).toContain("llm");
+    expect(ALLOWED_GRADERS.skill).toContain("ai");
     expect(ALLOWED_GRADERS.skill).not.toContain("cost");
     expect(ALLOWED_GRADERS["project-rules"]).toContain("skill-invoked");
   });
 
-  it("accepts llm-graded proposals without options", () => {
+  it("accepts ai-graded proposals without options", () => {
     const result = gateProposals(
-      [proposal({ grader: "llm", options: undefined })],
+      [proposal({ grader: "ai", options: undefined })],
       base,
     );
     expect(result.accepted).toHaveLength(1);

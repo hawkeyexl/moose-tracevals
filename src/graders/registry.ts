@@ -7,6 +7,7 @@ import { turnCountGrader } from "./turn-count.js";
 import { costGrader } from "./cost.js";
 import { regexGrader } from "./regex.js";
 import { jsonOutputGrader } from "./json-output.js";
+import { commandGrader } from "./command.js";
 
 const graders = new Map<string, TraceGrader>(
   [
@@ -17,6 +18,7 @@ const graders = new Map<string, TraceGrader>(
     costGrader,
     regexGrader,
     jsonOutputGrader,
+    commandGrader,
   ].map((g) => [g.kind, g]),
 );
 

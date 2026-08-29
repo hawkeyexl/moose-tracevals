@@ -45,8 +45,8 @@ An eval has five possible outcomes, not two:
 
 | Outcome | Meaning | Counts as failure? |
 |---|---|---|
-| `pass` | the criterion held | no |
-| `fail` | the criterion was violated | yes |
+| `pass` | the eval held | no |
+| `fail` | the eval was violated | yes |
 | `error` | the check itself broke | yes |
 | `needs-review` | the judge did not reach confident agreement | **yes, by default** |
 | `skipped` | the check did not run | no |
@@ -108,7 +108,9 @@ The markdown format renders as tables:
 |---|---|---|---|---|
 | pass | fix-bug | used-read | tool-usage |  |
 | fail | fix-bug | forbidden-tool | tool-usage | tool Bash was used 1 time(s) but must not be |
-| skipped | CLAUDE.md | adheres-to-artifact (implicit) | llm | llm evals skipped (deterministic-only run) |
+| pass | fix-bug | no-force-push | command |  |
+| needs-review | fix-bug | refactor-preserved-intent | human | awaiting human review |
+| skipped | CLAUDE.md | adheres-to-artifact (implicit) | ai | ai evals skipped (deterministic-only run) |
 
 ## Artifact coverage
 
@@ -122,7 +124,7 @@ The markdown format renders as tables:
 
 - 1 unparseable JSONL line(s) were skipped
 
-**7 eval(s)** — 1 pass, 1 fail, 0 error, 0 needs-review, 5 skipped.
+**9 eval(s)** — 2 pass, 1 fail, 0 error, 1 needs-review, 5 skipped.
 ```
 
 The last row has an empty location on purpose. Project rules resolve as one aggregated entry

@@ -38,7 +38,7 @@ export function makePlan(overrides: Partial<EvalPlan> = {}): EvalPlan {
     artifact: makeArtifact(),
     evalName: "demo-eval",
     assertion: "The session did the thing.",
-    grader: "llm",
+    grader: "ai",
     severity: "error",
     implicit: false,
     ...overrides,

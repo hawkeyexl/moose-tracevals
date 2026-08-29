@@ -39,7 +39,7 @@ describe("fill prompt", () => {
     const user = buildFillUser({
       artifact,
       existingNames: ["already-there"],
-      maxCriteria: 3,
+      maxEvals: 3,
       facts: { name: "doc-writer", declaredTools: ["Read", "Grep"] },
       knownSkills: ["fix-bug"],
     });
@@ -55,7 +55,7 @@ describe("fill prompt", () => {
     const user = buildFillUser({
       artifact: makeArtifact({ content: "x".repeat(MAX_BODY_CHARS + 500) }),
       existingNames: [],
-      maxCriteria: 3,
+      maxEvals: 3,
       facts: { declaredTools: [] },
       knownSkills: [],
     });
@@ -66,7 +66,7 @@ describe("fill prompt", () => {
   it("validates the provider response shape", () => {
     expect(
       isValidProposal({
-        criteria: [
+        evals: [
           {
             name: "no-shell",
             assertion: "No shell commands were run.",
@@ -84,10 +84,10 @@ describe("fill prompt", () => {
 
     // confidence is mandatory — the gate has nothing to work with without it.
     expect(
-      isValidProposal({ criteria: [{ name: "x", assertion: "y", grader: "llm" }] }),
+      isValidProposal({ evals: [{ name: "x", assertion: "y", grader: "llm" }] }),
     ).toBe(false);
-    expect(isValidProposal({ criteria: [], extra: 1 })).toBe(false);
-    expect(isValidProposal({ criteria: [], needsSharpening: [] })).toBe(true);
+    expect(isValidProposal({ evals: [], extra: 1 })).toBe(false);
+    expect(isValidProposal({ evals: [], needsSharpening: [] })).toBe(true);
   });
 });
 
@@ -107,7 +107,7 @@ describe("fill cache", () => {
       provider: "mock",
       model: "m",
       temperature: 0,
-      maxCriteria: 3,
+      maxEvals: 3,
       artifactType: "skill",
       path: "/p/.claude/skills/a/SKILL.md",
       body: "body",
@@ -120,12 +120,12 @@ describe("fill cache", () => {
     expect(key()).toBe(key());
   });
 
-  it("changes when the artifact or the existing criteria change", () => {
+  it("changes when the artifact or the existing evals change", () => {
     expect(key({ body: "different" })).not.toBe(key());
     // A post-fill re-run must miss, so the model is asked for *additional*
     // coverage rather than replaying its earlier proposal.
     expect(key({ existingNames: ["added"] })).not.toBe(key());
-    expect(key({ maxCriteria: 5 })).not.toBe(key());
+    expect(key({ maxEvals: 5 })).not.toBe(key());
     expect(key({ artifactType: "agent" })).not.toBe(key());
     expect(key({ model: "other" })).not.toBe(key());
     // Two artifacts with identical content at different paths are distinct.
@@ -143,7 +143,7 @@ describe("fill cache", () => {
 
   it("round-trips a proposal and treats corruption as a miss", async () => {
     const cache = new FillCache(dir, true);
-    const proposal = { criteria: [], needsSharpening: [] };
+    const proposal = { evals: [], needsSharpening: [] };
     expect(cache.get("k1")).toBeUndefined();
     cache.set("k1", proposal);
     expect(cache.get("k1")).toEqual(proposal);
@@ -155,7 +155,7 @@ describe("fill cache", () => {
 
   it("does nothing when disabled", () => {
     const cache = new FillCache(dir, false);
-    cache.set("k3", { criteria: [] });
+    cache.set("k3", { evals: [] });
     expect(cache.get("k3")).toBeUndefined();
   });
 });

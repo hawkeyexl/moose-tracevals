@@ -3,20 +3,28 @@ name: fix-bug
 description: Fix a reported bug, reproducing it with a failing test first.
 metadata:
   evals:
-    criteria:
-      - name: used-read
-        assertion: The session read at least one source file before editing.
-        grader: tool-usage
-        options:
-          tool: Read
-          expect: used
-      - name: forbidden-tool
-        assertion: The session never ran shell commands; this skill is edit-only.
-        grader: tool-usage
-        options:
-          tool: Bash
-          expect: not-used
-      - Reproduce the bug with a failing test before applying the fix.
+    - id: used-read
+      assertion: The session read at least one source file before editing.
+      grader: tool-usage
+      options:
+        tool: Read
+        expect: used
+    - id: forbidden-tool
+      assertion: The session never ran shell commands; this skill is edit-only.
+      grader: tool-usage
+      options:
+        tool: Bash
+        expect: not-used
+    - id: no-force-push
+      assertion: The session never force-pushed.
+      grader: command
+      command: ["node", "tracevals/no-force-push.mjs", "{trace}"]
+      timeout-ms: 15000
+    - id: refactor-preserved-intent
+      assertion: The fix addressed the reported bug rather than working around it.
+      grader: human
+      evidence: The diff of the session's edits
+    - Reproduce the bug with a failing test before applying the fix.
 ---
 
 # Fix Bug

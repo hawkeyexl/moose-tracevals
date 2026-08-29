@@ -24,9 +24,9 @@ whose sections re-home like this:
 | Opening value proposition | `/` | Rewrite as a router with a runnable proof; keep a one-paragraph version in the README. |
 | "How it works" pipeline diagram | `/` and `get-started/` | Keep the diagram; move the four supporting bullets into the pages that need them. |
 | "Quick start" | `get-started/` | Rewrite. Every command shown uses `node dist/cli.js`, which only works inside a clone; the site shows the installed binary. |
-| "Declaring criteria" | `declare/` | Expand into a journey. The block example survives; grader choice and severity are new. |
+| "Declaring evals" | `declare/` | Expand into a journey. The block example survives; grader choice and severity are new. |
 | "Deterministic grader kinds" table | `reference/graders/` | Move and expand — options, validation rules, and the actual failure messages. |
-| "Filling in criteria" | `declare/fill` | Expand into a workflow with a worked proposal report. The rejection-reason table moves with it. |
+| "Filling in evals" | `declare/fill` | Expand into a workflow with a worked proposal report. The rejection-reason table moves with it. |
 | "Configuration" YAML sample | `reference/configuration/` | Move. The sample stays; a per-key table with types and defaults is new. |
 | "Exit codes" table | `reference/report-and-exit-codes/` and `ci/exit-codes-and-reports` | Move; the CI page carries the policy discussion, reference carries the table. |
 | "Development" | `README.md` | Stays in the repository. Contributor content is not published to the site. |
@@ -49,7 +49,7 @@ Kept because the sequencing reasoning is the useful part, not the list.
 | Wave | Pages | Reasoning |
 |---|---|---|
 | **Launch (14)** | landing, get-started, declare + fill, ci + exit-codes, judge, triage, and the five-page reference shelf | Chosen to make four journeys usable end to end, and to serve the highest-traffic journey (`cuj-triage-failure`) with its one required page. Reference came in whole because every journey deep-links into it; without it the journey pages inflate with tables. |
-| **P1 (4)** | `declare/coverage`, `ci/consume-results`, `judge/calibrate`, `judge/schema-versioning` | Each closed a journey that dead-ended. Two journeys — `cuj-cover-every-artifact` and `cuj-evolve-criteria` — had no page at all until this wave. |
+| **P1 (4)** | `declare/coverage`, `ci/consume-results`, `judge/calibrate`, `judge/schema-versioning` | Each closed a journey that dead-ended. Two journeys — `cuj-cover-every-artifact` and `cuj-evolve-evals` — had no page at all until this wave. |
 | **P2 (6)** | `triage/faq`, `extend/` ×2, `reference/traces`, `reference/api`, `reference/glossary` | Four of the six are the toolsmith journey, which was 100% gaps and entirely self-contained — deferring it stranded nobody. |
 
 Two things learned in the P2 wave, worth remembering:
@@ -81,7 +81,7 @@ or revising one:
 | `reference/cli` | `src/cli.ts` |
 | `reference/configuration` | `src/core/config-schema.json`, `src/core/config.ts` |
 | `reference/graders` | `src/graders/` — one file per kind, plus `registry.ts` and `util.ts` for the shared validators and their exact messages |
-| `reference/criteria-schema` | `schemas/artifact-evals-0.2.json`, `schemas/artifact-evals-0.1.json`, `src/criteria/` |
+| `reference/evals-schema` | `schemas/artifact-evals-0.2.json`, `schemas/artifact-evals-0.1.json`, `src/evals/` |
 | `reference/report-and-exit-codes` | `src/types.ts`, `src/reporters/`, `src/history.ts` |
 | `reference/traces` | `src/trace/` — `detect.ts`, `claude.ts`, `discover.ts` |
 | `reference/api` | `src/index.ts` |

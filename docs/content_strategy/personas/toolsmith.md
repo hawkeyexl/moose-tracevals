@@ -10,7 +10,7 @@ prerequisites:
   - consumes an ESM-only package on Node 24+
   - writes JSON Schema
   - injects dependencies to keep a test suite offline
-  - already holds the domain vocabulary of trace, artifact, criterion, plan, grader, outcome
+  - already holds the domain vocabulary of trace, artifact, eval, plan, grader, outcome
 goals:
   - add a check the built-in graders do not cover
   - consume run results structurally instead of scraping output
@@ -42,7 +42,7 @@ and eventually read a trace format the tool does not support yet.
 
 **Pains:**
 
-- **A large surface with no map.** The package exports across traces, artifacts, criteria, graders,
+- **A large surface with no map.** The package exports across traces, artifacts, evals, graders,
   judge, config, engine, reporters, and commands. Nothing distinguishes an intended entry point
   from an internal that happens to be reachable, so every import is a guess about stability.
 - **A two-part contract that looks like one part.** A custom grader must both grade *and* validate
