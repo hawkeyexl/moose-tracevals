@@ -107,12 +107,25 @@ export {
   type ProviderConfig,
 } from "./core/config.js";
 export { runEvals, type EngineOptions } from "./core/engine.js";
-export { render, type ReportFormat } from "./reporters/index.js";
+export { render, renderBatch, type ReportFormat } from "./reporters/index.js";
+export { renderBatchHuman, renderBatchMarkdown } from "./reporters/batch.js";
+export { aggregate, type BatchOutcome } from "./aggregate.js";
 export {
+  prepareRun,
+  runOne,
   runRun,
   type RunCommandOptions,
   type RunCommandResult,
+  type RunContext,
+  type RunSharedOptions,
 } from "./commands/run.js";
+export {
+  parseSince,
+  resolveBatchTraces,
+  runBatch,
+  type BatchCommandOptions,
+  type BatchCommandResult,
+} from "./commands/batch.js";
 export {
   renderFill,
   runFill,
