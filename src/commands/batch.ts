@@ -39,6 +39,13 @@ export interface BatchCommandResult {
   rendered: string;
   /** Per-trace reports in batch order; absent entries failed to parse. */
   reports: RunReport[];
+  /**
+   * File-to-report pairs in batch order, including the traces that failed to
+   * parse. `reports` cannot carry that pairing — an entry drops out when a
+   * trace errors, so the indices stop lining up with the corpus. `calibrate`
+   * joins labels on the file, so it needs the pairing (ADR 01022).
+   */
+  outcomes: BatchOutcome[];
   /** `--history` comparisons, one per trace that had a previous run. */
   comparisons: HistoryComparison[];
 }
@@ -177,5 +184,5 @@ export async function runBatch(
   if (options.output) {
     await writeFile(options.output, rendered, "utf-8");
   }
-  return { report, rendered, reports, comparisons };
+  return { report, rendered, reports, outcomes, comparisons };
 }

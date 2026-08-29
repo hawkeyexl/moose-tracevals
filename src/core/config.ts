@@ -13,6 +13,7 @@ import { Ajv2020 } from "ajv/dist/2020.js";
 import { parse as parseYaml } from "yaml";
 import configSchemaJson from "./config-schema.json" with { type: "json" };
 import { compileRedactPatterns } from "../judge/redact.js";
+import { DEFAULT_LABELS_FILE } from "../calibrate/labels.js";
 import { TracevalsError } from "../types.js";
 
 const configSchema = configSchemaJson as Record<string, unknown>;
@@ -98,6 +99,24 @@ export interface TracevalsConfig {
     cacheDir: string;
     maxCostUsd?: number;
   };
+  /**
+   * `calibrate` — measuring the judge against a human's answers (ADR 01022).
+   * The sweep grid lives here rather than behind flags because the useful
+   * range is a property of a corpus, and a corpus outlives an invocation.
+   */
+  calibrate: {
+    /** Labels sidecar, resolved against the config file's directory. */
+    labels: string;
+    /** Thresholds. Unset means the run measures without gating. */
+    maxFalsePass?: number;
+    maxFalseFail?: number;
+    maxReview?: number;
+    sweep: {
+      ensembleRuns: number[];
+      autoPass: number[];
+      autoFail: number[];
+    };
+  };
   failOnNeedsReview: boolean;
   /**
    * Module specifiers imported before evals are planned, so a `registerGrader`
@@ -176,6 +195,21 @@ export function parseConfig(raw: unknown): TracevalsConfig {
       // Separate from the judge cache: different key scheme and value shape.
       cacheDir: r.fill?.cacheDir ?? ".moose-tracevals/cache/fill",
     },
+    calibrate: {
+      labels: r.calibrate?.labels ?? DEFAULT_LABELS_FILE,
+      sweep: {
+        // Spans the range rather than filling it: the first sweep judges the
+        // corpus at the largest value here, so a wide grid is the one part of
+        // calibration that does cost money.
+        ensembleRuns: [...(r.calibrate?.sweep?.ensembleRuns ?? [1, 3, 5])],
+        autoPass: [
+          ...(r.calibrate?.sweep?.autoPass ?? [0.5, 0.6, 0.7, 0.8, 0.9, 0.95]),
+        ],
+        autoFail: [
+          ...(r.calibrate?.sweep?.autoFail ?? [0.5, 0.6, 0.7, 0.8, 0.9, 0.95]),
+        ],
+      },
+    },
     failOnNeedsReview: r.failOnNeedsReview ?? true,
     // Always a list, never undefined: the read site concatenates `--require`
     // onto it, and a hole there would be a special case in every caller.
@@ -193,6 +227,13 @@ export function parseConfig(raw: unknown): TracevalsConfig {
   }
   if (typeof r.fill?.maxCostUsd === "number") {
     config.fill.maxCostUsd = r.fill.maxCostUsd;
+  }
+  // Left absent rather than defaulted to a number: `0` is a meaningful limit
+  // ("no false pass at all"), so it cannot double as "unset".
+  for (const key of ["maxFalsePass", "maxFalseFail", "maxReview"] as const) {
+    if (typeof r.calibrate?.[key] === "number") {
+      config.calibrate[key] = r.calibrate[key];
+    }
   }
   return config;
 }
