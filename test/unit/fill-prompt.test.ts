@@ -1,9 +1,11 @@
+import { createHash } from "node:crypto";
 import { mkdtemp, mkdir, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   FILL_PROMPT_VERSION,
   MAX_BODY_CHARS,
+  PROPOSAL_SCHEMA,
   buildFillUser,
   isValidProposal,
   systemPromptFor,
@@ -17,6 +19,30 @@ describe("fill prompt", () => {
     name: "doc-writer",
     path: "/p/.claude/agents/doc-writer.md",
     content: "---\nname: doc-writer\ntools: Read, Grep\n---\nNever modify code.\n",
+  });
+
+  /**
+   * `FILL_PROMPT_VERSION` is a cache-key component, so a prompt edit that
+   * leaves it alone makes every cached proposal replay the *old* prompt's
+   * output — silently, and for as long as the cache lives. Pinning the version
+   * to a digest of the prompt surface makes the pair the thing under test:
+   * change the text and this fails until the version moves with it.
+   */
+  it("moves FILL_PROMPT_VERSION with the prompt surface", () => {
+    const surface = [
+      ...(["skill", "agent", "project-rules", "slash-command"] as const).map(
+        systemPromptFor,
+      ),
+      JSON.stringify(PROPOSAL_SCHEMA),
+    ].join("\n---\n");
+    const digest = createHash("sha256")
+      .update(surface)
+      .digest("hex")
+      .slice(0, 12);
+    expect({ version: FILL_PROMPT_VERSION, digest }).toEqual({
+      version: 3,
+      digest: "ed66ab9af846",
+    });
   });
 
   it("names only the graders the artifact type may carry", () => {
