@@ -1,6 +1,11 @@
 /** Report rendering. */
+import type { CalibrationReport } from "../calibrate/types.js";
 import type { BatchReport, RunReport } from "../types.js";
 import { renderBatchHuman, renderBatchMarkdown } from "./batch.js";
+import {
+  renderCalibrationHuman,
+  renderCalibrationMarkdown,
+} from "./calibration.js";
 import { renderHuman } from "./human.js";
 import { renderMarkdown } from "./markdown.js";
 
@@ -33,5 +38,25 @@ export function renderBatch(
       return renderBatchMarkdown(report);
     default:
       return renderBatchHuman(report);
+  }
+}
+
+/**
+ * The calibration counterpart (ADR 01022). A third entry point rather than a
+ * mode of the other two: a calibration report answers "was it right?", and a
+ * consumer must be able to tell that shape apart from a verdict report without
+ * inspecting it.
+ */
+export function renderCalibration(
+  report: CalibrationReport,
+  format: ReportFormat,
+): string {
+  switch (format) {
+    case "json":
+      return JSON.stringify(report, null, 2);
+    case "markdown":
+      return renderCalibrationMarkdown(report);
+    default:
+      return renderCalibrationHuman(report);
   }
 }
