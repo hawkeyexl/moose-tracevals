@@ -34,11 +34,14 @@ first.
 
 ## Commands
 
-The CLI's three commands, callable directly. Each pairs a runner with a renderer.
+The CLI's four commands, callable directly. Each pairs a runner with a renderer.
 
 | Export | Notes |
 |---|---|
-| `runRun`, `RunCommandOptions`, `RunCommandResult` | `run`. `RunCommandOptions.judge` injects a judge. |
+| `runRun`, `RunCommandOptions`, `RunCommandResult` | `run`, one trace. `RunCommandOptions.judge` injects a judge. |
+| `prepareRun`, `runOne`, `RunContext`, `RunSharedOptions` | The seams a batch reuses: build the judge, config, and plugins once, then evaluate one trace. |
+| `runBatch`, `resolveBatchTraces`, `parseSince`, `BatchCommandOptions`, `BatchCommandResult` | `run` over many traces. `BatchCommandResult.outcomes` pairs each file with its report, errors included. |
+| `runCalibrate`, `CalibrateCommandOptions`, `CalibrateCommandResult` | `calibrate`. Accepts the same judge injection through `RunSharedOptions`. |
 | `runFill`, `renderFill`, `FillOptions`, `FillReport`, `FillArtifactResult`, `FillRun`, `FillStatus`, `SharpeningNote` | `fill`. `FillOptions.providerInstance` injects a provider. |
 | `runList`, `renderList`, `ListOptions`, `ListRun` | `list`. |
 
@@ -139,10 +142,16 @@ Downstream code always receives a fully-populated config, so there is no need to
 | Export | Notes |
 |---|---|
 | ★ `render(report, format)` | `"human"`, `"json"`, or `"markdown"`. |
+| `renderBatch(report, format)`, `renderBatchHuman`, `renderBatchMarkdown` | The aggregate shape. |
+| `renderCalibration(report, format)`, `renderCalibrationHuman`, `renderCalibrationMarkdown` | The calibration shape. |
+| `aggregate(outcomes, options)`, `BatchOutcome` | Fold per-trace reports into rates. Pure. |
 | `ReportFormat` | |
 | `appendHistory(file, report)`, `loadHistory(file)`, `compareToLast(...)`, `entryFor(report)` | |
 | `HistoryEntry`, `HistoryEval`, `HistoryComparison` | |
-| *(all of `types`)* | `TracevalsError`, `RunReport`, `EvalResult`, `RunSummary`, `Outcome`. |
+| *(all of `types`)* | `TracevalsError`, `RunReport`, `EvalResult`, `RunSummary`, `Outcome`, `BatchReport`, `AggregateRow`, `BatchTraceEntry`, `BatchSummary`. |
+| *(all of `calibrate/types`)* | `CalibrationReport`, `CalibrationCounts`, `Disagreement`, `SweepCell`, `CalibrationGate`, `JudgeSetting`, `JoinKind`, `EvalLabel`, `LabelOutcome`. |
+| `loadLabels`, `parseLabels`, `labelKey`, `DEFAULT_LABELS_FILE` | The labels sidecar. `parseLabels(text, file)` resolves trace paths against `file`'s directory. |
+| `joinLabels`, `score`, `rescore`, `classify` | Pure calibration arithmetic. `rescore` re-applies zones and ensemble depth to a result's cached runs — no provider involved. |
 
 `TracevalsError` is the operational-failure type. The CLI maps it to exit `2`; catch it if you want
 to distinguish "the tool could not run" from "a check failed".

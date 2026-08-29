@@ -327,6 +327,100 @@ describe.skipIf(!built)("built CLI", () => {
     });
   });
 
+  // ADR 01022. The command surface, the report shape, and the exit-code
+  // contract, through the built binary rather than the library.
+  describe("calibrate", () => {
+    const home = { MOOSE_TRACEVALS_HOME: "test/fixtures/home" };
+    const corpus = [
+      "test/fixtures/traces/claude-session.jsonl",
+      "test/fixtures/traces/claude-session-sidecar.jsonl",
+    ];
+    const base = [
+      "calibrate",
+      ...corpus,
+      "--project",
+      "test/fixtures/project",
+      "--labels",
+      "test/fixtures/project/tracevals/labels.yaml",
+      "--provider",
+      "mock",
+      "--no-cache",
+    ];
+
+    it("measures the corpus and exits 0 despite disagreeing", async () => {
+      const { code, stdout } = await runCli(
+        [...base, "--format", "json"],
+        home,
+      );
+      expect(code).toBe(0);
+      const report = JSON.parse(stdout);
+      expect(report.counts.falsePass).toBe(1);
+      expect(report.counts.falseFail).toBe(1);
+      expect(report.counts.reviewVolume).toBe(1);
+      // A calibration report is its own shape, distinguishable without
+      // inspecting the contents.
+      expect(report.evalResults).toBeUndefined();
+      expect(report.evals).toBeUndefined();
+      expect(report.batch.summary.traces).toBe(2);
+    });
+
+    it("exits 1 only when a threshold is asked for and missed", async () => {
+      const { code, stdout } = await runCli(
+        [...base, "--max-false-pass", "0", "--format", "json"],
+        home,
+      );
+      expect(code).toBe(1);
+      expect(JSON.parse(stdout).gates[0]).toEqual({
+        name: "falsePass",
+        limit: 0,
+        actual: 1,
+        exceeded: true,
+      });
+    });
+
+    it("sweeps every axis and names the setting that removes the false pass", async () => {
+      const { code, stdout } = await runCli(
+        [...base, "--sweep", "--format", "json"],
+        home,
+      );
+      expect(code).toBe(0);
+      const report = JSON.parse(stdout);
+      const strict = report.sweep.find(
+        (c: { axis: string; value: number }) =>
+          c.axis === "zones.autoPass" && c.value === 0.95,
+      );
+      expect(strict.counts.falsePass).toBe(0);
+      expect(strict.counts.reviewVolume).toBe(4);
+    });
+
+    it("exits 2 with the corpus listed when a label names a foreign trace", async () => {
+      const { code, stderr } = await runCli(
+        [
+          "calibrate",
+          corpus[0]!,
+          "--project",
+          "test/fixtures/project",
+          "--labels",
+          "test/fixtures/project/tracevals/labels.yaml",
+          "--deterministic-only",
+        ],
+        home,
+      );
+      expect(code).toBe(2);
+      expect(stderr).toMatch(/not in the corpus/);
+      expect(stderr).toMatch(/claude-session-sidecar\.jsonl/);
+    });
+
+    it("exits 2 when the labels file does not exist", async () => {
+      const { code, stderr } = await runCli(
+        [...base, "--labels", "test/fixtures/project/tracevals/nope.yaml"],
+        home,
+      );
+      expect(code).toBe(2);
+      expect(stderr).toMatch(/could not read labels file/);
+    });
+  });
+
   it("legacy stream-json traces still parse", async () => {
     const { code, stdout } = await runCli(
       [
