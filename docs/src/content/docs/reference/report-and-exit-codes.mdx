@@ -87,7 +87,7 @@ The complete `RunReport`:
 | `evalName` | string | The eval's name, or `adheres-to-artifact` / `evals-block-valid`. |
 | `artifact` | string | Absolute path to the artifact file. |
 | `artifactName` | string | Its display name — `fix-bug`, `CLAUDE.md`. |
-| `artifactType` | string | `skill`, `agent`, or `project-rules`. |
+| `artifactType` | string | `skill`, `agent`, `project-rules`, or `slash-command`. |
 | `grader` | string | The grader kind, `ai` for judged. |
 | `implicit` | boolean | `true` for the whole-artifact eval. |
 | `outcome` | string | One of the five outcomes above. |
@@ -121,7 +121,7 @@ One entry per artifact reference found in the trace, resolved or not.
 | Field | Type | Notes |
 |---|---|---|
 | `ref` | string | The reference as it appeared, e.g. `fix-bug`, `plugin:skill`. |
-| `kind` | string | `skill`, `agent`, or `project-rules`. |
+| `kind` | string | `skill`, `agent`, `project-rules`, or `slash-command`. |
 | `resolved` | boolean | Whether a file was found. |
 | `path` | string? | The resolved file. Absent for an aggregated `project-rules` entry covering several files. |
 | `tried` | string[] | Every location searched, in order. Usually enough to diagnose a miss. |
@@ -269,7 +269,7 @@ One artifact, or one eval within it, summed across the batch.
 |---|---|---|
 | `key` | string | `<type>:<name>`, plus `::<evalName>` on eval rows. The sort key. |
 | `artifactName` | string | `fix-bug`, `CLAUDE.md`. |
-| `artifactType` | string | `skill`, `agent`, or `project-rules`. |
+| `artifactType` | string | `skill`, `agent`, `project-rules`, or `slash-command`. |
 | `artifacts` | string[] | Distinct paths this row aggregated from. More than one means the row spans projects. |
 | `evalName` | string? | Absent on artifact rows. |
 | `graders` | string[]? | Grader kinds seen, sorted. Eval rows only. |

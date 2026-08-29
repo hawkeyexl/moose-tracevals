@@ -46,7 +46,7 @@ labels:
 | Field | Required | Meaning |
 |---|---|---|
 | `trace` | yes | Path to the trace, resolved **against this file's own directory** — not your working directory, so a committed labels file means the same thing from anywhere. |
-| `artifact` | yes | The name the report shows: a skill name, a `subagent_type`, or a project-rules filename such as `CLAUDE.md`. |
+| `artifact` | yes | The name the report shows: a skill name, a `subagent_type`, a slash-command name, or a project-rules filename such as `CLAUDE.md`. |
 | `type` | no | `skill`, `agent`, `project-rules`, or `slash-command`. Needed only to disambiguate a name two artifact kinds share — a skill and an agent, or a skill and the slash command that types it. |
 | `eval` | yes | The eval's `id`. |
 | `expected` | yes | `pass`, `fail`, or `needs-review`. |
