@@ -1,5 +1,6 @@
 /** regex: assert a pattern does/doesn't appear in session text. */
 import type { TraceGrader } from "./types.js";
+import { evaluateWhen, skippedTrigger, validateWhen } from "./when.js";
 import {
   fail,
   firstError,
@@ -47,6 +48,7 @@ function validateOptions(options: Options): string | undefined {
     checkPattern(options),
     optionalEnum(options, "on", ["assistant", "user", "all"]),
     optionalEnum(options, "expect", ["match", "no-match"]),
+    validateWhen(options),
   );
 }
 
@@ -64,6 +66,8 @@ export const regexGrader: TraceGrader = {
 
     const window = windowFor(trace, plan);
     if (window.empty) return skippedWindow(window);
+    const trigger = evaluateWhen(options, window);
+    if (!trigger.armed) return skippedTrigger(trigger);
     const corpus =
       on === "user"
         ? window.userMessages

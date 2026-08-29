@@ -10,6 +10,7 @@
  * its budget must still fail rather than quietly skip.
  */
 import type { TraceGrader } from "./types.js";
+import { rejectWhen } from "./when.js";
 import {
   fail,
   firstError,
@@ -25,6 +26,7 @@ function validateOptions(options: Options): string | undefined {
     requireOneOf(options, ["maxUsd", "maxTokens"]),
     optionalNumber(options, "maxUsd", { min: 0 }),
     optionalNumber(options, "maxTokens", { min: 0 }),
+    rejectWhen("cost", options),
   );
 }
 
