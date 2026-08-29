@@ -60,6 +60,30 @@ describe("parseConfig", () => {
     expect(() => parseConfig({ unknownKey: true })).toThrow(TracevalsError);
   });
 
+  describe("plugins", () => {
+    it("defaults to an empty list, so the read site never sees a hole", () => {
+      expect(parseConfig({}).plugins).toEqual([]);
+    });
+
+    it("keeps declared module specifiers in order", () => {
+      // Order is load order, and a later plugin wins a colliding kind — so it
+      // is a value, not incidental.
+      const config = parseConfig({
+        plugins: ["./tracevals/graders.mjs", "@acme/tracevals-graders"],
+      });
+      expect(config.plugins).toEqual([
+        "./tracevals/graders.mjs",
+        "@acme/tracevals-graders",
+      ]);
+    });
+
+    it("rejects a bare string, a non-string entry, and an empty specifier", () => {
+      expect(() => parseConfig({ plugins: "./one.mjs" })).toThrow(TracevalsError);
+      expect(() => parseConfig({ plugins: [1] })).toThrow(TracevalsError);
+      expect(() => parseConfig({ plugins: [""] })).toThrow(TracevalsError);
+    });
+  });
+
   describe("provider section", () => {
     it("defaults to claude-cli so a fresh checkout needs no API key", () => {
       const config = parseConfig({});
@@ -185,6 +209,15 @@ describe("loadConfig", () => {
   it("returns defaults when the file is absent", async () => {
     const config = await loadConfig(dir);
     expect(config.judge.ensembleRuns).toBe(3);
+  });
+
+  it("reads a plugins list out of the section", async () => {
+    await write(
+      "moose.config.yaml",
+      "tracevals:\n  plugins:\n    - ./tracevals/graders.mjs\n",
+    );
+    const config = await loadConfig(dir);
+    expect(config.plugins).toEqual(["./tracevals/graders.mjs"]);
   });
 
   it("returns defaults when the file holds only other tools' sections", async () => {
