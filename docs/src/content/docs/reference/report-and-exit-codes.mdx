@@ -218,6 +218,159 @@ The same run as tables: `# moose-tracevals report`, bullet metadata, then `## Ev
 summary sentence. An offered-but-unused row reads `n/a` under **Resolved**, never `no`. Pipe characters
 in messages are escaped. Suited to a build summary or a PR comment.
 
+## Batch runs
+
+Naming more than one trace — or selecting them with `--all-projects`, `--since`, or `--limit` —
+emits a **`BatchReport`** instead. It answers a different question: not *did this hold?* but *how
+often does it hold?*
+
+Naming exactly one trace still emits the `RunReport` above, byte for byte. What decides the shape is
+how the traces were selected, never how many came back; see
+[the CLI reference](/moose-tracevals/reference/cli/#which-report-you-get).
+
+```jsonc
+{
+  "traces": [ /* BatchTraceEntry[] */ ],
+  "artifacts": [ /* AggregateRow[] — one per artifact */ ],
+  "evals": [ /* AggregateRow[] — one per eval */ ],
+  "summary": {
+    "total": 14, "pass": 4, "fail": 1, "error": 0, "needsReview": 1, "skipped": 8,
+    "traces": 2, "tracesPassed": 1, "tracesFailed": 1, "tracesErrored": 0
+  },
+  "warnings": [],
+  "exitCode": 1,
+  "costUsd": 0,
+  "durationMs": 75
+}
+```
+
+`summary` is the single-run `RunSummary` counts **summed over every trace**, plus four per-trace
+tallies: `traces` selected, `tracesPassed`, `tracesFailed` (reported exit 1), and `tracesErrored`
+(could not be parsed at all).
+
+### `AggregateRow`
+
+One artifact, or one eval within it, summed across the batch.
+
+| Field | Type | Notes |
+|---|---|---|
+| `key` | string | `<type>:<name>`, plus `::<evalName>` on eval rows. The sort key. |
+| `artifactName` | string | `fix-bug`, `CLAUDE.md`. |
+| `artifactType` | string | `skill`, `agent`, or `project-rules`. |
+| `artifacts` | string[] | Distinct paths this row aggregated from. More than one means the row spans projects. |
+| `evalName` | string? | Absent on artifact rows. |
+| `graders` | string[]? | Grader kinds seen, sorted. Eval rows only. |
+| `traces` | number | Traces that produced at least one result for this row. |
+| `total` | number | Eval results contributing. |
+| `counts` | object | `{ pass, fail, error, needsReview, skipped }`. |
+| `graded` | number | `total` minus `skipped` — the pass-rate denominator. |
+| `passRate` | number\|null | `pass / graded`, or `null` when nothing was graded. |
+| `failingTraces` | string[] | Traces where this row produced a `fail` or `error`, in batch order. |
+| `reviewTraces` | string[] | Traces where it produced a `needs-review`. |
+| `skipReasons` | string[] | Distinct skip reasons, sorted. |
+
+Two things about `passRate` are deliberate and worth knowing before you build on it:
+
+- **`skipped` is out of the denominator.** A check that never armed is not evidence in either
+  direction, so it is excluded rather than counted as a pass. An artifact that was resolved but
+  never invoked reports `null`, rendered as `—`, not `100%`.
+- **`needs-review` is in the denominator and not in the numerator.** It fails the run by default, so
+  counting it as a pass would contradict the [exit-code contract](#exit-codes). A row that is all
+  review therefore reads `0%`, with the traces named in `reviewTraces`.
+
+Rows are keyed by artifact **type and name**, not by path, so the same skill evaluated across
+several projects is one rate. Ordering is a byte comparison on `key`, so two runs over the same
+corpus produce comparable reports on any platform.
+
+### `BatchTraceEntry`
+
+| Field | Type | Notes |
+|---|---|---|
+| `file` | string | The trace, as it was named or discovered. |
+| `sessionId` | string? | When the trace records one. |
+| `error` | string? | Set when the trace could not be evaluated at all. `summary` is then absent. |
+| `summary` | object? | That trace's own `RunSummary`. |
+| `warnings` | string[] | That trace's warnings. |
+| `exitCode` | number | `0` or `1`. An errored trace is `1`. |
+| `costUsd` | number | Judge spend for that trace. |
+| `durationMs` | number | Time for that trace. |
+
+<Aside type="caution" title="The judge budget is shared, not per trace">
+`maxCostUsd` applies to the whole invocation. Once it is exhausted the remaining evals report
+`skipped` with the reason `judge cost budget exhausted ($N)` — on later traces as well as later
+evals — and the reason survives into the row's `skipReasons`. It is never a `pass`, and never a
+silently absent row.
+</Aside>
+
+### `--format human` and `--format markdown`
+
+The human batch report leads with the rate table, names the outlier traces beneath each row, then
+lists artifact rates and one line per trace. Rows are in `key` order, so a batch is comparable to
+the one before it. Run against this repository's own fixture corpus:
+
+```
+moose-tracevals — 2 trace(s)
+1 passed · 1 failed · 0 unreadable
+
+Eval pass rates
+       —  doc-writer › doc-writer-followed-its-brief (1 trace(s))
+          0 pass, 0 fail, 0 error, 0 review, 1 skip
+          skipped: agent "doc-writer" was spawned but recorded no subagent turns (no inline sidechain records and no sidecar transcript), so it governed no turns
+       —  doc-writer › doc-writer-wrote-docs (1 trace(s))
+          0 pass, 0 fail, 0 error, 0 review, 1 skip
+          skipped: agent "doc-writer" was spawned but recorded no subagent turns (no inline sidechain records and no sidecar transcript), so it governed no turns
+    100%  reviewer › reviewer-is-read-only (1 trace(s))
+          1 pass, 0 fail, 0 error, 0 review, 0 skip
+    100%  reviewer › reviewer-read-something (1 trace(s))
+          1 pass, 0 fail, 0 error, 0 review, 0 skip
+       —  AGENTS.md › eval-1 (2 trace(s))
+          0 pass, 0 fail, 0 error, 0 review, 2 skip
+          skipped: ai evals skipped (deterministic-only run)
+       —  CLAUDE.md › adheres-to-artifact (2 trace(s))
+          0 pass, 0 fail, 0 error, 0 review, 2 skip
+          skipped: ai evals skipped (deterministic-only run)
+       —  fix-bug › eval-5 (1 trace(s))
+          0 pass, 0 fail, 0 error, 0 review, 1 skip
+          skipped: ai evals skipped (deterministic-only run)
+      0%  fix-bug › forbidden-tool (1 trace(s))
+          0 pass, 1 fail, 0 error, 0 review, 0 skip
+          failing: claude-session.jsonl
+    100%  fix-bug › no-force-push (1 trace(s))
+          1 pass, 0 fail, 0 error, 0 review, 0 skip
+      0%  fix-bug › refactor-preserved-intent (1 trace(s))
+          0 pass, 0 fail, 0 error, 1 review, 0 skip
+          review: claude-session.jsonl
+    100%  fix-bug › used-read (1 trace(s))
+          1 pass, 0 fail, 0 error, 0 review, 0 skip
+       —  writing-toolkit:identify-ai-tells › adheres-to-artifact (1 trace(s))
+          0 pass, 0 fail, 0 error, 0 review, 1 skip
+          skipped: artifact skipped via metadata.eval-skip
+
+Artifact pass rates
+       —  agent: doc-writer 0 pass, 0 fail, 0 error, 0 review, 2 skip
+    100%  agent: reviewer 2 pass, 0 fail, 0 error, 0 review, 0 skip
+       —  project-rules: AGENTS.md 0 pass, 0 fail, 0 error, 0 review, 2 skip
+       —  project-rules: CLAUDE.md 0 pass, 0 fail, 0 error, 0 review, 2 skip
+     50%  skill: fix-bug 2 pass, 1 fail, 0 error, 1 review, 1 skip
+       —  skill: writing-toolkit:identify-ai-tells 0 pass, 0 fail, 0 error, 0 review, 1 skip
+
+Traces
+  FAIL   claude-session.jsonl 4 pass, 1 fail, 0 error, 1 review, 6 skip
+  PASS   claude-session-sidecar.jsonl 0 pass, 0 fail, 0 error, 0 review, 2 skip
+
+14 eval(s) across 2 trace(s): 4 pass, 1 fail, 0 error, 1 needs-review, 8 skipped
+```
+
+Three rows worth reading closely. `forbidden-tool` is `0%` over the one trace that invoked the
+skill — the other trace never did, so it is not in the denominator. `refactor-preserved-intent` is
+`0%` for a different reason: it is awaiting human review, named under `review:` rather than
+`failing:`. And `doc-writer`'s rows are `—`, because that agent governed no turns in either trace;
+a `100%` there would be a rate computed from nothing.
+
+The markdown form is the same content as three tables — `## Eval pass rates`
+(`| Rate | Artifact | Eval | Grader | Traces | Outcomes | Outliers |`), `## Artifact pass rates`, and
+`## Traces` — suited to a build summary or a PR comment.
+
 ## `--output`
 
 Writes the rendered report to a file **in addition to** stdout, in whichever format `--format`

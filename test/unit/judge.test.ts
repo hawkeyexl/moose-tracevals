@@ -116,6 +116,34 @@ describe("makeTraceJudge", () => {
     expect(result?.outcome).toBe("skipped");
     expect(result?.skipReason).toContain("budget");
   });
+
+  // The batch's money bug (ADR 01018). A judge instance is called once per
+  // trace, so a per-call budget is no budget at all: 50 traces would cost 50x
+  // the configured cap and every run would look like it respected it.
+  it("spends one budget across successive calls, not one per call", async () => {
+    const priced = (match: "pass" | "fail") => ({
+      ...mockVerdict(match, 0.95),
+      // 1M input tokens at $1/MTok, so exactly one call exhausts a $1 budget.
+      usage: { inputTokens: 1_000_000, outputTokens: 0 },
+    });
+    const judge = makeTraceJudge({
+      provider: new MockProvider([priced("pass"), priced("pass")]),
+      runs: 1,
+      noCache: true,
+      maxCostUsd: 1,
+      pricing: { inputPerMTok: 1, outputPerMTok: 0 },
+    });
+
+    const [first] = await judge([plan], () => "trace one");
+    expect(first?.outcome).toBe("pass");
+    expect(first?.costUsd).toBeCloseTo(1, 5);
+
+    // Second trace, same judge. The budget is already gone.
+    const [second] = await judge([plan], () => "trace two");
+    expect(second?.outcome).toBe("skipped");
+    expect(second?.skipReason).toContain("budget");
+    expect(second?.costUsd).toBe(0);
+  });
 });
 
 describe("cacheKey", () => {

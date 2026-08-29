@@ -5,8 +5,8 @@
  *
  * The ensemble mechanics (retry-once, errored runs counting against consensus,
  * cache replay) now live in the inference library; what stays here is what is
- * moose-tracevals-specific — the per-plan budget gate, the trace-worded verdict
- * schema, and the `JudgedEval` shape the reporters consume.
+ * moose-tracevals-specific — the per-instance budget gate, the trace-worded
+ * verdict schema, and the `JudgedEval` shape the reporters consume.
  */
 import {
   JsonCache,
@@ -75,8 +75,11 @@ export interface JudgedEval {
 /**
  * The digest is requested per plan rather than handed over once: each eval is
  * judged against the window its artifact was governing (ADR 01015), so the
- * transcript differs from eval to eval. Keeping the whole batch inside one call
- * is what keeps `maxCostUsd` a budget for the run instead of per group.
+ * transcript differs from eval to eval.
+ *
+ * The returned function is callable repeatedly — once per trace in a batch —
+ * and `maxCostUsd` spans every call, because the budget lives on the instance
+ * rather than on the call (ADR 01018).
  */
 export type TraceJudge = (
   plans: EvalPlan[],
@@ -95,8 +98,15 @@ export function makeTraceJudge(options: TraceJudgeOptions): TraceJudge {
   );
   const pricing = pricingFor(provider.modelName(), options.pricing);
 
+  // Deliberately outside the returned function: the budget belongs to the
+  // *judge instance*, not to one call of it. A batch calls the judge once per
+  // trace (ADR 01018), so a per-call counter would make `maxCostUsd` a cap on
+  // the largest trace rather than on the run — 50 traces would bill 50x the
+  // configured ceiling and every report would look like it obeyed it. A
+  // single-trace run calls the judge exactly once, so this is invisible there.
+  let spentUsd = 0;
+
   return async (plans, renderFor) => {
-    let spentUsd = 0;
     const results: JudgedEval[] = [];
 
     for (const plan of plans) {
