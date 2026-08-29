@@ -31,6 +31,8 @@ export interface RunCommandOptions {
   output?: string;
   /** Append this run to history and compare against the previous run. */
   history?: boolean;
+  /** Overrides config.failOnNeedsReview; undefined defers to the config. */
+  failOnNeedsReview?: boolean;
   /** Directory holding moose.config.yaml; defaults to cwd. */
   configDir?: string;
   env?: Record<string, string | undefined>;
@@ -48,7 +50,13 @@ export async function runRun(
   options: RunCommandOptions,
 ): Promise<RunCommandResult> {
   const configDir = options.configDir ?? process.cwd();
-  const config = await loadConfig(configDir);
+  const loaded = await loadConfig(configDir);
+  // Flags override the config rather than bypassing it, so the engine still
+  // reads one fully-resolved value (CLAUDE.md, "Config <-> CLI flags").
+  const config = {
+    ...loaded,
+    failOnNeedsReview: options.failOnNeedsReview ?? loaded.failOnNeedsReview,
+  };
 
   let judge = options.judge;
   if (judge === undefined && options.deterministicOnly !== true) {
