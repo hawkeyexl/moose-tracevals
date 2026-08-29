@@ -40,6 +40,32 @@ const pct = (value: number | null): string =>
 const settingOf = (c: SweepCell): string =>
   `runs=${c.setting.ensembleRuns} autoPass=${c.setting.zones.autoPass} autoFail=${c.setting.zones.autoFail}`;
 
+/**
+ * The sweep table, header and rows built from one spec so they cannot drift.
+ *
+ * `scored` leads and `insuff` trails for the same reason: a count with no
+ * denominator is unreadable, and a cell scored from fewer cached runs than its
+ * setting asks for is a number that was quietly not measured. Without the two
+ * of them a reader tuning thresholds cannot tell "zero false passes" from
+ * "nothing was scored".
+ */
+const SWEEP_COLUMNS: {
+  label: string;
+  width: number;
+  of: (c: CalibrationCounts) => number;
+}[] = [
+  { label: "scored", width: 6, of: (c) => c.scored },
+  { label: "agree", width: 5, of: (c) => c.agree },
+  { label: "false-pass", width: 10, of: (c) => c.falsePass },
+  { label: "false-fail", width: 10, of: (c) => c.falseFail },
+  { label: "review", width: 6, of: (c) => c.review },
+  { label: "reviewVol", width: 9, of: (c) => c.reviewVolume },
+  { label: "insuff", width: 6, of: (c) => c.insufficient },
+];
+
+const sweepRow = (axis: string, setting: string, cells: string[]): string =>
+  `  ${axis.padEnd(20)} ${setting.padEnd(38)} ${cells.join("  ")}`;
+
 /** The evidence behind a judged verdict, or nothing for a graded one. */
 function evidence(d: Disagreement): string {
   if (d.consensus === undefined) return "";
@@ -140,16 +166,20 @@ export function renderCalibrationHuman(report: CalibrationReport): string {
     );
     lines.push(
       pc.dim(
-        "  axis                 setting                                 agree  false-pass  false-fail  review  reviewVol",
+        sweepRow(
+          "axis",
+          "setting",
+          SWEEP_COLUMNS.map((c) => c.label.padStart(c.width)),
+        ),
       ),
     );
     for (const s of report.sweep) {
       lines.push(
-        `  ${s.axis.padEnd(20)} ${settingOf(s).padEnd(38)} ${String(s.counts.agree).padStart(5)} ${String(
-          s.counts.falsePass,
-        ).padStart(11)} ${String(s.counts.falseFail).padStart(11)} ${String(
-          s.counts.review,
-        ).padStart(7)} ${String(s.counts.reviewVolume).padStart(10)}`,
+        sweepRow(
+          s.axis,
+          settingOf(s),
+          SWEEP_COLUMNS.map((c) => String(c.of(s.counts)).padStart(c.width)),
+        ),
       );
     }
   }
@@ -170,13 +200,7 @@ export function renderCalibrationHuman(report: CalibrationReport): string {
   }
 
   lines.push("");
-  lines.push(
-    pc.dim(
-      report.exitCode === 0
-        ? "Measured cleanly. Disagreement is the finding, not a failure — exit 0."
-        : "Exit 1: a threshold was exceeded, or a trace in the corpus could not be evaluated.",
-    ),
-  );
+  lines.push(pc.dim(verdictLine(report)));
   if (report.costUsd > 0) {
     lines.push(pc.dim(`judge cost $${report.costUsd.toFixed(4)}`));
   }
@@ -184,7 +208,26 @@ export function renderCalibrationHuman(report: CalibrationReport): string {
 }
 
 function countsRow(counts: CalibrationCounts): string {
-  return `${counts.agree} | ${counts.falsePass} | ${counts.falseFail} | ${counts.review} | ${counts.missedReview} | ${counts.reviewVolume}`;
+  return `${counts.scored} | ${counts.agree} | ${counts.falsePass} | ${counts.falseFail} | ${counts.review} | ${counts.missedReview} | ${counts.reviewVolume} | ${counts.insufficient}`;
+}
+
+/**
+ * The one sentence that says what the exit code means.
+ *
+ * A run that scored nothing gets its own wording rather than the generic
+ * "a threshold was exceeded": the thresholds did *not* trip, and sending a
+ * reader to look at one would send them to the wrong place.
+ */
+function verdictLine(report: CalibrationReport): string {
+  if (report.counts.scored === 0) {
+    return (
+      "Exit 1: nothing was scored — every label joined to a skipped result, " +
+      "so agreement and every threshold above rest on an empty denominator."
+    );
+  }
+  return report.exitCode === 0
+    ? "Measured cleanly. Disagreement is the finding, not a failure — exit 0."
+    : "Exit 1: a threshold was exceeded, or the measurement is incomplete — a trace could not be evaluated, or the judge budget cut the corpus short.";
 }
 
 export function renderCalibrationMarkdown(report: CalibrationReport): string {
@@ -251,9 +294,9 @@ export function renderCalibrationMarkdown(report: CalibrationReport): string {
     );
     lines.push("");
     lines.push(
-      "| Axis | Setting | Agree | False passes | False fails | Deferred | Missed reviews | Review volume |",
+      "| Axis | Setting | Scored | Agree | False passes | False fails | Deferred | Missed reviews | Review volume | Insufficient |",
     );
-    lines.push("|---|---|---|---|---|---|---|---|");
+    lines.push("|---|---|---|---|---|---|---|---|---|---|");
     for (const s of report.sweep) {
       lines.push(`| ${s.axis} | ${cell(settingOf(s))} | ${countsRow(s.counts)} |`);
     }
@@ -281,9 +324,7 @@ export function renderCalibrationMarkdown(report: CalibrationReport): string {
   }
 
   lines.push(
-    report.exitCode === 0
-      ? "Measured cleanly. Disagreement is the finding, not a failure — exit 0."
-      : "**Exit 1**: a threshold was exceeded, or a trace in the corpus could not be evaluated.",
+    report.exitCode === 0 ? verdictLine(report) : `**${verdictLine(report)}**`,
   );
   return lines.join("\n");
 }

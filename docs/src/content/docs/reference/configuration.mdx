@@ -82,6 +82,7 @@ tracevals:
   graders:
     command:
       enabled: true              # false, or --no-commands, skips them instead
+                                # (--commands forces them back on)
   render:
     maxBlockChars: 2000
     maxTotalChars: 150000
@@ -237,7 +238,7 @@ Per-grader settings. Only graders with a knob outside the eval that names them a
 
 | Key | Type | Default | CLI |
 |---|---|---|---|
-| `graders.command.enabled` | boolean | `true` | `--no-commands` |
+| `graders.command.enabled` | boolean | `true` | `--commands` / `--no-commands` |
 
 `command`-graded evals run a program named in an artifact, and artifacts come from the **trace's**
 project — so evaluating someone else's trace can execute that repository's code. That is the
@@ -254,6 +255,14 @@ Disabled, a command eval reports **`skipped`** with the reason stated — never 
 has not been satisfied, so the report says so rather than quietly counting it as clean. Nothing else
 about the run changes, including the exit code. See
 [the `command` grader](/moose-tracevals/reference/graders/#command).
+
+```
+command execution is disabled (--no-commands / graders.command.enabled: false)
+```
+
+The flag is a **pair**, and both `run` and `calibrate` honour it. Pass neither and this setting
+decides; `--no-commands` turns execution off for one invocation; `--commands` turns it back on
+against a config that disabled it.
 
 ## `render`
 

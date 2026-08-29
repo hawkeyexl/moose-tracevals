@@ -20,10 +20,14 @@ const built = existsSync(cli);
 async function runCli(
   args: string[],
   env: Record<string, string> = {},
+  // Defaults to the repo root. A different one is how a test reaches a
+  // `moose.config.yaml` other than the repo's own: `configDir` is the working
+  // directory and no flag overrides it.
+  cwd: string = root,
 ): Promise<{ code: number; stdout: string; stderr: string }> {
   try {
     const { stdout, stderr } = await exec("node", [cli, ...args], {
-      cwd: root,
+      cwd,
       env: { ...process.env, ...env },
     });
     return { code: 0, stdout, stderr };
@@ -547,6 +551,190 @@ describe.skipIf(!built)("built CLI", () => {
       ]);
       expect(code).toBe(2);
       expect(stderr).toMatch(/cannot be used with a corpus/);
+    });
+  });
+
+  /**
+   * ADR 01011's safety opt-out, exercised through the CLI rather than around
+   * it.
+   *
+   * `--no-commands` was declared with no positive twin, so commander defaulted
+   * `opts.commands` to `true`; `prepareRun`'s `options.commands ?? config` then
+   * never saw `undefined`, and `graders.command.enabled: false` in a config was
+   * unreachable from the command line. The unit tests hand `commands` straight
+   * to `runRun`, which is exactly why they never caught it — only the built
+   * binary exercises the flag declaration.
+   */
+  describe("command execution opt-out", () => {
+    // A config directory whose only job is to turn command execution off.
+    const noCommands = join(root, "test/fixtures/no-commands");
+    const home = { MOOSE_TRACEVALS_HOME: join(root, "test/fixtures/home") };
+    const trace = join(root, "test/fixtures/traces/claude-session.jsonl");
+    const project = join(root, "test/fixtures/project");
+    const args = (extra: string[]) => [
+      "run",
+      trace,
+      "--project",
+      project,
+      "--deterministic-only",
+      "--format",
+      "json",
+      ...extra,
+    ];
+    const commandEval = (stdout: string) =>
+      JSON.parse(stdout).evalResults.find(
+        (r: { evalName: string }) => r.evalName === "no-force-push",
+      );
+
+    it("lets the config decide when neither flag is passed", async () => {
+      const { stdout } = await runCli(args([]), home, noCommands);
+      expect(commandEval(stdout)?.outcome).toBe("skipped");
+      expect(commandEval(stdout)?.skipReason).toMatch(
+        /command execution is disabled/,
+      );
+    });
+
+    it("--commands overrides a config that disabled them", async () => {
+      const { stdout } = await runCli(args(["--commands"]), home, noCommands);
+      expect(commandEval(stdout)?.outcome).toBe("pass");
+    });
+
+    it("--no-commands still skips, and still states why", async () => {
+      const { stdout } = await runCli(args(["--no-commands"]), home);
+      expect(commandEval(stdout)?.outcome).toBe("skipped");
+      expect(commandEval(stdout)?.skipReason).toMatch(
+        /command execution is disabled/,
+      );
+    });
+
+    it("runs the command by default against the repo's own config", async () => {
+      const { stdout } = await runCli(args([]), home);
+      expect(commandEval(stdout)?.outcome).toBe("pass");
+    });
+
+    // `calibrate` shares `run`'s flags, so it must share their behaviour. It
+    // hand-copied the mapping and omitted `commands` entirely: the flag parsed,
+    // printed in --help, and did nothing.
+    it("calibrate acts on the flag it accepts", async () => {
+      const { stdout } = await runCli(
+        [
+          "calibrate",
+          trace,
+          join(root, "test/fixtures/traces/claude-session-sidecar.jsonl"),
+          "--project",
+          project,
+          "--labels",
+          join(root, "test/fixtures/project/tracevals/labels.yaml"),
+          "--provider",
+          "mock",
+          "--no-cache",
+          "--no-commands",
+          "--format",
+          "json",
+        ],
+        home,
+      );
+      const row = JSON.parse(stdout).batch.evals.find(
+        (e: { evalName: string }) => e.evalName === "no-force-push",
+      );
+      expect(row?.skipReasons ?? []).toContainEqual(
+        expect.stringMatching(/command execution is disabled/),
+      );
+    });
+  });
+
+  /**
+   * A flag that parses to NaN survives the `??` overlay, because `undefined` is
+   * what defers to the config and NaN is not undefined. `spentUsd >= NaN` is
+   * false forever, so the budget gate never trips while the report still claims
+   * a budget; `--limit=-1` reaches `slice(0, -1)` and quietly evaluates every
+   * trace except the oldest.
+   */
+  describe("numeric flag validation", () => {
+    const home = { MOOSE_TRACEVALS_HOME: "test/fixtures/home" };
+    const trace = "test/fixtures/traces/claude-session.jsonl";
+    const judged = ["--project", "test/fixtures/project", "--provider", "mock"];
+
+    it("rejects a --max-cost-usd that is not a number", async () => {
+      for (const bad of ["abc", ""]) {
+        const { code, stderr } = await runCli(
+          ["run", trace, ...judged, "--max-cost-usd", bad],
+          home,
+        );
+        expect(code).toBe(2);
+        expect(stderr).toMatch(/--max-cost-usd/);
+      }
+    });
+
+    it("rejects a negative --max-cost-usd", async () => {
+      const { code, stderr } = await runCli(
+        ["run", trace, ...judged, "--max-cost-usd=-1"],
+        home,
+      );
+      expect(code).toBe(2);
+      expect(stderr).toMatch(/--max-cost-usd/);
+    });
+
+    it("rejects a --limit that would silently drop the oldest trace", async () => {
+      const { code, stderr } = await runCli(
+        [
+          "run",
+          "--all-projects",
+          "--limit=-1",
+          "--project",
+          "test/fixtures/project",
+          "--deterministic-only",
+        ],
+        home,
+      );
+      expect(code).toBe(2);
+      expect(stderr).toMatch(/--limit/);
+    });
+
+    it("rejects a --runs that is not a whole number above zero", async () => {
+      for (const bad of ["abc", "0", "1.5"]) {
+        const { code, stderr } = await runCli(
+          ["run", trace, ...judged, "--runs", bad],
+          home,
+        );
+        expect(code).toBe(2);
+        expect(stderr).toMatch(/--runs/);
+      }
+    });
+
+    it("guards the same flags on calibrate", async () => {
+      const { code, stderr } = await runCli(
+        ["calibrate", trace, "--project", "test/fixtures/project", "--runs=-1"],
+        home,
+      );
+      expect(code).toBe(2);
+      expect(stderr).toMatch(/--runs/);
+    });
+
+    it("guards `list --limit` too", async () => {
+      const { code, stderr } = await runCli(["list", "--limit=-1"], home);
+      expect(code).toBe(2);
+      expect(stderr).toMatch(/--limit/);
+    });
+
+    it("still accepts the values a user actually passes", async () => {
+      const { code } = await runCli(
+        [
+          "run",
+          trace,
+          ...judged,
+          "--no-cache",
+          "--runs",
+          "1",
+          "--max-cost-usd",
+          "0.5",
+          "--format",
+          "json",
+        ],
+        home,
+      );
+      // 1 because of the engineered deterministic failure, never 2.
+      expect(code).toBe(1);
     });
   });
 
