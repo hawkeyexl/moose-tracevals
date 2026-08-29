@@ -119,7 +119,7 @@ export function requireOneOf(options: Options, keys: string[]): OptionCheck {
  */
 export interface TraceWindow {
   /** Which rule produced this window. */
-  scope: "session" | "skill" | "agent";
+  scope: "session" | "skill" | "agent" | "slash-command";
   /** Names the window in reasons and in the judge digest. */
   label: string;
   /**
@@ -150,6 +150,7 @@ export function windowFor(trace: Trace, plan: EvalPlan): TraceWindow {
   const { name, type } = plan.artifact;
   if (type === "skill") return skillWindow(trace, name);
   if (type === "agent") return agentWindow(trace, name);
+  if (type === "slash-command") return slashCommandWindow(trace, name);
   // Project rules govern everything, so the window is the trace itself —
   // handed back by reference, so a session-scoped eval grades exactly what it
   // graded before scoping existed.
@@ -173,19 +174,46 @@ export function skippedWindow(window: TraceWindow): GradeResult {
 }
 
 function skillWindow(trace: Trace, name: string): TraceWindow {
-  const label = `skill "${name}"`;
-  const opens = trace.skillInvocations
-    .filter((s) => s.name === name)
-    .map((s) => s.index);
+  // A skill loads either way: through the `Skill` tool, or by someone typing
+  // its slash form.
+  return injectionWindow(trace, "skill", `skill "${name}"`, (s) => s.name === name);
+}
+
+/**
+ * A slash command's window is a skill's window, because the mechanism is the
+ * same one: an instruction set injected at a point in the session, in force
+ * until the next injection takes over (ADR 01023). Only the opening differs —
+ * a `Skill` tool call is not the slash-command mechanism, so it can close a
+ * command's window but never open it.
+ */
+function slashCommandWindow(trace: Trace, name: string): TraceWindow {
+  return injectionWindow(
+    trace,
+    "slash-command",
+    `slash command "/${name}"`,
+    (s) => s.name === name && s.via === "command-injection",
+  );
+}
+
+/**
+ * The window an injected instruction set governed: from each of its own
+ * injections until the next injection of any kind — including another of its
+ * own, which simply reopens the window — or to the end of the session.
+ */
+function injectionWindow(
+  trace: Trace,
+  scope: "skill" | "slash-command",
+  label: string,
+  opensHere: (invocation: SkillInvocation) => boolean,
+): TraceWindow {
+  const opens = trace.skillInvocations.filter(opensHere).map((s) => s.index);
   if (opens.length === 0) {
     return emptyWindow(
-      "skill",
+      scope,
       label,
       `${label} was never invoked in this trace, so it governed no turns`,
     );
   }
-  // A skill governs until another skill takes over — including another
-  // invocation of itself, which simply reopens the window.
   const boundaries = [...trace.skillInvocations.map((s) => s.index)].sort(
     (a, b) => a - b,
   );
@@ -193,12 +221,12 @@ function skillWindow(trace: Trace, name: string): TraceWindow {
     start,
     end: boundaries.find((b) => b > start) ?? Number.POSITIVE_INFINITY,
   }));
-  // A skill invoked inside a subagent branch governs that branch's chain; one
-  // invoked on the main chain governs the main chain.
+  // An instruction set injected inside a subagent branch governs that branch's
+  // chain; one injected on the main chain governs the main chain.
   const own = new Set<string | undefined>(
     opens.map((index) => trace.events[index]?.branchId),
   );
-  return materialize(trace, "skill", label, spans, undefined, own);
+  return materialize(trace, scope, label, spans, undefined, own);
 }
 
 function agentWindow(trace: Trace, name: string): TraceWindow {

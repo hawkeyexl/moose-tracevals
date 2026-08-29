@@ -116,6 +116,32 @@ jobs:
             const availabilityOf = (ref) => r.coverage.find((c) => c.ref === ref)?.availability;
             check("fix-bug availability", availabilityOf("fix-bug"), "offered-and-used");
             check("doc-writer availability", availabilityOf("doc-writer"), "not-offered");
+            // The three things a `<command-name>` injection can be, told apart
+            // by the filesystem rather than by a list that goes stale
+            // (ADR 01023). This closes the limitation ADR 01016 recorded.
+            const kindOf = (ref) => r.coverage.find((c) => c.ref === ref)?.kind;
+            check("project command kind", kindOf("ship-it"), "slash-command");
+            check("skill under its slash form", kindOf("writing-toolkit:identify-ai-tells"), "skill");
+            check("built-in command kind", kindOf("model"), "slash-command");
+            // A built-in is reported as one, never as a skill that went
+            // missing: no warning, and no roster claim, because the transcript
+            // records no roster of commands to have missed it from.
+            const builtin = r.coverage.find((c) => c.ref === "model");
+            check("built-in command resolved", builtin?.resolved, false);
+            check("built-in command availability", builtin?.availability, undefined);
+            if (!/built-in slash command/.test(builtin?.note ?? "")) {
+              console.error(`expected a built-in note, got: ${builtin?.note}`);
+              process.exitCode = 1;
+            }
+            if (r.warnings.some((w) => /"model"/.test(w))) {
+              console.error("a built-in slash command must not warn:", JSON.stringify(r.warnings));
+              process.exitCode = 1;
+            }
+            // A slash command is windowed like a skill: the session ran Bash
+            // twice, both before /ship-it was invoked, so an unwindowed run
+            // would fail this. And the roster counts are untouched by any of it.
+            check("ship-it no-shell", find("ship-it.md", "no-shell-during-release")?.outcome, "pass");
+            check("ship-it wrote-note", find("ship-it.md", "wrote-the-release-note")?.outcome, "pass");
             // Offered-but-unused is counted, not listed, unless asked for.
             check("roster recorded", r.availability?.recorded, true);
             check("skills offered", r.availability?.skills?.offered, 5);
@@ -333,7 +359,7 @@ jobs:
             if (raw.charCodeAt(0) === 0xfeff) raw = raw.slice(1);
             const r = JSON.parse(raw);
             const paths = r.results.map((x) => x.artifact.replace(/\\/g, "/"));
-            const want = ["fix-bug/SKILL.md", "doc-writer.md", "CLAUDE.md", "AGENTS.md"];
+            const want = ["fix-bug/SKILL.md", "doc-writer.md", "CLAUDE.md", "AGENTS.md", "commands/ship-it.md"];
             for (const suffix of want) {
               if (!paths.some((p) => p.endsWith(suffix))) {
                 console.error(`expected to discover ${suffix}`);
@@ -350,6 +376,14 @@ jobs:
             const rules = r.results.filter((x) => x.type === "project-rules");
             if (rules.length === 0 || !rules.every((x) => x.status === "propose-only")) {
               console.error("project rules must be propose-only");
+              process.exitCode = 1;
+            }
+            // A slash command is not. Its frontmatter is consumed by the
+            // harness rather than injected, so an eval block there cannot leak
+            // the rubric into the session under test (ADR 01023).
+            const commands = r.results.filter((x) => x.type === "slash-command");
+            if (commands.length === 0 || commands.some((x) => x.status === "propose-only")) {
+              console.error("slash commands must be writable, not propose-only");
               process.exitCode = 1;
             }
             // Proves the gate ran instead of rubber-stamping the proposal.
@@ -390,6 +424,10 @@ jobs:
             const r = JSON.parse(raw);
             const filled = r.results.filter((x) => x.status === "filled");
             if (filled.length === 0) { console.error("expected at least one filled artifact"); process.exitCode = 1; }
+            if (!filled.some((x) => x.type === "slash-command")) {
+              console.error("expected the slash command to be written on the real path");
+              process.exitCode = 1;
+            }
             // Project rules must stay propose-only even on the write path.
             if (r.results.some((x) => x.type === "project-rules" && x.status === "filled")) {
               console.error("project rules must never be written");

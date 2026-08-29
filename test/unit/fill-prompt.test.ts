@@ -26,6 +26,10 @@ describe("fill prompt", () => {
 
     const rules = systemPromptFor("project-rules");
     expect(rules).toContain("skill-invoked");
+
+    const command = systemPromptFor("slash-command");
+    expect(command).toContain("slash command");
+    expect(command).not.toContain("json-output");
   });
 
   it("states the binary pass/fail bar and demands examples", () => {

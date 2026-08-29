@@ -44,6 +44,20 @@ export interface AvailabilityCoverage {
 
 const EMPTY: AvailabilityCounts = { offered: 0, used: 0, unused: 0 };
 
+/**
+ * Kinds the roster says nothing about, so no row of theirs may carry a state.
+ *
+ * Project rules are never *offered* — they are in force from the first turn.
+ * Slash commands have no listing record of any kind, so `not-offered` would be
+ * a confident accusation drawn from evidence that was never collected — which
+ * is precisely what a built-in command looked like before it had its own type
+ * (ADR 01016's recorded limitation, closed by ADR 01023).
+ */
+const UNROSTERED = new Set<CoverageEntry["kind"]>([
+  "project-rules",
+  "slash-command",
+]);
+
 export function coverAvailability(
   trace: Trace,
   coverage: CoverageEntry[],
@@ -56,7 +70,7 @@ export function coverAvailability(
     return {
       report: { recorded: false, skills: EMPTY, agents: EMPTY, listed: false },
       coverage: coverage.map((entry) =>
-        entry.kind === "project-rules"
+        UNROSTERED.has(entry.kind)
           ? entry
           : { ...entry, availability: "unknown" as const },
       ),
@@ -72,9 +86,7 @@ export function coverAvailability(
   const usedAgents = new Set<string>();
 
   const annotated = coverage.map((entry) => {
-    // Project rules are not offered to a session; they are in force from the
-    // first turn, so the roster has nothing to say about them.
-    if (entry.kind === "project-rules") return entry;
+    if (UNROSTERED.has(entry.kind)) return entry;
     const offered = offeredFor(entry.kind).has(entry.ref);
     if (offered) {
       (entry.kind === "skill" ? usedSkills : usedAgents).add(entry.ref);
