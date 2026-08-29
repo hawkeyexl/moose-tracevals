@@ -80,6 +80,13 @@ export interface TracevalsConfig {
     maxCostUsd?: number;
   };
   failOnNeedsReview: boolean;
+  /**
+   * Module specifiers imported before evals are planned, so a `registerGrader`
+   * call from outside this package lands in time (ADR 01017). Resolved against
+   * the config file's directory, in order — a later entry wins a colliding
+   * kind. `--require` appends to this list rather than replacing it.
+   */
+  plugins: string[];
 }
 
 const ajv = new Ajv2020({ allErrors: true });
@@ -143,6 +150,9 @@ export function parseConfig(raw: unknown): TracevalsConfig {
       cacheDir: r.fill?.cacheDir ?? ".moose-tracevals/cache/fill",
     },
     failOnNeedsReview: r.failOnNeedsReview ?? true,
+    // Always a list, never undefined: the read site concatenates `--require`
+    // onto it, and a hole there would be a special case in every caller.
+    plugins: [...(r.plugins ?? [])],
   };
   if (typeof r.judge?.maxCostUsd === "number") {
     config.judge.maxCostUsd = r.judge.maxCostUsd;

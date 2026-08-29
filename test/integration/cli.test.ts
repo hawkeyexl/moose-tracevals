@@ -154,6 +154,77 @@ describe.skipIf(!built)("built CLI", () => {
     expect(stderr).toContain("no such file or directory");
   });
 
+  // The plugin path only really exists once it survives bundling: `dist/cli.js`
+  // and `dist/index.js` are separate entries, and a side-effect plugin that
+  // imports `moose-tracevals` is registering into whichever copy of the
+  // registry that specifier resolves to. Only the built CLI can prove it is the
+  // same one (ADR 01017).
+  describe("grader plugins", () => {
+    const pluginRun = (extra: string[]) => [
+      "run",
+      "test/fixtures/traces/claude-session.jsonl",
+      "--project",
+      "test/fixtures/plugin-project",
+      "--deterministic-only",
+      "--format",
+      "json",
+      ...extra,
+    ];
+
+    it("reports an unknown grader kind when no plugin is required", async () => {
+      const { code, stdout } = await runCli(pluginRun([]), {
+        MOOSE_TRACEVALS_HOME: "test/fixtures/plugin-project",
+      });
+      expect(code).toBe(1);
+      const report = JSON.parse(stdout);
+      const result = report.evalResults.find(
+        (x: { evalName: string }) => x.evalName === "stayed-in-the-worktree",
+      );
+      expect(result.outcome).toBe("error");
+      expect(result.error).toContain("unknown grader kind");
+    });
+
+    it("--require registers the kind and the same eval passes", async () => {
+      const { code, stdout } = await runCli(
+        pluginRun(["--require", "./test/fixtures/plugins/stayed-in-scope.mjs"]),
+        { MOOSE_TRACEVALS_HOME: "test/fixtures/plugin-project" },
+      );
+      expect(code).toBe(0);
+      const report = JSON.parse(stdout);
+      const result = report.evalResults.find(
+        (x: { evalName: string }) => x.evalName === "stayed-in-the-worktree",
+      );
+      expect(result.outcome).toBe("pass");
+    });
+
+    it("accepts a plugin that registers by importing the package itself", async () => {
+      // The side-effect form the extend guide documents. It registers a kind
+      // no eval declares, so the assertion is the absence of the
+      // registered-nothing warning: the import reached the CLI's own registry.
+      const { stdout } = await runCli(
+        pluginRun([
+          "--require",
+          "./test/fixtures/plugins/side-effect-grader.mjs",
+        ]),
+        { MOOSE_TRACEVALS_HOME: "test/fixtures/plugin-project" },
+      );
+      const report = JSON.parse(stdout);
+      expect(
+        report.warnings.some((w: string) => /registered no grader kinds/.test(w)),
+      ).toBe(false);
+    });
+
+    it("exits 2 with a message that is not the grader-not-found one", async () => {
+      const { code, stderr } = await runCli(
+        pluginRun(["--require", "./test/fixtures/plugins/does-not-exist.mjs"]),
+        { MOOSE_TRACEVALS_HOME: "test/fixtures/plugin-project" },
+      );
+      expect(code).toBe(2);
+      expect(stderr).toContain("could not load grader plugin");
+      expect(stderr).not.toContain("unknown grader kind");
+    });
+  });
+
   it("legacy stream-json traces still parse", async () => {
     const { code, stdout } = await runCli(
       [

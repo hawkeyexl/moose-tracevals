@@ -100,7 +100,12 @@
         "maxCostUsd": { "type": "number", "minimum": 0 }
       }
     },
-    "failOnNeedsReview": { "type": "boolean" }
+    "failOnNeedsReview": { "type": "boolean" },
+    "plugins": {
+      "type": "array",
+      "description": "Modules imported before evals are planned, so one calling registerGrader() can add a grader kind the built-ins do not cover. A relative or absolute path resolves against this file's directory, not the working directory; a bare package name resolves the way an import from this file's directory would. Load order is significant: a later entry wins a colliding kind.",
+      "items": { "type": "string", "minLength": 1 }
+    }
   },
   "$defs": {
     "pricing": {

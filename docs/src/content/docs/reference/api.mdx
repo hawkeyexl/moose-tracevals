@@ -84,6 +84,9 @@ The CLI's three commands, callable directly. Each pairs a runner with a renderer
 | `IMPLICIT_EVAL_NAME` | `"adheres-to-artifact"`. |
 | ★ `registerGrader(grader)` | Add a kind at runtime. See [Custom graders](/moose-tracevals/extend/custom-graders/). |
 | `graderFor(kind)`, `listGraderKinds()` | |
+| `BUILTIN_GRADER_KINDS` | The kinds this package ships, frozen before anything can register over them. |
+| `loadGraderPlugins({ plugins, configDir })` | Import grader plugins the way `run` and `fill` do — same resolution, same warnings. Throws `TracevalsError` on a specifier that will not load. |
+| `GraderPluginApi`, `GraderPluginRegister`, `LoadGraderPluginsOptions`, `LoadedGraderPlugins` | |
 | `EvalPlan` | |
 | *(all of `graders/types`)* | `TraceGrader`, `GradeResult`, `Finding`, `TraceGraderContext`. |
 | `windowFor(trace, plan)` | The slice of the trace that plan's artifact governed. A custom grader that counts events should read this rather than the trace. |
