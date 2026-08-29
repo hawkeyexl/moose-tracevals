@@ -151,6 +151,65 @@ describe("resolveArtifacts", () => {
     expect(command?.origin).toBe("plugin");
   });
 
+  it("keeps the whole remainder of a plugin reference as the short name", async () => {
+    // `split(":", 2)` discards everything past the second field, so
+    // `plugin:release:tag` looked for a skill named `release`. The plugin
+    // namespace is the part before the first colon; the rest is the name.
+    const { coverage } = await resolveArtifacts(
+      emptyTrace({
+        skillInvocations: [
+          {
+            name: "writing-toolkit:deep:nested",
+            via: "skill-tool",
+            index: 0,
+          },
+        ],
+      }),
+      { env: { MOOSE_TRACEVALS_HOME: fixtureHome } },
+    );
+    const entry = coverage.find((c) => c.ref === "writing-toolkit:deep:nested");
+    expect(entry?.resolved).toBe(false);
+    // Truncation shows up as a lookup for the *wrong* name: the store is
+    // searched for `deep` rather than for `deep:nested`.
+    expect(
+      entry?.tried.some((t) => /deep:nested[\\/]SKILL\.md$/.test(t)),
+      `tried: ${entry?.tried.join(" | ")}`,
+    ).toBe(true);
+  });
+
+  it("matches a plugin name as a path segment, not a substring", async () => {
+    // `path.includes(pluginName)` matched any absolute path containing the
+    // name — another plugin's directory, or a Windows home like C:\Users\docs.
+    const { coverage, artifacts } = await resolveArtifacts(
+      emptyTrace({
+        skillInvocations: [
+          // `identify-ai-tells` really exists, but under `writing-toolkit`.
+          { name: "toolkit:identify-ai-tells", via: "skill-tool", index: 0 },
+        ],
+      }),
+      { env: { MOOSE_TRACEVALS_HOME: fixtureHome } },
+    );
+    expect(
+      artifacts.some((a) => a.name === "toolkit:identify-ai-tells"),
+      "a substring match claimed another plugin's skill",
+    ).toBe(false);
+    expect(
+      coverage.find((c) => c.ref === "toolkit:identify-ai-tells")?.resolved,
+    ).toBe(false);
+  });
+
+  it("matches a plugin command by segment too", async () => {
+    const { artifacts } = await resolveArtifacts(
+      emptyTrace({
+        skillInvocations: [
+          { name: "toolkit:polish-prose", via: "command-injection", index: 0 },
+        ],
+      }),
+      { env: { MOOSE_TRACEVALS_HOME: fixtureHome } },
+    );
+    expect(artifacts.some((a) => a.name === "toolkit:polish-prose")).toBe(false);
+  });
+
   it("resolves project rules at the project dir", async () => {
     const { artifacts } = await resolveFixtureSession();
     const rules = artifacts.filter((a) => a.type === "project-rules");
@@ -395,6 +454,55 @@ describe("artifact staleness with a session manifest", () => {
     expect(resolved.artifacts[0]?.content).toContain("# Rewritten");
     expect(
       resolved.coverage.find((c) => c.kind === "project-rules")?.resolved,
+    ).toBe(true);
+  });
+
+  it("joins when the session cwd is below the git root", async () => {
+    // The monorepo case: `capture` runs at the session's cwd, while `run`
+    // without `--project` keys on the *git root*. Two different bases produce
+    // two different relative paths for one file, so every hash check silently
+    // degraded to `skipped` — which is exactly the outcome a manifest exists
+    // to remove.
+    const app = join(dir, "app");
+    await mkdir(app, { recursive: true });
+    await writeFile(join(app, "CLAUDE.md"), "# App rules\n", "utf-8");
+    // One rules file, so the row is about the join and nothing else.
+    await rm(join(dir, "CLAUDE.md"));
+    const manifest = await buildManifest({ sessionId: "s1", root: app });
+    expect(manifest.artifacts.map((a) => a.path)).toContain("CLAUDE.md");
+
+    const { coverage, warnings } = await resolveArtifacts(
+      emptyTrace({ cwd: app, sessionId: "s1" }),
+      { projectDir: app, projectRoot: dir, env: {}, manifest },
+    );
+    const rules = coverage.find((c) => c.kind === "project-rules");
+    expect(rules?.contentCheck?.status).toBe("match");
+    expect(warnings.some((w) => /manifest/i.test(w) && /no/i.test(w))).toBe(
+      false,
+    );
+  });
+
+  it("says so once when a manifest joins nothing at all", async () => {
+    // Row-by-row degradation reads as "nothing recorded here", which is the
+    // same sentence a manifest for a different tree produces. Say it once,
+    // loudly, instead.
+    const manifest = await capture();
+    const foreign: SessionManifest = {
+      ...manifest,
+      artifacts: [
+        {
+          name: "CLAUDE.md",
+          type: "project-rules",
+          path: "somewhere/else/CLAUDE.md",
+          sha256: "0".repeat(64),
+          bytes: 1,
+        },
+      ],
+    };
+    const { warnings } = await resolveWith(foreign, "2026-06-01T00:00:00.000Z");
+    expect(
+      warnings.some((w) => /manifest/i.test(w) && /no artifact/i.test(w)),
+      `warnings were: ${warnings.join(" | ")}`,
     ).toBe(true);
   });
 });
