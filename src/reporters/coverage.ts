@@ -1,5 +1,6 @@
 /** Coverage rendering shared by every reporter. */
 import type { AvailabilityReport, CoverageEntry } from "../artifacts/types.js";
+import type { ManifestReport } from "../capture/types.js";
 
 /**
  * The "where" cell for one coverage entry.
@@ -65,10 +66,47 @@ export function availabilityLines(report: AvailabilityReport): string[] {
  * "which file", and this answers "is that file still what the session saw"
  * (ADR 01021). Collapsing them would drop the path for a stale entry, which is
  * exactly the row where a reader most wants to open the file.
+ *
+ * The wording says which evidence answered, because they are not the same
+ * claim (ADR 01024). A manifest mismatch is content identity — the file *is*
+ * different. mtime is a guess that a checkout defeats. A reader deciding
+ * whether to act on the row needs to know which of the two they are reading,
+ * and the mtime phrasing is left byte-identical so that nothing downstream has
+ * to re-learn it.
  */
 export function coverageStaleness(entry: CoverageEntry): string {
   if (entry.stale !== true) return "";
+  if (entry.contentCheck?.status === "mismatch") {
+    return "changed since the session started (session manifest sha256)";
+  }
   return entry.modifiedAt !== undefined
     ? `modified after the session ended (${entry.modifiedAt})`
     : "modified after the session ended";
+}
+
+/**
+ * The session-manifest block, or nothing when no manifest was found.
+ *
+ * Silence is the right default for the absent case: a line on every run of
+ * every project that has not adopted `capture` is noise, and the machine-
+ * readable answer is already on each coverage row as a `skipped` content check
+ * with its reason.
+ *
+ * `unrecorded` is reported rather than folded into `matched`, because those
+ * rows still rest on the mtime heuristic and a reader has to be able to see how
+ * many of them there are.
+ */
+export function manifestLines(report: ManifestReport): string[] {
+  const lines = [
+    `${report.path} captured ${report.capturedAt}${
+      report.gitSha !== undefined ? ` at ${report.gitSha.slice(0, 12)}` : ""
+    }`,
+    `${report.matched} artifact(s) unchanged, ${report.changed} changed, ${report.unrecorded} not recorded`,
+  ];
+  if (report.unrecorded > 0) {
+    lines.push(
+      "artifacts the manifest did not record keep the mtime heuristic",
+    );
+  }
+  return lines;
 }

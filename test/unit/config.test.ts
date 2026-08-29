@@ -14,7 +14,18 @@ describe("parseConfig", () => {
     expect(config.render.maxBlockChars).toBe(2000);
     expect(config.render.maxTotalChars).toBe(150000);
     expect(config.history.file).toBe(".moose-tracevals/history.jsonl");
+    expect(config.capture.dir).toBe(".moose-tracevals/sessions");
     expect(config.failOnNeedsReview).toBe(true);
+  });
+
+  it("takes an explicit capture directory and rejects a bad one", () => {
+    expect(parseConfig({ capture: { dir: "artifacts/manifests" } }).capture.dir).toBe(
+      "artifacts/manifests",
+    );
+    expect(() => parseConfig({ capture: { dir: "" } })).toThrow(TracevalsError);
+    expect(() => parseConfig({ capture: { nope: true } })).toThrow(
+      TracevalsError,
+    );
   });
 
   it("keeps explicit values", () => {
