@@ -25,6 +25,7 @@ describe("discoverArtifacts", () => {
       "project-rules:AGENTS.md",
       "project-rules:CLAUDE.md",
       "skill:SKILL.md",
+      "slash-command:ship-it.md",
     ]);
     // packages/api/README.md is a doc, not an instruction artifact.
     expect(
@@ -132,6 +133,43 @@ describe("discoverArtifacts", () => {
       expect(paths.some((p) => p.includes("vendor/agents"))).toBe(false);
       // The legitimate ones are still found.
       expect(paths.some((p) => p.endsWith("agents/helper.md"))).toBe(true);
+    });
+
+    // `.claude/commands/` is the only place the resolver ever looks, and
+    // organizing subdirectories there are still one flat command namespace
+    // (ADR 01023).
+    it("recognizes .claude/commands at any depth, and nothing else named commands", async () => {
+      await mkdir(join(dir, ".claude", "commands", "release"), {
+        recursive: true,
+      });
+      await mkdir(join(dir, "docs", "commands"), { recursive: true });
+      await writeFile(
+        join(dir, ".claude", "commands", "ship.md"),
+        "---\ndescription: ship\n---\nbody\n",
+      );
+      await writeFile(
+        join(dir, ".claude", "commands", "release", "tag.md"),
+        "---\ndescription: tag\n---\nbody\n",
+      );
+      await writeFile(
+        join(dir, "docs", "commands", "cli-reference.md"),
+        "# CLI reference\n\nProse about commands.\n",
+      );
+
+      const result = await discoverArtifacts({ root: dir });
+      expect(ids(result.artifacts)).toContain("slash-command:ship.md");
+      // A nested command is still invoked by its bare name.
+      const nested = result.artifacts.find((a) =>
+        a.artifact.path.endsWith("tag.md"),
+      );
+      expect(nested?.artifact.type).toBe("slash-command");
+      expect(nested?.artifact.name).toBe("tag");
+      // fill writes by default, so prose under docs/commands/ must stay out.
+      expect(
+        result.artifacts.some((a) =>
+          a.artifact.path.replace(/\\/g, "/").includes("docs/commands"),
+        ),
+      ).toBe(false);
     });
 
     it("anchors convention at the scanned directory, not only the root", async () => {

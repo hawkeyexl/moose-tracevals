@@ -76,6 +76,24 @@ describe("coverAvailability (ADR 01016)", () => {
     expect(coverage[0]?.availability).toBeUndefined();
   });
 
+  // The transcript records no roster of slash commands, so "not offered" would
+  // be a claim about evidence that does not exist — and asserting it anyway is
+  // exactly the defect ADR 01016 recorded (ADR 01023).
+  it("leaves slash commands out of the roster comparison", () => {
+    const { coverage, report } = coverAvailability(rostered(), [
+      used("ship-it", "slash-command"),
+      {
+        ref: "model",
+        kind: "slash-command",
+        resolved: false,
+        tried: ["/p/.claude/commands/model.md"],
+      },
+    ]);
+    expect(coverage.every((c) => c.availability === undefined)).toBe(true);
+    expect(report.skills.used).toBe(0);
+    expect(report.agents.used).toBe(0);
+  });
+
   it("counts offered, used, and unused per kind", () => {
     const { report } = coverAvailability(rostered(), [
       used("fix-bug", "skill"),
