@@ -325,6 +325,90 @@ jobs:
             }
           '
 
+      # `registerGrader` is exported and documented, but until ADR 01017 there
+      # was no way to reach it from the CLI — so a repo could write a custom
+      # grader and still not use it in CI. This proves both halves through the
+      # built binary: the same corpus errors without the plugin and passes with
+      # it, from the flag and from the config alike.
+      - name: Dogfood run (grader plugins)
+        shell: bash
+        env:
+          MOOSE_TRACEVALS_HOME: test/fixtures/plugin-project
+        run: |
+          trace=test/fixtures/traces/claude-session.jsonl
+          # 1. The gap. A declared custom kind with nothing loading it is an
+          #    errored eval — never a silent pass.
+          set +e
+          node dist/cli.js run "$trace" --project test/fixtures/plugin-project --deterministic-only --format json > moose-tracevals-plugin-off.json
+          code=$?
+          set -e
+          if [ "$code" -ne 1 ]; then
+            echo "Expected exit 1 without the plugin, got $code"; cat moose-tracevals-plugin-off.json; exit 1
+          fi
+
+          # 2. --require closes it, and nothing else about the corpus changed.
+          node dist/cli.js run "$trace" --project test/fixtures/plugin-project --deterministic-only --require ./test/fixtures/plugins/stayed-in-scope.mjs --format json > moose-tracevals-plugin-on.json
+
+          # 3. The same plugin named by the config instead, run from the
+          #    project directory: `../plugins/…` only resolves if specifiers
+          #    are taken relative to the config file, not the working
+          #    directory. Run from the repo root it would resolve to nothing.
+          ( cd test/fixtures/plugin-project && MOOSE_TRACEVALS_HOME=. node ../../../dist/cli.js run ../traces/claude-session.jsonl --project . --deterministic-only --format json ) > moose-tracevals-plugin-config.json
+
+          node -e '
+            const fs = require("fs");
+            const read = (f) => {
+              let raw = fs.readFileSync(f, "utf8");
+              if (raw.charCodeAt(0) === 0xfeff) raw = raw.slice(1);
+              return JSON.parse(raw);
+            };
+            const evalOf = (r) => r.evalResults.find((x) => x.evalName === "stayed-in-the-worktree");
+            const check = (label, actual, expected) => {
+              if (actual !== expected) {
+                console.error(`${label}: expected ${expected}, got ${actual}`);
+                process.exitCode = 1;
+              }
+            };
+            const off = evalOf(read("moose-tracevals-plugin-off.json"));
+            check("no plugin outcome", off?.outcome, "error");
+            if (!/unknown grader kind/.test(off?.error ?? "")) {
+              console.error(`no plugin: expected the registry error, got: ${off?.error}`);
+              process.exitCode = 1;
+            }
+            for (const file of ["moose-tracevals-plugin-on.json", "moose-tracevals-plugin-config.json"]) {
+              const r = read(file);
+              check(`${file} outcome`, evalOf(r)?.outcome, "pass");
+              check(`${file} exit`, r.exitCode, 0);
+              // A plugin that loaded but registered nothing would still pass
+              // the check above by accident on a corpus with no custom eval;
+              // here it would surface as this warning.
+              if (r.warnings.some((w) => /registered no grader kinds/.test(w))) {
+                console.error(`${file}: the plugin registered nothing`);
+                process.exitCode = 1;
+              }
+            }
+          '
+
+          # 4. A plugin that will not load is operational (exit 2), and says so
+          #    in words that cannot be mistaken for a typo'd grader kind — the
+          #    two are neighbours, and conflating them sends the reader to the
+          #    wrong file.
+          set +e
+          node dist/cli.js run "$trace" --project test/fixtures/plugin-project --deterministic-only --require ./test/fixtures/plugins/not-here.mjs > /dev/null 2> moose-tracevals-plugin-err.txt
+          code=$?
+          set -e
+          if [ "$code" -ne 2 ]; then
+            echo "Expected exit 2 from an unloadable plugin, got $code"; cat moose-tracevals-plugin-err.txt; exit 1
+          fi
+          grep -q "could not load grader plugin" moose-tracevals-plugin-err.txt || {
+            echo "missing the plugin-load error:"; cat moose-tracevals-plugin-err.txt; exit 1
+          }
+          if grep -q "unknown grader kind" moose-tracevals-plugin-err.txt; then
+            echo "a load failure must not read as a grader-not-found error:"
+            cat moose-tracevals-plugin-err.txt
+            exit 1
+          fi
+
       - name: Dogfood list (fixture session store)
         shell: bash
         env:

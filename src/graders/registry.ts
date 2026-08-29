@@ -22,6 +22,15 @@ const graders = new Map<string, TraceGrader>(
   ].map((g) => [g.kind, g]),
 );
 
+/**
+ * The kinds this package ships, frozen before anything can register over them.
+ * Plugin loading (ADR 01017) reads it to tell "a plugin added a kind" from
+ * "a plugin took over a built-in" — the second silently changes what every
+ * eval declaring that kind means, including evals the plugin's author does not
+ * own, so it has to be said out loud.
+ */
+export const BUILTIN_GRADER_KINDS: ReadonlySet<string> = new Set(graders.keys());
+
 export function registerGrader(grader: TraceGrader): void {
   graders.set(grader.kind, grader);
 }

@@ -90,6 +90,7 @@ tracevals:
     cacheDir: .moose-tracevals/cache/fill
     # maxCostUsd has no default
   failOnNeedsReview: true
+  plugins: []                  # grader modules to import before evals are planned
 ```
 
 ## `provider`
@@ -228,10 +229,48 @@ shape.
 
 | Key | Type | Default | CLI |
 |---|---|---|---|
-| `failOnNeedsReview` | boolean | `true` | — |
+| `failOnNeedsReview` | boolean | `true` | `--fail-on-needs-review` / `--no-fail-on-needs-review` |
 
 Whether a `needs-review` outcome contributes to a non-zero exit code. Set it to `false` to surface
 ambiguous verdicts in the report without blocking on them.
+
+## `plugins`
+
+| Key | Type | Default | CLI |
+|---|---|---|---|
+| `plugins` | array of strings | `[]` | `--require` **appends** |
+
+Modules imported before evals are planned, so one calling `registerGrader()` can add a grader kind
+the built-ins do not cover. Honoured by both `run` and `fill`. See
+[Write a custom grader](/moose-tracevals/extend/custom-graders/#loading-it-from-the-cli).
+
+```yaml
+tracevals:
+  plugins:
+    - ./tracevals/graders.mjs      # relative to *this file*, not the cwd
+    - /opt/shared/graders.mjs      # absolute, as written
+    - "@acme/tracevals-graders"    # resolved from this file's directory
+```
+
+Four things to know, in the order they will bite:
+
+- **Specifiers resolve against this file's directory**, never the working directory. That is what
+  lets a committed relative path survive a CI step that runs the CLI from the repository root.
+- **Load order is significant.** Entries load in order, config before `--require`, and a later one
+  wins a kind an earlier one already claimed.
+- **`--require` adds; it does not replace.** A one-off flag would otherwise unregister every grader
+  the config names, and each eval declaring one would report `unknown grader kind` — pointing at an
+  artifact that is not the problem.
+- **A specifier that will not import exits `2`.** Skipping it would leave a run that looks like it
+  ran. A module that imports but registers nothing warns instead, and one that takes over a built-in
+  kind is allowed and reported.
+
+<Aside type="caution" title="This imports code named in your config">
+A plugin runs with the CLI's full privileges; there is no sandbox. The list is empty unless you
+write one, and it lives in the repository doing the evaluating — unlike the
+[`command` grader](/moose-tracevals/reference/graders/), which runs a program named by the artifacts
+of the project being evaluated. Evaluating someone else's trace cannot introduce a plugin.
+</Aside>
 
 ## Keys with no CLI flag
 
@@ -239,4 +278,4 @@ Worth knowing, because they can only be changed in the config file:
 
 `judge.temperature` · `judge.zones.autoPass` · `judge.zones.autoFail` · `judge.cacheDir` ·
 `render.maxBlockChars` · `render.maxTotalChars` · `history.file` · `fill.temperature` ·
-`fill.cacheDir` · `failOnNeedsReview` · every `provider.*` key except `model`
+`fill.cacheDir` · every `provider.*` key except `model`

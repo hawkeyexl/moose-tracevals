@@ -31,6 +31,12 @@ interface RunFlags {
   output?: string;
   history?: boolean;
   failOnNeedsReview?: boolean;
+  require?: string[];
+}
+
+/** Repeatable option collector — commander keeps only the last value otherwise. */
+function collect(value: string, previous: string[] = []): string[] {
+  return [...previous, value];
 }
 
 async function executeRun(trace: string | undefined, opts: RunFlags) {
@@ -58,6 +64,7 @@ async function executeRun(trace: string | undefined, opts: RunFlags) {
     history: opts.history,
     // Left undefined when neither flag is passed, so the config still decides.
     failOnNeedsReview: opts.failOnNeedsReview,
+    ...(opts.require !== undefined ? { require: opts.require } : {}),
   });
   console.log(rendered);
   process.exitCode = report.exitCode;
@@ -79,7 +86,12 @@ function addRunFlags(cmd: Command): Command {
     .option("-o, --output <file>", "also write the report to a file")
     .option("--history", "append to history and compare with the previous run")
     .option("--fail-on-needs-review", "treat needs-review as a failure")
-    .option("--no-fail-on-needs-review", "do not fail the run on needs-review");
+    .option("--no-fail-on-needs-review", "do not fail the run on needs-review")
+    .option(
+      "--require <module>",
+      "load a grader plugin; repeatable, and added to config plugins",
+      collect,
+    );
 }
 
 addRunFlags(
@@ -109,6 +121,11 @@ program
   .option("--no-cache", "bypass the proposal cache")
   .option("--provider <name>", "provider: claude-cli, anthropic, openai, mock")
   .option("--model <model>", "model override")
+  .option(
+    "--require <module>",
+    "load a grader plugin; repeatable, and added to config plugins",
+    collect,
+  )
   .option("-f, --format <format>", "human | json", "human")
   .action(async (paths: string[], opts: {
     project?: string;
@@ -119,6 +136,7 @@ program
     cache?: boolean;
     provider?: string;
     model?: string;
+    require?: string[];
     format?: string;
   }) => {
     // parseFloat("abc") is NaN, and every comparison against NaN is false —
@@ -150,6 +168,7 @@ program
       ...(opts.cache === false ? { noCache: true } : {}),
       ...(opts.provider !== undefined ? { provider: opts.provider } : {}),
       ...(opts.model !== undefined ? { model: opts.model } : {}),
+      ...(opts.require !== undefined ? { require: opts.require } : {}),
     });
     console.log(
       opts.format === "json" ? JSON.stringify(report, null, 2) : rendered,
