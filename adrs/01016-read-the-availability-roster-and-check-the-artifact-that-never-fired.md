@@ -236,7 +236,10 @@ roster makes a filesystem scan unnecessary here anyway.
   location(s) tried)" beside it, so the pair reads as "this reference is not a skill" rather than as
   a misconfiguration. Fixing it properly means giving slash commands their own `ArtifactType`, which
   is a separate change; a hard-coded list of built-in command names would go stale with every Claude
-  Code release.
+  Code release. **Closed by [ADR 01023](01023-give-slash-commands-their-own-artifact-type.md):** a
+  `<command-name>` injection now resolves to a command file, a skill, or a built-in by looking for
+  the file, and a `slash-command` row carries no roster state at all — because the transcript keeps
+  no roster of commands for it to be missing from.
 - Neutral, because `deferred_tools_delta` carries no descriptions, so the tool roster is names only —
   enough for availability, not enough to judge whether a tool *should* have been used.
 - Neutral, because the judge digest is unchanged: the roster is not rendered into the prompt, so no

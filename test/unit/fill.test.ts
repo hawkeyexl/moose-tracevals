@@ -88,6 +88,24 @@ describe("runFill", () => {
     expect(await readFile(join(project, "CLAUDE.md"), "utf-8")).toBe(before);
   });
 
+  // A slash command's frontmatter is consumed by the harness and only its body
+  // is injected, so an eval block there never reaches the agent under test —
+  // the hazard that keeps project rules propose-only (ADR 01023).
+  it("writes into a slash command like a skill, not propose-only", async () => {
+    const { report } = await run();
+    const command = report.results.find((r) => r.type === "slash-command");
+
+    expect(command?.status).toBe("filled");
+    const updated = await readFile(
+      join(project, ".claude", "commands", "ship-it.md"),
+      "utf-8",
+    );
+    expect(updated).toContain("no-shell");
+    expect(updated).toContain("eval-provenance");
+    // Pre-existing evals are untouched.
+    expect(updated).toContain("no-shell-during-release");
+  });
+
   it("writes nothing in a dry run", async () => {
     const before = await readFile(
       join(project, ".claude", "skills", "fix-bug", "SKILL.md"),

@@ -41,7 +41,7 @@ All exit `2`:
 
 | Field | Source |
 |---|---|
-| `skillInvocations` | `Skill` tool calls (`input.skill`, `via: "skill-tool"`) **and** `<command-name>` injections in user text (`via: "command-injection"`, leading `/` stripped, `<command-args>` captured) |
+| `skillInvocations` | `Skill` tool calls (`input.skill`, `via: "skill-tool"`) **and** `<command-name>` injections in user text (`via: "command-injection"`, leading `/` stripped, `<command-args>` captured). `via` is load-bearing: a `command-injection` entry names a **slash command**, which [resolution](/moose-tracevals/declare/coverage/#slash-commands-are-one-of-three-things) later decides is a command file, a skill, or a built-in |
 | `agentSpawns` | the `Agent` tool's `input.subagent_type`, plus its `description` |
 | `fileAccesses` | `Read` / `Write` / `Edit` `input.file_path`, mapped to op `read` / `write` / `edit` |
 | `toolCalls` | every tool call, with a sidechain flag |

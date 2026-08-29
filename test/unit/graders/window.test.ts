@@ -89,8 +89,10 @@ const trace = makeTrace({
   ],
 });
 
-const planFor = (name: string, type: "skill" | "agent" | "project-rules") =>
-  makePlan({ artifact: makeArtifact({ name, type }) });
+const planFor = (
+  name: string,
+  type: "skill" | "agent" | "project-rules" | "slash-command",
+) => makePlan({ artifact: makeArtifact({ name, type }) });
 
 describe("windowFor", () => {
   it("gives project rules the whole session", () => {
@@ -136,6 +138,40 @@ describe("windowFor", () => {
     expect(window.events.map((e) => e.index)).toEqual([6]);
     expect(window.toolCalls.map((c) => c.name)).toEqual(["Read"]);
     expect(window.fileAccesses.map((a) => a.path)).toEqual(["src/util.ts"]);
+  });
+
+  // A slash command injects instructions at a point in the session and is
+  // superseded by the next injection, which is the skill rule exactly
+  // (ADR 01023).
+  it("runs a slash command's window from its injection to the next", () => {
+    const injected = makeTrace({
+      ...trace,
+      skillInvocations: [
+        { name: "ship-it", via: "command-injection", index: 1 },
+        { name: "fix-bug", via: "skill-tool", index: 2 },
+        { name: "polish", via: "skill-tool", index: 8 },
+      ],
+    });
+    const window = windowFor(injected, planFor("ship-it", "slash-command"));
+    expect(window.scope).toBe("slash-command");
+    expect(window.empty).toBe(false);
+    expect(window.label).toContain("/ship-it");
+    // Closed by the skill invoked right after it.
+    expect(window.events.map((e) => e.index)).toEqual([1]);
+    expect(window.toolCalls.map((c) => c.name)).toEqual(["Bash"]);
+  });
+
+  // A `Skill` tool call is not the slash-command mechanism, so it can never
+  // open a slash command's window — only close it.
+  it("opens a slash command's window only on a command injection", () => {
+    const shadowed = makeTrace({
+      ...trace,
+      skillInvocations: [{ name: "ship-it", via: "skill-tool", index: 2 }],
+    });
+    const window = windowFor(shadowed, planFor("ship-it", "slash-command"));
+    expect(window.empty).toBe(true);
+    expect(window.reason).toContain("/ship-it");
+    expect(window.reason).toContain("never invoked");
   });
 
   it("reports an empty window when a resolved skill was never invoked", () => {
