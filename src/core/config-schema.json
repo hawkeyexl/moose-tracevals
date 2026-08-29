@@ -71,7 +71,29 @@
           }
         },
         "cacheDir": { "type": "string" },
-        "maxCostUsd": { "type": "number", "minimum": 0 }
+        "maxCostUsd": { "type": "number", "minimum": 0 },
+        "redact": {
+          "type": "array",
+          "description": "Extra regular expressions scrubbed from the session digest before it is sent to a judge provider. Applied on top of the built-in secret shapes, never instead of them; each source is compiled with the `g` flag, and a match is replaced with `[redacted]`. Pattern matching is best-effort — --deterministic-only is the only setting that guarantees nothing leaves the machine.",
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "graders": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Per-grader settings. Only graders with a knob of their own appear here; every other grader is configured entirely by the eval that names it.",
+      "properties": {
+        "command": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Run `command`-graded evals. On by default (ADR 01011). Set false — or pass --no-commands — to evaluate a trace without executing anything that trace's project declares; those evals then report `skipped` with a reason, never `pass`."
+            }
+          }
+        }
       }
     },
     "render": {

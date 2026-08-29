@@ -1,6 +1,10 @@
 /** Markdown report, suitable for PR comments and docs. */
 import type { RunReport } from "../types.js";
-import { availabilityLines, coverageLocation } from "./coverage.js";
+import {
+  availabilityLines,
+  coverageLocation,
+  coverageStaleness,
+} from "./coverage.js";
 
 /**
  * Escapes a value for a markdown table cell. Every cell needs this, not just
@@ -57,8 +61,15 @@ export function renderMarkdown(report: RunReport): string {
         : entry.resolved
           ? "yes"
           : "no";
+    // Staleness is appended to the same cell rather than given a column of its
+    // own: an extra column would be empty on almost every row of almost every
+    // report, and Availability already claims the one column worth spending.
+    const stale = coverageStaleness(entry);
+    const cellText = stale
+      ? `${where}${where ? " — " : ""}⚠ ${cell(stale)}`
+      : where;
     lines.push(
-      `| ${resolved} | ${cell(entry.kind)} | ${cell(entry.ref)} | ${cell(entry.availability ?? "")} | ${where} |`,
+      `| ${resolved} | ${cell(entry.kind)} | ${cell(entry.ref)} | ${cell(entry.availability ?? "")} | ${cellText} |`,
     );
   }
   lines.push("");
