@@ -1,6 +1,18 @@
 /** Resolved instruction artifacts and coverage reporting. */
 
-export type ArtifactType = "skill" | "agent" | "project-rules";
+/**
+ * The kinds of instruction artifact a session can be governed by.
+ *
+ * `slash-command` is a `.claude/commands/*.md` file: frontmattered markdown
+ * whose body Claude Code injects as a prompt when someone types `/name`
+ * (ADR 01023). It is the same shape as a skill — an instruction set that loads
+ * at a point in the session — and is graded the same way.
+ */
+export type ArtifactType =
+  | "skill"
+  | "agent"
+  | "project-rules"
+  | "slash-command";
 
 export type ArtifactOrigin = "project" | "user" | "plugin";
 
@@ -41,8 +53,9 @@ export interface CoverageEntry {
   note?: string;
   /**
    * Roster state. Absent for `project-rules`, which is not something a session
-   * is offered — it is always in force. Never affects an eval outcome or the
-   * exit code: this is an observation.
+   * is offered — it is always in force — and for `slash-command`, which the
+   * transcript keeps no roster of at all (ADR 01023). Never affects an eval
+   * outcome or the exit code: this is an observation.
    */
   availability?: ArtifactAvailability;
   /**

@@ -152,6 +152,18 @@ describe("gateProposals", () => {
     expect(ALLOWED_GRADERS.skill).toContain("ai");
     expect(ALLOWED_GRADERS.skill).not.toContain("cost");
     expect(ALLOWED_GRADERS["project-rules"]).toContain("skill-invoked");
+    // A slash command is an injected procedure with a window, exactly like a
+    // skill, so it carries the skill allowlist (ADR 01023).
+    expect(ALLOWED_GRADERS["slash-command"]).toEqual(ALLOWED_GRADERS.skill);
+  });
+
+  it("rejects a whole-session grader proposed on a slash command", () => {
+    const result = gateProposals([proposal({ grader: "cost" })], {
+      ...base,
+      artifactType: "slash-command",
+    });
+    expect(result.accepted).toEqual([]);
+    expect(reasons(result)).toEqual(["grader-not-allowed"]);
   });
 
   it("accepts ai-graded proposals without options", () => {
