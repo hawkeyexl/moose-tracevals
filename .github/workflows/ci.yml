@@ -71,8 +71,32 @@ jobs:
             };
             // The fixture skill declares a tool-usage eval the trace violates.
             check("SKILL.md forbidden-tool", find("SKILL.md", "forbidden-tool")?.outcome, "fail");
+            // Scoped grading (ADR 01015): the trace runs Bash twice, once
+            // before the skill was ever invoked. Only the in-window call may
+            // count, so the *count* — not just the verdict — is the assertion.
+            const forbiddenMsg = find("SKILL.md", "forbidden-tool")?.findings?.[0]?.message ?? "";
+            if (!/used 1 time\(s\)/.test(forbiddenMsg)) {
+              console.error(`forbidden-tool must count only the in-window Bash, got: ${forbiddenMsg}`);
+              process.exitCode = 1;
+            }
             // And one it satisfies.
             check("SKILL.md used-read", find("SKILL.md", "used-read")?.outcome, "pass");
+            // An agent is graded against its own branch: the parent session ran
+            // Edit, the reviewer branch only read. Unwindowed, this is a fail.
+            check("reviewer.md read-only", find("reviewer.md", "reviewer-is-read-only")?.outcome, "pass");
+            check("reviewer.md read-something", find("reviewer.md", "reviewer-read-something")?.outcome, "pass");
+            // And an agent that spawned no branch governed nothing: every eval
+            // on it must say so. `doc-writer-wrote-docs` would otherwise pass
+            // on a file the *parent* wrote — the exact false pass windowing
+            // exists to prevent, so a silent `pass` here is the regression.
+            for (const name of ["doc-writer-wrote-docs", "doc-writer-followed-its-brief"]) {
+              const empty = find("doc-writer.md", name);
+              check(`doc-writer.md ${name}`, empty?.outcome, "skipped");
+              if (!/no subagent turns/.test(empty?.skipReason ?? "")) {
+                console.error(`${name}: expected an empty-window reason, got ${empty?.skipReason}`);
+                process.exitCode = 1;
+              }
+            }
             // A command-graded eval really spawns its check script over {trace}.
             check("SKILL.md no-force-push", find("SKILL.md", "no-force-push")?.outcome, "pass");
             check("SKILL.md no-force-push grader", find("SKILL.md", "no-force-push")?.grader, "command");
@@ -120,6 +144,14 @@ jobs:
             const r = JSON.parse(raw);
             const judged = r.evalResults.filter((x) => x.consensus);
             if (judged.length === 0) { console.error("expected judged evals with consensus objects"); process.exitCode = 1; }
+            // An ai eval whose artifact governed no turn never reaches the
+            // judge: no consensus object, a skip with a stated reason. A judge
+            // handed an empty window would answer about the parent session.
+            const empty = r.evalResults.find((x) => x.evalName === "doc-writer-followed-its-brief");
+            if (empty?.outcome !== "skipped" || empty?.consensus !== undefined) {
+              console.error("an empty window must be skipped before the judge, got:", JSON.stringify(empty));
+              process.exitCode = 1;
+            }
           '
 
       # `fill` is the only command that writes, so the gate proves two things:
@@ -251,6 +283,47 @@ jobs:
           if [ -n "$dirty" ]; then
             echo "the write-path gate leaked into the real corpus:"; echo "$dirty"; exit 1
           fi
+
+      # Modern Claude Code writes subagent turns to a sidecar directory rather
+      # than inline in the session file, so this asserts the merge really runs
+      # through the built CLI: a branch spawned from *inside* another sidecar
+      # must reach artifact resolution, and a malformed sidecar must degrade to
+      # a warning instead of failing the run (ADR 01014).
+      - name: Dogfood run (subagent sidecar transcripts)
+        shell: bash
+        env:
+          MOOSE_TRACEVALS_HOME: test/fixtures/home
+        run: |
+          set +e
+          node dist/cli.js run test/fixtures/traces/claude-session-sidecar.jsonl --project test/fixtures/project --deterministic-only --format json > moose-tracevals-sidecar.json
+          code=$?
+          set -e
+          if [ "$code" -ne 0 ]; then
+            echo "Expected exit 0 from the sidecar fixture, got $code"
+            cat moose-tracevals-sidecar.json
+            exit 1
+          fi
+          node -e '
+            let raw = require("fs").readFileSync("moose-tracevals-sidecar.json", "utf8");
+            if (raw.charCodeAt(0) === 0xfeff) raw = raw.slice(1);
+            const r = JSON.parse(raw);
+            // A depth-2 agent whose Agent call exists only inside the depth-1
+            // sidecar. Seeing it here proves the merge fed artifact resolution.
+            if (!r.coverage.some((c) => c.kind === "agent" && c.ref === "general-purpose")) {
+              console.error("expected the nested subagent to reach artifact coverage");
+              console.error(JSON.stringify(r.coverage, null, 2));
+              process.exitCode = 1;
+            }
+            // Both degradation shapes must warn, not throw and not pass silently.
+            const warned = (needle) => r.warnings.some((w) => w.includes(needle));
+            for (const needle of ["is unreadable or not an object", "which is not in this trace"]) {
+              if (!warned(needle)) {
+                console.error(`expected a degradation warning containing: ${needle}`);
+                console.error(JSON.stringify(r.warnings, null, 2));
+                process.exitCode = 1;
+              }
+            }
+          '
 
       - name: Dogfood list (fixture session store)
         shell: bash

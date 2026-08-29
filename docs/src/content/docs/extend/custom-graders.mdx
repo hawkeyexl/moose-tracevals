@@ -42,6 +42,8 @@ A grader asserting the session touched no file outside an allowed directory:
 ```ts
 import {
   registerGrader,
+  skippedWindow,
+  windowFor,
   type TraceGrader,
   type GradeResult,
 } from "moose-tracevals";
@@ -62,8 +64,13 @@ const stayedInScope: TraceGrader = {
 
   grade({ trace, plan }): GradeResult {
     const root = String(plan.options?.root ?? "");
+    // Grade the window this artifact governed, not the whole session — and
+    // skip rather than pass when it governed nothing.
+    const window = windowFor(trace, plan);
+    if (window.empty) return skippedWindow(window);
+
     const normalise = (p: string) => p.replace(/\\/g, "/").toLowerCase();
-    const strays = trace.fileAccesses
+    const strays = window.fileAccesses
       .filter((a) => a.op !== "read")
       .filter((a) => !normalise(a.path).includes(normalise(root)));
 
@@ -82,6 +89,14 @@ const stayedInScope: TraceGrader = {
 
 registerGrader(stayedInScope);
 ```
+
+`windowFor(trace, plan)` is the one thing a custom grader has to remember. Reading `trace` directly
+counts events from before the artifact was ever in force, which is how a skill's eval ends up failing
+on a command that ran before it loaded. `window` carries the same shapes as the trace —
+`toolCalls`, `fileAccesses`, `skillInvocations`, `events`, `userMessages`, `assistantTexts`,
+`turnCount` — so switching is usually one word. And `skippedWindow(window)` is the required answer
+when the artifact governed nothing: a verdict there would be about somebody else's turns. See
+[Shared behavior](/moose-tracevals/reference/graders/#shared-behavior) for the window rules.
 
 Then declare it like any built-in:
 

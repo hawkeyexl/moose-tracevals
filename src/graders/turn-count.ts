@@ -8,6 +8,8 @@ import {
   orderedBounds,
   pass,
   requireOneOf,
+  skippedWindow,
+  windowFor,
   type Options,
 } from "./util.js";
 
@@ -27,7 +29,9 @@ export const turnCountGrader: TraceGrader = {
     const options = plan.options ?? {};
     const invalid = validateOptions(options);
     if (invalid !== undefined) return optionsError("turn-count", invalid);
-    const { turnCount } = trace;
+    const window = windowFor(trace, plan);
+    if (window.empty) return skippedWindow(window);
+    const { turnCount } = window;
     if (typeof options.max === "number" && turnCount > options.max) {
       return fail(plan, `${turnCount} turn(s); at most ${options.max} allowed`);
     }

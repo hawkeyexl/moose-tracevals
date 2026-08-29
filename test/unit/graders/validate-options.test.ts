@@ -189,7 +189,9 @@ describe("grader option validation", () => {
 
   it("is enforced by grade(), not just callable on its own", async () => {
     const result = await graderFor("tool-usage")!.grade({
-      trace: makeTrace({ toolCalls: [{ name: "Bash", input: {}, sidechain: false }] }),
+      trace: makeTrace({
+        toolCalls: [{ name: "Bash", input: {}, sidechain: false, index: 0 }],
+      }),
       plan: makePlan({
         grader: "tool-usage",
         options: { tool: "Bash", expect: "typo" },

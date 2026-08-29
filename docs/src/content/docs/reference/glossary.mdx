@@ -100,10 +100,17 @@ See the [grader reference](/moose-tracevals/reference/graders/).
 : One that decides from the trace alone — no model call, no cost, same answer every time.
 `tool-usage`, `skill-invoked`, `file-access`, `turn-count`, `cost`, `regex`, `json-output`.
 
+**Eval window**
+: The slice of a trace an artifact was actually governing, and the only evidence its evals see.
+Derived from the artifact's type — a skill's invocation up to the next skill's, an agent's own
+branch, the whole session for project rules. An empty window is `skipped` with a reason, never
+passed. See the [grader reference](/moose-tracevals/reference/graders/).
+
 **Whole-session grader**
-: `turn-count`, `cost`, and `json-output`, which measure the entire session rather than one
-artifact's slice of it. Never proposed by `fill`, because a limit declared inside one artifact
-silently constrains everything.
+: `cost` and `json-output`, which measure the entire session rather than one artifact's window:
+tokens are not attributable to whichever artifact was governing, and the final output is the
+session's. Never proposed by `fill`, and neither is `turn-count`, which is windowed but stayed out
+of the allowlist.
 
 **Finding**
 : One problem a deterministic grader reports: an eval name, an artifact, a message, and a severity.

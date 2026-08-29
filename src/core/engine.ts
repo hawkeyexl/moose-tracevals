@@ -7,6 +7,7 @@ import { parseTraceFile } from "../trace/claude.js";
 import { resolveArtifacts } from "../artifacts/resolve.js";
 import { planEvals, type EvalPlan } from "./plan.js";
 import { graderFor, listGraderKinds } from "../graders/registry.js";
+import { windowFor } from "../graders/util.js";
 import { renderTrace } from "../judge/render.js";
 import type { TraceJudge } from "../judge/trace-judge.js";
 import type { TracevalsConfig } from "./config.js";
@@ -61,6 +62,23 @@ export async function runEvals(options: EngineOptions): Promise<RunReport> {
         durationMs: 0,
       });
       continue;
+    }
+    // An artifact that governed no turn in this trace grades nothing. Saying
+    // so is the only honest outcome: a judge handed an empty window would
+    // answer about the parent session's work, and a `human` reviewer would be
+    // queued to review nothing (ADR 01015). Deterministic graders make the
+    // same call for themselves, since only they know whether they are windowed.
+    if (plan.grader === "ai" || plan.grader === "human") {
+      const window = windowFor(trace, plan);
+      if (window.empty) {
+        results.push({
+          ...base,
+          outcome: "skipped",
+          skipReason: window.reason ?? "the artifact governed no turns",
+          durationMs: 0,
+        });
+        continue;
+      }
     }
     if (plan.grader === "ai") {
       aiPlans.push(plan);
@@ -162,8 +180,9 @@ export async function runEvals(options: EngineOptions): Promise<RunReport> {
         });
       }
     } else {
-      const rendered = renderTrace(trace, config.render);
-      const judged = await options.judge(aiPlans, rendered);
+      const judged = await options.judge(aiPlans, (plan) =>
+        renderTrace(trace, config.render, plan),
+      );
       judged.forEach((j, i) => {
         const plan = aiPlans[i];
         results.push({

@@ -25,7 +25,7 @@ describe("makeTraceJudge", () => {
       runs: 3,
       noCache: true,
     });
-    const [result] = await judge([plan], "trace text");
+    const [result] = await judge([plan], () => "trace text");
     expect(result?.outcome).toBe("pass");
     expect(result?.consensus?.zone).toBe("auto-pass");
     expect(result?.consensus?.votes.pass).toBe(3);
@@ -37,7 +37,7 @@ describe("makeTraceJudge", () => {
       runs: 3,
       noCache: true,
     });
-    const [result] = await judge([plan], "trace text");
+    const [result] = await judge([plan], () => "trace text");
     expect(result?.outcome).toBe("fail");
   });
 
@@ -51,7 +51,7 @@ describe("makeTraceJudge", () => {
       runs: 3,
       noCache: true,
     });
-    const [result] = await judge([plan], "trace text");
+    const [result] = await judge([plan], () => "trace text");
     expect(result?.outcome).toBe("needs-review");
   });
 
@@ -68,7 +68,7 @@ describe("makeTraceJudge", () => {
       runs: 3,
       noCache: true,
     });
-    const [result] = await judge([plan], "trace text");
+    const [result] = await judge([plan], () => "trace text");
     expect(result?.outcome).toBe("needs-review");
     expect(result?.consensus?.votes.error).toBeGreaterThan(0);
   });
@@ -82,7 +82,7 @@ describe("makeTraceJudge", () => {
       runs: 1,
       noCache: true,
     });
-    const [result] = await judge([plan], "trace text");
+    const [result] = await judge([plan], () => "trace text");
     expect(result?.outcome).toBe("pass");
   });
 
@@ -93,14 +93,14 @@ describe("makeTraceJudge", () => {
       runs: 2,
       cacheDir,
     });
-    await first([plan], "same trace");
+    await first([plan], () => "same trace");
 
     const second = makeTraceJudge({
       provider: new MockProvider([mockVerdict("fail", 0.95)]),
       runs: 2,
       cacheDir,
     });
-    const [result] = await second([plan], "same trace");
+    const [result] = await second([plan], () => "same trace");
     expect(result?.outcome).toBe("pass");
     expect(result?.consensus?.runs.every((r) => r.cached)).toBe(true);
   });
@@ -112,7 +112,7 @@ describe("makeTraceJudge", () => {
       noCache: true,
       maxCostUsd: 0,
     });
-    const [result] = await judge([plan], "trace text");
+    const [result] = await judge([plan], () => "trace text");
     expect(result?.outcome).toBe("skipped");
     expect(result?.skipReason).toContain("budget");
   });
@@ -145,7 +145,7 @@ describe("cacheKey", () => {
       });
       const [result] = await judge(
         [makePlan({ grader: "ai", provider: "mock-secondary" })],
-        "trace text",
+        () => "trace text",
       );
       expect(result?.outcome).toBe("fail");
       expect(named.requests.length).toBe(3);
@@ -162,7 +162,7 @@ describe("cacheKey", () => {
       });
       const [result] = await judge(
         [makePlan({ grader: "ai", provider: "typo" })],
-        "trace text",
+        () => "trace text",
       );
       expect(result?.outcome).toBe("error");
       expect(result?.error).toContain("typo");
@@ -177,7 +177,7 @@ describe("cacheKey", () => {
       });
       const [result] = await judge(
         [makePlan({ grader: "ai", provider: "claude-cli" })],
-        "trace text",
+        () => "trace text",
       );
       expect(result?.outcome).toBe("error");
     });
