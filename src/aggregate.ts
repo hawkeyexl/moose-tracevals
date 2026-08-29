@@ -20,6 +20,49 @@ export type BatchOutcome =
   | { file: string; report: RunReport }
   | { file: string; error: string; durationMs: number };
 
+/**
+ * The prefix `src/judge/trace-judge.ts` writes on an eval it declined to judge
+ * because the shared budget was gone.
+ *
+ * Matching on the reason string rather than on a flag is deliberate, and it is
+ * the narrowest seam available: the budget lives inside one judge instance,
+ * the skip is the only trace of it that reaches a report, and the wording is
+ * already load-bearing — the reason is what a reader sees and what the CI
+ * dogfood step greps for.
+ */
+const BUDGET_EXHAUSTED = /^judge cost budget exhausted/;
+
+/**
+ * What an exhausted budget cost this batch: how many evals it left unjudged,
+ * across how many traces, and the reason as the judge stated it.
+ *
+ * Reported separately from the skip counts because the two mean different
+ * things. An eval skipped for a trigger that never armed produced no evidence
+ * *about the session*; an eval skipped for an exhausted budget produced no
+ * evidence *about anything* — the tool simply stopped looking.
+ */
+export interface BatchBudget {
+  /** Evals left unjudged, summed over every trace. */
+  skippedEvals: number;
+  /** Traces that carried at least one such skip. */
+  traces: number;
+  /** The judge's own wording, budget figure included. */
+  reason: string;
+}
+
+/**
+ * `BatchReport` plus the budget block.
+ *
+ * Declared here rather than in `types.ts` for the same reason `BatchOutcome`
+ * is: the field exists because of how the batch is *folded*, and every
+ * consumer reaches it through `aggregate`. `budget` is optional, so a plain
+ * `BatchReport` is still assignable — nothing downstream has to change to
+ * ignore it.
+ */
+export interface BatchReportWithBudget extends BatchReport {
+  budget?: BatchBudget;
+}
+
 const zero = (): AggregateCounts => ({
   pass: 0,
   fail: 0,
@@ -122,10 +165,16 @@ const artifactKey = (r: EvalResult): string =>
 export function aggregate(
   outcomes: BatchOutcome[],
   options: { warnings?: string[]; durationMs: number },
-): BatchReport {
+): BatchReportWithBudget {
   const artifactRows = new Map<string, Accumulator>();
   const evalRows = new Map<string, Accumulator>();
   const traces: BatchTraceEntry[] = [];
+
+  // An exhausted budget is a property of the run, not of any one trace, so it
+  // is counted here rather than inside a row.
+  let budgetSkips = 0;
+  const budgetTraces = new Set<string>();
+  let budgetReason = "";
 
   const summary: BatchSummary = {
     total: 0,
@@ -182,6 +231,15 @@ export function aggregate(
     summary.skipped += report.summary.skipped;
 
     for (const result of report.evalResults) {
+      if (
+        result.outcome === "skipped" &&
+        result.skipReason !== undefined &&
+        BUDGET_EXHAUSTED.test(result.skipReason)
+      ) {
+        budgetSkips += 1;
+        budgetTraces.add(outcome.file);
+        budgetReason = result.skipReason;
+      }
       const base = artifactKey(result);
       accumulate(artifactRows, base, result, outcome.file, false);
       accumulate(
@@ -194,6 +252,23 @@ export function aggregate(
     }
   }
 
+  const budget: BatchBudget | undefined =
+    budgetSkips > 0
+      ? {
+          skippedEvals: budgetSkips,
+          traces: budgetTraces.size,
+          reason: budgetReason,
+        }
+      : undefined;
+
+  const warnings = [...(options.warnings ?? [])];
+  if (budget !== undefined) {
+    warnings.push(
+      `${budget.reason}: ${budget.skippedEvals} eval(s) across ${budget.traces} of ` +
+        `${outcomes.length} trace(s) were never judged — raise judge.maxCostUsd or narrow the corpus`,
+    );
+  }
+
   return {
     traces,
     artifacts: [...artifactRows.values()]
@@ -201,9 +276,19 @@ export function aggregate(
       .sort(byKey),
     evals: [...evalRows.values()].map((r) => finish(r, true)).sort(byKey),
     summary,
-    warnings: options.warnings ?? [],
+    warnings,
+    // A batch that ran out of money mid-corpus did not measure the corpus, and
+    // "did not measure" must never render as "measured clean". Exit 1 rather
+    // than 2: unlike an empty selector, the report is real and worth keeping —
+    // the traces that were judged carry genuine verdicts, and throwing them
+    // away to raise an operational error would cost more than it says.
     exitCode:
-      summary.tracesFailed > 0 || summary.tracesErrored > 0 ? 1 : 0,
+      summary.tracesFailed > 0 ||
+      summary.tracesErrored > 0 ||
+      budget !== undefined
+        ? 1
+        : 0,
+    ...(budget !== undefined ? { budget } : {}),
     costUsd,
     durationMs: options.durationMs,
   };

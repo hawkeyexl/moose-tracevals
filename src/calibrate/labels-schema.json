@@ -31,8 +31,8 @@
             "description": "Artifact name as the report shows it: a skill name, a subagent_type, or a project-rules filename such as CLAUDE.md."
           },
           "type": {
-            "enum": ["skill", "agent", "project-rules"],
-            "description": "Optional disambiguator, needed only when a skill and an agent share a name."
+            "enum": ["skill", "agent", "project-rules", "slash-command"],
+            "description": "Optional disambiguator, needed when one name resolves to two kinds of artifact — a skill and an agent, or a skill and the slash command that types it. Every `ArtifactType` the resolver can produce belongs here: a label whose type this rejects has no way to name the artifact it means."
           },
           "eval": {
             "type": "string",
