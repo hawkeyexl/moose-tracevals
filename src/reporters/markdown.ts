@@ -4,6 +4,7 @@ import {
   availabilityLines,
   coverageLocation,
   coverageStaleness,
+  manifestLines,
 } from "./coverage.js";
 
 /**
@@ -73,6 +74,16 @@ export function renderMarkdown(report: RunReport): string {
     );
   }
   lines.push("");
+
+  if (report.manifest !== undefined) {
+    // Only when there is one — see the human reporter (ADR 01024).
+    lines.push(`## Session manifest`);
+    lines.push("");
+    for (const line of manifestLines(report.manifest)) {
+      lines.push(`- ${cell(line)}`);
+    }
+    lines.push("");
+  }
 
   lines.push(`## Availability`);
   lines.push("");

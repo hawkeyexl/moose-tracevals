@@ -185,6 +185,41 @@ and you can discover it instead of naming a file:
 `list --json` emits `{ "traces": [...] }` sorted newest-first, so the first entry is the session
 that just finished.
 
+## Carry the manifest with the trace
+
+There is one thing CI gets badly wrong on its own, and it is worth fixing before you trust the
+report: **a checkout rewrites every file's mtime**, so the
+[staleness heuristic](/moose-tracevals/declare/coverage/#staleness) flags every artifact in your
+repository on every run. The warning is technically correct and completely useless.
+
+A [session manifest](/moose-tracevals/reference/cli/#capture) fixes it, because it compares content
+rather than timestamps. The mechanics are the same three patterns above:
+
+| Pattern | Where the manifest is |
+|---|---|
+| **Evaluate in the same job** | `capture` wrote it to `.moose-tracevals/sessions/<id>.json` in the workspace, and `run` finds it there. Nothing to do. |
+| **Upload the trace** | Upload the manifest with it. Name it `<trace>.manifest.json` and `run` picks it up beside the trace with no flag. |
+| **Committed corpus** | `.moose-tracevals/` is gitignored, so copy the manifest next to the trace when you commit it — `traces/refactor-session.manifest.json`. |
+
+```yaml
+      - name: Upload the session and its manifest
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-session
+          path: |
+            session.jsonl
+            session.manifest.json
+```
+
+The evaluating job downloads both into one directory, names the trace, and gets exact staleness for
+free.
+
+<Aside title="Nothing breaks without one">
+An absent manifest is the default and always will be. Every hash check reports `skipped` with the
+reason, the mtime heuristic stands, and no verdict, summary count, or exit code moves either way — a
+manifest is an observation about the artifacts, never an input to a verdict.
+</Aside>
+
 ## Other CI platforms
 
 There is no platform-specific behavior to account for. The contract is a command, an exit code, and

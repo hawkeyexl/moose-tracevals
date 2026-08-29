@@ -34,6 +34,7 @@ interface RunFlags {
   commands?: boolean;
   require?: string[];
   reportUnusedArtifacts?: boolean;
+  manifest?: string;
   allProjects?: boolean;
   since?: string;
   limit?: number;
@@ -62,6 +63,7 @@ async function executeRun(traces: string[], opts: RunFlags) {
     commands: opts.commands,
     ...(opts.require !== undefined ? { require: opts.require } : {}),
     reportUnusedArtifacts: opts.reportUnusedArtifacts,
+    ...(opts.manifest !== undefined ? { manifest: opts.manifest } : {}),
   };
 
   // What decides the report shape is *how traces were selected*, not how many
@@ -74,6 +76,13 @@ async function executeRun(traces: string[], opts: RunFlags) {
     opts.limit !== undefined;
 
   if (traces.length > 1 || selecting) {
+    if (opts.manifest !== undefined) {
+      // Each trace finds its own manifest by convention; one named file cannot
+      // be evidence about more than the session it was captured for.
+      throw new TracevalsError(
+        "--manifest names one session's manifest, so it cannot be used with a corpus; drop it and each trace will find its own",
+      );
+    }
     const { runBatch } = await import("./commands/batch.js");
     const { report, rendered } = await runBatch({
       ...shared,
@@ -157,7 +166,15 @@ addRunFlags(
     .description(
       "Evaluate one or more traces against the skills and instructions they used",
     ),
-).action(executeRun);
+)
+  // Run-only, and single-trace-only: a manifest belongs to exactly one session
+  // (ADR 01024). A corpus still picks one up per trace by convention — this
+  // flag is for naming one outright, which only a single trace can mean.
+  .option(
+    "--manifest <file>",
+    "session manifest to compare artifacts against; without it one is looked for beside the trace and under the project",
+  )
+  .action(executeRun);
 
 // `calibrate` shares `run`'s flags because it *is* a run — plus the labels it
 // is measured against. Kept a separate command rather than a flag on `run`:
@@ -320,6 +337,37 @@ program
       opts.format === "json" ? JSON.stringify(report, null, 2) : rendered,
     );
     process.exitCode = report.exitCode;
+  });
+
+// The one write path `run` never takes (ADR 01024). Meant for a `SessionStart`
+// hook, which is why it reads its payload on stdin and — in that mode — writes
+// its report to stderr: a SessionStart hook's stdout becomes model context.
+program
+  .command("capture")
+  .description(
+    "Record a session manifest: sha256 of every instruction artifact plus the git SHA, read from a Claude Code hook payload on stdin",
+  )
+  .option("--project <dir>", "project root to scan (default: the payload's cwd)")
+  .option("--session-id <id>", "session id (default: the payload's session_id)")
+  .option("-o, --out <file>", "write here instead of the configured directory")
+  .option("-f, --format <format>", "human | json", "human")
+  .action(async (opts: {
+    project?: string;
+    sessionId?: string;
+    out?: string;
+    format?: string;
+  }) => {
+    const { runCapture } = await import("./commands/capture.js");
+    const result = await runCapture({
+      version,
+      ...(opts.project !== undefined ? { project: opts.project } : {}),
+      ...(opts.sessionId !== undefined ? { sessionId: opts.sessionId } : {}),
+      ...(opts.out !== undefined ? { out: opts.out } : {}),
+      format: opts.format === "json" ? "json" : "human",
+    });
+    if (result.stdout !== "") console.log(result.stdout);
+    if (result.stderr !== "") console.error(result.stderr);
+    process.exitCode = result.exitCode;
   });
 
 program
