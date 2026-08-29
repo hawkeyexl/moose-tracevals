@@ -3,6 +3,7 @@ import { writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { loadConfig } from "../core/config.js";
 import { runEvals } from "../core/engine.js";
+import { loadGraderPlugins } from "../graders/plugins.js";
 import {
   appendHistory,
   compareToLast,
@@ -33,6 +34,8 @@ export interface RunCommandOptions {
   history?: boolean;
   /** Overrides config.failOnNeedsReview; undefined defers to the config. */
   failOnNeedsReview?: boolean;
+  /** `--require`: grader plugins to load *in addition to* `config.plugins`. */
+  require?: string[];
   /** Directory holding moose.config.yaml; defaults to cwd. */
   configDir?: string;
   env?: Record<string, string | undefined>;
@@ -56,7 +59,21 @@ export async function runRun(
   const config = {
     ...loaded,
     failOnNeedsReview: options.failOnNeedsReview ?? loaded.failOnNeedsReview,
+    // A set-valued knob, so `--require` *adds* instead of replacing. A one-off
+    // flag must not silently unregister the house graders a repo's config
+    // names — every eval declaring one would flip to `unknown grader kind`,
+    // which reads as a typo in an artifact nobody touched. Config entries load
+    // first, so a deliberate `--require` still wins a colliding kind
+    // (ADR 01017).
+    plugins: [...loaded.plugins, ...(options.require ?? [])],
   };
+
+  // Before planning: `planEvals` is downstream of the registry, and a grader
+  // registered after it has been read is a grader that does not exist.
+  const plugins = await loadGraderPlugins({
+    plugins: config.plugins,
+    configDir,
+  });
 
   let judge = options.judge;
   if (judge === undefined && options.deterministicOnly !== true) {
@@ -113,6 +130,7 @@ export async function runRun(
     ...(options.deterministicOnly !== undefined
       ? { deterministicOnly: options.deterministicOnly }
       : {}),
+    ...(plugins.warnings.length > 0 ? { warnings: plugins.warnings } : {}),
   });
 
   let comparison: HistoryComparison | undefined;

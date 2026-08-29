@@ -13,6 +13,7 @@ import pc from "picocolors";
 import { discoverArtifacts, type DiscoveredArtifact } from "../artifacts/discover.js";
 import { appendArtifactEvals, type NewEvalEntry } from "../evals/write.js";
 import { loadConfig } from "../core/config.js";
+import { loadGraderPlugins } from "../graders/plugins.js";
 import { TracevalsError } from "../types.js";
 import {
   costOfUsage,
@@ -58,6 +59,8 @@ export interface FillOptions {
   noCache?: boolean;
   provider?: string;
   model?: string;
+  /** `--require`: grader plugins to load *in addition to* `config.plugins`. */
+  require?: string[];
   /** Test seam: bypasses provider construction entirely. */
   providerInstance?: InferenceProvider;
 }
@@ -126,14 +129,26 @@ function toEvalEntry(proposed: ProposedEval): NewEvalEntry {
 export async function runFill(options: FillOptions = {}): Promise<FillRun> {
   const cwd = options.cwd ?? process.cwd();
   const root = resolve(options.project ?? cwd);
-  const config = await loadConfig(options.configDir ?? cwd);
+  const configDir = options.configDir ?? cwd;
+  const config = await loadConfig(configDir);
+
+  // The same list `run` loads, appended to the same way, for the same reason:
+  // a repo whose config names its house graders must not behave differently
+  // depending on which command reached the registry. What it changes here is
+  // narrower — `ALLOWED_GRADERS` still refuses to propose a custom kind, but a
+  // plugin that *replaces* a built-in replaces the `validateOptions` the gate
+  // ground-checks proposals with (ADR 01017).
+  const plugins = await loadGraderPlugins({
+    plugins: [...config.plugins, ...(options.require ?? [])],
+    configDir,
+  });
 
   const threshold = options.confidence ?? config.fill.confidenceThreshold;
   const maxEvals = options.maxEvals ?? config.fill.maxEvalsPerArtifact;
   const temperature = config.fill.temperature;
   const maxCostUsd = options.maxCostUsd ?? config.fill.maxCostUsd;
   const cache = new FillCache(
-    resolve(options.configDir ?? cwd, config.fill.cacheDir),
+    resolve(configDir, config.fill.cacheDir),
     options.noCache !== true,
   );
 
@@ -200,7 +215,7 @@ export async function runFill(options: FillOptions = {}): Promise<FillRun> {
     results,
     threshold,
     dryRun: options.dryRun === true,
-    warnings: discovery.warnings,
+    warnings: [...plugins.warnings, ...discovery.warnings],
     exitCode: results.some((r) => r.status === "error") ? 1 : 0,
   };
   return { report, rendered: renderFill(report, { cwd }) };

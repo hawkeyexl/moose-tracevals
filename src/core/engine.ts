@@ -22,6 +22,12 @@ export interface EngineOptions {
   /** Injected judge; required unless deterministicOnly. */
   judge?: TraceJudge;
   deterministicOnly?: boolean;
+  /**
+   * Warnings raised before the engine ran — grader-plugin loading is the one
+   * source today. They belong in the report because they change how a verdict
+   * should be read, and they happened first, so they lead the list.
+   */
+  warnings?: string[];
 }
 
 export async function runEvals(options: EngineOptions): Promise<RunReport> {
@@ -225,7 +231,11 @@ export async function runEvals(options: EngineOptions): Promise<RunReport> {
       ...(trace.model !== undefined ? { model: trace.model } : {}),
       turnCount: trace.turnCount,
     },
-    warnings: [...trace.warnings, ...resolved.warnings],
+    warnings: [
+      ...(options.warnings ?? []),
+      ...trace.warnings,
+      ...resolved.warnings,
+    ],
     coverage: resolved.coverage,
     evalResults: results,
     summary,

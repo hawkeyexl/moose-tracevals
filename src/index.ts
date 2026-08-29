@@ -46,7 +46,19 @@ export {
 } from "./evals/write.js";
 export { IMPLICIT_EVAL_NAME, planEvals, type EvalPlan } from "./core/plan.js";
 export * from "./graders/types.js";
-export { graderFor, listGraderKinds, registerGrader } from "./graders/registry.js";
+export {
+  BUILTIN_GRADER_KINDS,
+  graderFor,
+  listGraderKinds,
+  registerGrader,
+} from "./graders/registry.js";
+export {
+  loadGraderPlugins,
+  type GraderPluginApi,
+  type GraderPluginRegister,
+  type LoadGraderPluginsOptions,
+  type LoadedGraderPlugins,
+} from "./graders/plugins.js";
 export { skippedWindow, windowFor, type TraceWindow } from "./graders/util.js";
 export { renderTrace, type RenderOptions } from "./judge/render.js";
 export {
