@@ -11,6 +11,7 @@
  * Cases are written as YAML because that is how artifacts are authored — a
  * JSON-literal port would not catch a shape that only YAML can express.
  */
+import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 import { Ajv2020 } from "ajv/dist/2020.js";
@@ -275,6 +276,16 @@ describe("docmeta:artifact-evals:1.0.0-proposal.1", () => {
     // A vocabulary docmeta publishes; this repo implements behavior against it
     // (ADR 01010). The pre-1.0 URL `$id` said we owned the shape — we do not.
     expect(schema.$id).toBe("docmeta:artifact-evals:1.0.0-proposal.1");
+  });
+
+  it("resolves the schema to a file that actually exists", () => {
+    // The path is probed rather than inferred from the directory name: keying
+    // off `src/evals` vs `dist` meant a rename returned a path that does not
+    // exist, and validation quietly stopped happening. Probing makes it loud.
+    const path = artifactEvalsSchemaPath();
+    expect(existsSync(path)).toBe(true);
+    // Memoized, and stable across calls.
+    expect(artifactEvalsSchemaPath()).toBe(path);
   });
 
   it("keeps the prerelease hyphen, which sorts below the 1.0.0 it registers as", async () => {

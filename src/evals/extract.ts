@@ -9,24 +9,45 @@
  * tools' members pass untouched — which is why validation is handed the entire
  * front matter object rather than the `evals` value alone.
  */
+import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { join, dirname } from "node:path";
 import { extractFrontmatter, Validator, type FieldError } from "docmeta";
 import type { ResolvedArtifact } from "../artifacts/types.js";
+import { TracevalsError } from "../types.js";
 
 export const ARTIFACT_EVALS_SCHEMA_ID = "docmeta:artifact-evals:1.0.0-proposal.1";
 
 const SCHEMA_FILE = "artifact-evals-1.0.0-proposal.1.json";
 
-/** Absolute path of the packaged schema (works from src and dist). */
+let schemaPath: string | undefined;
+
+/**
+ * Absolute path of the packaged schema (works from src and dist).
+ *
+ * Probed rather than inferred from the directory name. `src/evals/` sits two
+ * hops under the package root and tsup flattens `dist/` to one, but keying off
+ * the directory name means a rename — or a change in tsup's output shape —
+ * silently returns a path that does not exist, and schema validation quietly
+ * stops happening. Probing makes that a loud failure instead. Memoized, so the
+ * stat cost is paid once per process rather than once per artifact.
+ */
 export function artifactEvalsSchemaPath(): string {
-  // src/evals/ and dist/ are both one hop from the package root.
+  if (schemaPath !== undefined) return schemaPath;
   const here = dirname(fileURLToPath(import.meta.url));
-  const fromSrc = join(here, "..", "..", "schemas", SCHEMA_FILE);
-  const fromDist = join(here, "..", "schemas", SCHEMA_FILE);
-  // tsup bundles to dist/ flat; src runs nested. Prefer whichever exists at
-  // require time — but stat here would make this async, so decide by marker.
-  return here.endsWith("evals") ? fromSrc : fromDist;
+  const candidates = [
+    join(here, "..", "..", "schemas", SCHEMA_FILE), // src/evals/
+    join(here, "..", "schemas", SCHEMA_FILE), // dist/ (flat)
+  ];
+  const found = candidates.find((candidate) => existsSync(candidate));
+  if (found === undefined) {
+    throw new TracevalsError(
+      `cannot locate ${SCHEMA_FILE}; looked in ${candidates.join(" and ")}. ` +
+        "The package ships it under schemas/ — reinstall if it is missing.",
+    );
+  }
+  schemaPath = found;
+  return found;
 }
 
 export type Severity = "error" | "warning" | "info";
@@ -151,6 +172,11 @@ function reservedPrefixErrors(
   if (bag === undefined) return [];
   const errors: FieldError[] = [];
   for (const key of Object.keys(bag)) {
+    // Detection is case-insensitive while the allowlist is not, deliberately:
+    // YAML keys are case-sensitive, so `Eval-skip` is never a valid spelling of
+    // `eval-skip` and should be reported rather than accepted. Do not "fix" the
+    // asymmetry by making RESERVED_EVAL_KEYS case-insensitive — that would
+    // silently accept exactly the misspellings this guard exists to catch.
     if (!/^eval/i.test(key) || RESERVED_EVAL_KEYS.has(key)) continue;
     const line = lineFor(`/metadata/${key}`);
     errors.push({

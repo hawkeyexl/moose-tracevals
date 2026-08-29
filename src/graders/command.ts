@@ -22,6 +22,13 @@ import type { GradeResult, TraceGrader, TraceGraderContext } from "./types.js";
 /** Bounded by default: a check with no stated timeout still cannot hang. */
 export const DEFAULT_TIMEOUT_MS = 30_000;
 
+/**
+ * How long a timed-out child gets between SIGTERM and SIGKILL. It costs the run
+ * nothing — the eval has already been settled as a timeout by then — so this is
+ * purely the grace a well-behaved check script gets to clean up.
+ */
+const KILL_GRACE_MS = 2000;
+
 /** Enough stderr to diagnose a failure without pasting a log into a report. */
 const STDERR_LIMIT = 2000;
 
@@ -138,15 +145,18 @@ function execute(
       resolve(result);
     };
 
+    let hardKill: ReturnType<typeof setTimeout> | undefined;
     const timer = setTimeout(() => {
       timedOut = true;
+      // Ask, then insist. Both signals in one tick would make the SIGTERM dead
+      // code — SIGKILL wins before SIGTERM can be delivered — so the escalation
+      // gets its own timer, and a check script that cleans up after itself is
+      // given the chance to.
       child.kill();
+      hardKill = setTimeout(() => child.kill("SIGKILL"), KILL_GRACE_MS);
       // Settle on the timeout itself rather than waiting for `close`. A child
       // that traps SIGTERM never closes, and waiting for it would hang the
-      // whole run — the opposite of what a timeout is for. SIGKILL follows so
-      // the process does not outlive the run; it is unstoppable on POSIX and
-      // a no-op where the first kill already terminated the child.
-      child.kill("SIGKILL");
+      // whole run — the opposite of what a timeout is for.
       done({ code: null, stderr, timedOut: true });
     }, timeoutMs);
     // Never hold the process open on this grader's account.
@@ -159,9 +169,15 @@ function execute(
         stderr = (stderr + chunk.toString()).slice(0, STDERR_LIMIT);
       }
     });
-    child.on("error", (err) =>
-      done({ code: null, stderr, timedOut, spawnError: err.message }),
-    );
-    child.on("close", (code) => done({ code, stderr, timedOut }));
+    // Clearing the escalation on exit matters: a SIGTERM the child honored
+    // would otherwise leave a live 2s timer holding the process open.
+    child.on("error", (err) => {
+      if (hardKill) clearTimeout(hardKill);
+      done({ code: null, stderr, timedOut, spawnError: err.message });
+    });
+    child.on("close", (code) => {
+      if (hardKill) clearTimeout(hardKill);
+      done({ code, stderr, timedOut });
+    });
   });
 }

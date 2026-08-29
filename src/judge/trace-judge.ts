@@ -106,6 +106,15 @@ export function makeTraceJudge(options: TraceJudgeOptions): TraceJudge {
       // An eval may name its own provider. Resolve it before the budget gate
       // so a typo is reported as the eval's own error rather than hidden
       // behind an exhausted budget.
+      //
+      // The comparison is on the provider *name*, which is the unit the
+      // schema's `provider` field names — not on instance identity. A match
+      // therefore reuses the run's already-constructed default, inheriting any
+      // `--model` override, which is what an eval naming only a provider
+      // should get. Two spellings of one provider would each construct their
+      // own instance, but the accepted set is closed (anthropic, openai,
+      // claude-cli, mock) and has no aliases, so that cannot arise today;
+      // adding an alias would be the change that makes it matter.
       let evalProvider = provider;
       let evalPricing = pricing;
       if (plan.provider !== undefined && plan.provider !== provider.provider()) {
