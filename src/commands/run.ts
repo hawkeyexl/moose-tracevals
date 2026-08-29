@@ -36,6 +36,8 @@ export interface RunCommandOptions {
   failOnNeedsReview?: boolean;
   /** `--require`: grader plugins to load *in addition to* `config.plugins`. */
   require?: string[];
+  /** Overrides config.reportUnusedArtifacts; undefined defers to the config. */
+  reportUnusedArtifacts?: boolean;
   /** Directory holding moose.config.yaml; defaults to cwd. */
   configDir?: string;
   env?: Record<string, string | undefined>;
@@ -66,6 +68,8 @@ export async function runRun(
     // first, so a deliberate `--require` still wins a colliding kind
     // (ADR 01017).
     plugins: [...loaded.plugins, ...(options.require ?? [])],
+    reportUnusedArtifacts:
+      options.reportUnusedArtifacts ?? loaded.reportUnusedArtifacts,
   };
 
   // Before planning: `planEvals` is downstream of the registry, and a grader

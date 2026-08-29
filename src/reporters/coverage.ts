@@ -1,5 +1,5 @@
 /** Coverage rendering shared by every reporter. */
-import type { CoverageEntry } from "../artifacts/types.js";
+import type { AvailabilityReport, CoverageEntry } from "../artifacts/types.js";
 
 /**
  * The "where" cell for one coverage entry.
@@ -17,5 +17,43 @@ import type { CoverageEntry } from "../artifacts/types.js";
  */
 export function coverageLocation(entry: CoverageEntry): string {
   if (entry.resolved) return entry.path ?? entry.note ?? "";
+  if (entry.availability === "offered-not-used") {
+    // Never looked for on disk, so "not found" would be a false claim.
+    return entry.note ?? "offered, never used";
+  }
   return entry.note ?? `not found (${entry.tried.length} location(s) tried)`;
+}
+
+/**
+ * The roster line for one coverage row (ADR 01016). Only the two states a
+ * reader has to act on are labelled: an artifact that was offered and used is
+ * the ordinary case and says nothing, and `unknown` means the trace carried no
+ * roster, which is not this row's problem to announce.
+ */
+export function availabilityTag(entry: CoverageEntry): string | undefined {
+  if (entry.availability === "not-offered") return "not offered";
+  if (entry.availability === "offered-not-used") return "offered, unused";
+  return undefined;
+}
+
+/**
+ * The offered-versus-used summary. Counts by default — a real roster runs to
+ * hundreds of skills, and listing them would bury the evals above.
+ */
+export function availabilityLines(report: AvailabilityReport): string[] {
+  if (!report.recorded) {
+    // Unknown, not zero: older sessions and stream transcripts carry no
+    // listing records at all (ADR 01003).
+    return [
+      "no availability roster in this trace, so what the session was offered is unknown",
+    ];
+  }
+  const lines = [
+    `${report.skills.offered} skill(s) offered, ${report.skills.used} used, ${report.skills.unused} never used`,
+    `${report.agents.offered} agent(s) offered, ${report.agents.used} used, ${report.agents.unused} never used`,
+  ];
+  if (!report.listed && report.skills.unused + report.agents.unused > 0) {
+    lines.push("pass --report-unused-artifacts to list them");
+  }
+  return lines;
 }

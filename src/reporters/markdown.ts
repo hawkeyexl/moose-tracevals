@@ -1,6 +1,6 @@
 /** Markdown report, suitable for PR comments and docs. */
 import type { RunReport } from "../types.js";
-import { coverageLocation } from "./coverage.js";
+import { availabilityLines, coverageLocation } from "./coverage.js";
 
 /**
  * Escapes a value for a markdown table cell. Every cell needs this, not just
@@ -41,17 +41,32 @@ export function renderMarkdown(report: RunReport): string {
 
   lines.push(`## Artifact coverage`);
   lines.push("");
-  lines.push(`| Resolved | Kind | Ref | Where |`);
-  lines.push(`|---|---|---|---|`);
+  lines.push(`| Resolved | Kind | Ref | Availability | Where |`);
+  lines.push(`|---|---|---|---|---|`);
   for (const entry of report.coverage) {
     const location = cell(coverageLocation(entry));
     // Code-span only a real path; wrapping an empty string in backticks would
     // render an empty code span rather than an empty cell.
     const where =
       entry.resolved && entry.path !== undefined ? `\`${location}\`` : location;
+    // An artifact that was offered and never used was never looked for, so
+    // "no" under Resolved would be a claim about a search that never ran.
+    const resolved =
+      entry.availability === "offered-not-used"
+        ? "n/a"
+        : entry.resolved
+          ? "yes"
+          : "no";
     lines.push(
-      `| ${entry.resolved ? "yes" : "no"} | ${cell(entry.kind)} | ${cell(entry.ref)} | ${where} |`,
+      `| ${resolved} | ${cell(entry.kind)} | ${cell(entry.ref)} | ${cell(entry.availability ?? "")} | ${where} |`,
     );
+  }
+  lines.push("");
+
+  lines.push(`## Availability`);
+  lines.push("");
+  for (const line of availabilityLines(report.availability)) {
+    lines.push(`- ${line}`);
   }
   lines.push("");
 

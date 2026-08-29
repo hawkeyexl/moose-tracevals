@@ -1,7 +1,12 @@
 /** Human-readable terminal report. */
 import pc from "picocolors";
 import type { EvalResult, RunReport } from "../types.js";
-import { coverageLocation } from "./coverage.js";
+import type { CoverageEntry } from "../artifacts/types.js";
+import {
+  availabilityLines,
+  availabilityTag,
+  coverageLocation,
+} from "./coverage.js";
 
 const OUTCOME_LABEL: Record<EvalResult["outcome"], string> = {
   pass: "PASS",
@@ -23,6 +28,16 @@ function colorFor(outcome: EvalResult["outcome"]): (s: string) => string {
     default:
       return pc.dim;
   }
+}
+
+/**
+ * `✓` resolved, `·` offered and never used (nothing was looked for, so it is
+ * not an unresolved reference), `○` referenced but not found.
+ */
+function coverageMark(entry: CoverageEntry): string {
+  if (entry.resolved) return pc.green("✓");
+  if (entry.availability === "offered-not-used") return pc.dim("·");
+  return pc.yellow("○");
 }
 
 export function renderHuman(report: RunReport): string {
@@ -62,10 +77,18 @@ export function renderHuman(report: RunReport): string {
   lines.push("");
   lines.push(pc.bold("Artifact coverage"));
   for (const entry of report.coverage) {
-    const mark = entry.resolved ? pc.green("✓") : pc.yellow("○");
+    const tag = availabilityTag(entry);
     lines.push(
-      `  ${mark} ${entry.kind}: ${entry.ref} ${pc.dim(coverageLocation(entry))}`,
+      `  ${coverageMark(entry)} ${entry.kind}: ${entry.ref}${
+        tag === undefined ? "" : ` ${pc.yellow(`[${tag}]`)}`
+      } ${pc.dim(coverageLocation(entry))}`,
     );
+  }
+
+  lines.push("");
+  lines.push(pc.bold("Availability"));
+  for (const line of availabilityLines(report.availability)) {
+    lines.push(`  ${pc.dim(line)}`);
   }
 
   if (report.warnings.length > 0) {

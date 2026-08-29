@@ -91,6 +91,7 @@ tracevals:
     # maxCostUsd has no default
   failOnNeedsReview: true
   plugins: []                  # grader modules to import before evals are planned
+  reportUnusedArtifacts: false
 ```
 
 ## `provider`
@@ -271,6 +272,19 @@ write one, and it lives in the repository doing the evaluating — unlike the
 [`command` grader](/moose-tracevals/reference/graders/), which runs a program named by the artifacts
 of the project being evaluated. Evaluating someone else's trace cannot introduce a plugin.
 </Aside>
+## `reportUnusedArtifacts`
+
+| Key | Type | Default | CLI |
+|---|---|---|---|
+| `reportUnusedArtifacts` | boolean | `false` | `--report-unused-artifacts` |
+
+Whether the coverage table lists every skill and agent the session was
+[offered and never used](/moose-tracevals/declare/coverage/#offered-used-and-never-on-the-menu), or
+only counts them. Off by default because a real roster runs to a couple of hundred skills and would
+bury the evals above it.
+
+This is an observation, not a gate. Turning it on changes what the report *shows* and nothing about
+what it *decides* — the summary counts and the exit code are identical either way.
 
 ## Keys with no CLI flag
 
