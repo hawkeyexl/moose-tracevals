@@ -1,4 +1,10 @@
-/** `moose-tracevals run <trace>` — evaluate one trace end to end. */
+/**
+ * `moose-tracevals run <trace>` — evaluate one trace end to end.
+ *
+ * Split into three exports so the batch path can reuse them (ADR 01018):
+ * `prepareRun` builds what is shared across traces, `runOne` evaluates one, and
+ * `runRun` is the two of them plus rendering, unchanged for callers.
+ */
 import { writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { loadConfig } from "../core/config.js";
@@ -18,9 +24,13 @@ import { makeTraceJudge, type TraceJudge } from "../judge/trace-judge.js";
 import type { InferenceProvider, Pricing } from "@hawkeyexl/inference";
 import { render, type ReportFormat } from "../reporters/index.js";
 import type { RunReport } from "../types.js";
+import type { TracevalsConfig } from "../core/config.js";
 
-export interface RunCommandOptions {
-  tracePath: string;
+/**
+ * Everything that is the same for every trace in a run. `runRun` adds the one
+ * per-trace field; the batch path (ADR 01018) carries a list instead.
+ */
+export interface RunSharedOptions {
   project?: string;
   provider?: string;
   model?: string;
@@ -45,15 +55,38 @@ export interface RunCommandOptions {
   judge?: TraceJudge;
 }
 
+export interface RunCommandOptions extends RunSharedOptions {
+  tracePath: string;
+}
+
 export interface RunCommandResult {
   report: RunReport;
   rendered: string;
   comparison?: HistoryComparison;
 }
 
-export async function runRun(
-  options: RunCommandOptions,
-): Promise<RunCommandResult> {
+/**
+ * Everything a run needs that is *not* per-trace: the resolved config, the
+ * plugin-loading warnings, and the judge.
+ *
+ * Split out for the batch path (ADR 01018), and the split is not cosmetic. The
+ * judge carries the cost budget, so building one per trace would turn
+ * `maxCostUsd` from a ceiling on the run into a ceiling on the largest trace.
+ * Config and plugins are hoisted for a smaller reason: a plugin imports once
+ * per process (ADR 01017), so re-running the loader would attach its warnings
+ * to the first trace's report and to no other.
+ */
+export interface RunContext {
+  config: TracevalsConfig;
+  configDir: string;
+  /** Plugin-loading warnings, prepended to every report in the batch. */
+  warnings: string[];
+  judge?: TraceJudge;
+}
+
+export async function prepareRun(
+  options: RunSharedOptions,
+): Promise<RunContext> {
   const configDir = options.configDir ?? process.cwd();
   const loaded = await loadConfig(configDir);
   // Flags override the config rather than bypassing it, so the engine still
@@ -125,25 +158,50 @@ export async function runRun(
     });
   }
 
+  return {
+    config,
+    configDir,
+    warnings: plugins.warnings,
+    ...(judge !== undefined ? { judge } : {}),
+  };
+}
+
+/**
+ * One trace, through the engine and the history file. No rendering: the batch
+ * path renders once over the aggregate rather than per trace.
+ */
+export async function runOne(
+  options: RunCommandOptions,
+  context: RunContext,
+): Promise<{ report: RunReport; comparison?: HistoryComparison }> {
+  const { config } = context;
   const report = await runEvals({
     tracePath: options.tracePath,
     ...(options.project !== undefined ? { projectDir: options.project } : {}),
     ...(options.env !== undefined ? { env: options.env } : {}),
     config,
-    ...(judge !== undefined ? { judge } : {}),
+    ...(context.judge !== undefined ? { judge: context.judge } : {}),
     ...(options.deterministicOnly !== undefined
       ? { deterministicOnly: options.deterministicOnly }
       : {}),
-    ...(plugins.warnings.length > 0 ? { warnings: plugins.warnings } : {}),
+    ...(context.warnings.length > 0 ? { warnings: context.warnings } : {}),
   });
 
   let comparison: HistoryComparison | undefined;
   if (options.history) {
-    const historyFile = resolve(configDir, config.history.file);
+    const historyFile = resolve(context.configDir, config.history.file);
     comparison =
       compareToLast(await loadHistory(historyFile), report) ?? undefined;
     await appendHistory(historyFile, report);
   }
+  return { report, ...(comparison ? { comparison } : {}) };
+}
+
+export async function runRun(
+  options: RunCommandOptions,
+): Promise<RunCommandResult> {
+  const context = await prepareRun(options);
+  const { report, comparison } = await runOne(options, context);
 
   let rendered = render(report, options.format ?? "human");
   if (comparison && (options.format ?? "human") !== "json") {
@@ -155,7 +213,8 @@ export async function runRun(
   return { report, rendered, ...(comparison ? { comparison } : {}) };
 }
 
-function renderComparison(comparison: HistoryComparison): string {
+/** Exported for the batch reporter, which renders one block per trace. */
+export function renderComparison(comparison: HistoryComparison): string {
   const lines = [`History vs ${comparison.previousTimestamp}:`];
   for (const r of comparison.regressions) {
     lines.push(`  regression: ${r.evalName} (${r.outcome})`);
