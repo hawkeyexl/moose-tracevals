@@ -482,6 +482,8 @@ that repository declares. This is on by default ([ADR 01011](https://github.com/
 Two properties bound it: argv is spawned with **no shell**, so `;`, `&&`, and `$(...)` in an
 artifact reach the process as literal argument text; and `timeout-ms` always has a finite value, so
 a hung check fails its own eval rather than the run.
+
+**To evaluate a trace without running anything it declares**, pass `--no-commands` — see below.
 </Aside>
 
 Four states are an `error` rather than a verdict, because none of them can honestly be called a
@@ -500,6 +502,40 @@ not generate check scripts — it reports the mismatch and leaves the regenerati
 
 `fill` never proposes a command grader. Writing an executable into an artifact is a decision a human
 makes.
+
+### Turning execution off
+
+Pass `--no-commands`, or set the config key, to evaluate a trace without running anything its
+project declares:
+
+```yaml title="moose.config.yaml"
+tracevals:
+  graders:
+    command:
+      enabled: false
+```
+
+The eval reports **`skipped`**, with the reason stated — never `pass`:
+
+```
+  SKIP   fix-bug › no-force-push
+         command execution is disabled (--no-commands / graders.command.enabled: false)
+```
+
+An unrun check has not been satisfied, so it never counts as clean. Nothing else about the run
+changes — the same verdicts, and the same exit code, as a run without the flag.
+
+The default stays **on**: an eval that declares a command is asking for that command to run, and a
+tool that silently refused would make the vocabulary's own worked example look broken. What is new
+is the lever for the person taking the risk
+([ADR 01019](https://github.com/hawkeyexl/moose-tracevals/blob/main/adrs/01019-add-an-opt-out-for-command-execution.md),
+which amends 01011 rather than reversing it).
+
+For a run that both executes nothing *and* sends nothing, combine it with `--deterministic-only`:
+
+```bash
+moose-tracevals run session.jsonl --deterministic-only --no-commands
+```
 
 ## Custom graders
 

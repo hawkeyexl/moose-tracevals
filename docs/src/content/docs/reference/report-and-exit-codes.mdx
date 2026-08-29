@@ -122,9 +122,15 @@ One entry per artifact reference found in the trace, resolved or not.
 | `tried` | string[] | Every location searched, in order. Usually enough to diagnose a miss. |
 | `note` | string? | Why it will never resolve, e.g. `built-in agent (no definition file)`. |
 | `availability` | string? | `offered-and-used`, `offered-not-used`, `not-offered`, or `unknown`. Absent for `project-rules`, which is always in force. |
+| `stale` | boolean? | The file is newer than the session's end time. Absent when the trace records no end time. |
+| `modifiedAt` | string? | The file's mtime, ISO-8601. Present whenever `stale` is. |
 
 An unresolved reference is **not** a failing eval. It is a coverage note plus a warning, so a missing
 plugin never crashes a run or turns a build red on its own.
+
+`stale` is likewise **never** an eval outcome and never an exit code — it is a heuristic
+(mtime is not content identity, and a checkout rewrites every mtime) that says how much to trust the
+verdicts, not what they are. See [Staleness](/moose-tracevals/declare/coverage/#staleness).
 
 #### The location shown for an entry
 
@@ -209,6 +215,8 @@ extra lines appear: the vote split and the first `observed`.
 Coverage marks: `✓` resolved, `○` referenced but not found, `·` offered and never used. The location
 follows the rule [above](#the-location-shown-for-an-entry) — except for a `·` row, which reports
 `offered, never used` plus the roster's own description, because nothing was ever looked for on disk.
+A stale entry appends `⚠ modified after the session ended (<iso>)` after the location — in markdown,
+into the same **Where** cell, so the table keeps its column count.
 
 ## `--format markdown`
 

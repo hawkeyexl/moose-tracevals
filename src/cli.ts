@@ -31,6 +31,7 @@ interface RunFlags {
   output?: string;
   history?: boolean;
   failOnNeedsReview?: boolean;
+  commands?: boolean;
   require?: string[];
   reportUnusedArtifacts?: boolean;
   allProjects?: boolean;
@@ -57,6 +58,8 @@ async function executeRun(traces: string[], opts: RunFlags) {
     history: opts.history,
     // Left undefined when neither flag is passed, so the config still decides.
     failOnNeedsReview: opts.failOnNeedsReview,
+    // Same: commander sets this false only for `--no-commands`.
+    commands: opts.commands,
     ...(opts.require !== undefined ? { require: opts.require } : {}),
     reportUnusedArtifacts: opts.reportUnusedArtifacts,
   };
@@ -123,6 +126,10 @@ function addRunFlags(cmd: Command): Command {
     )
     .option("--fail-on-needs-review", "treat needs-review as a failure")
     .option("--no-fail-on-needs-review", "do not fail the run on needs-review")
+    .option(
+      "--no-commands",
+      "do not execute command-graded evals; they report skipped",
+    )
     .option(
       "--require <module>",
       "load a grader plugin; repeatable, and added to config plugins",

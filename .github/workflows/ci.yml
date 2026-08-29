@@ -150,6 +150,84 @@ jobs:
               console.error("unexpected errored evals:", JSON.stringify(errored, null, 2));
               process.exitCode = 1;
             }
+            // Artifact staleness (ADR 01021). A checkout rewrites every mtime,
+            // so on this corpus every resolved artifact is newer than the
+            // fixture trace by construction — which makes the flag and the
+            // warning assertable, and makes it worth pinning that neither one
+            // reaches an outcome. The exit-1 check above is that guarantee.
+            const resolved = r.coverage.filter((c) => c.resolved);
+            if (resolved.length === 0) { console.error("expected resolved coverage entries"); process.exitCode = 1; }
+            for (const c of resolved) {
+              if (c.stale !== true || typeof c.modifiedAt !== "string") {
+                console.error("expected a staleness flag on a freshly checked-out artifact:", JSON.stringify(c));
+                process.exitCode = 1;
+              }
+            }
+            if (!r.warnings.some((w) => /modified after the session ended/.test(w))) {
+              console.error("expected a staleness warning:", JSON.stringify(r.warnings, null, 2));
+              process.exitCode = 1;
+            }
+          '
+
+      # ADR 01019: the opt-out ADR 01011 never provided. The corpus declares a
+      # real command eval that spawns a script and passes; with the flag it must
+      # report `skipped` — never `pass`, because an unrun check has not been
+      # satisfied — and nothing else about the run may move.
+      - name: Dogfood run (command opt-out)
+        shell: bash
+        env:
+          MOOSE_TRACEVALS_HOME: test/fixtures/home
+        run: |
+          set +e
+          node dist/cli.js run test/fixtures/traces/claude-session.jsonl --project test/fixtures/project --deterministic-only --no-commands --format json > moose-tracevals-nocmd.json
+          code=$?
+          set -e
+          if [ "$code" -ne 1 ]; then
+            echo "Expected exit 1 with --no-commands (the deterministic failure is unrelated to it), got $code"
+            cat moose-tracevals-nocmd.json
+            exit 1
+          fi
+          node -e '
+            const fs = require("fs");
+            const read = (f) => {
+              let raw = fs.readFileSync(f, "utf8");
+              if (raw.charCodeAt(0) === 0xfeff) raw = raw.slice(1);
+              return JSON.parse(raw);
+            };
+            const on = read("moose-tracevals-run.json");
+            const off = read("moose-tracevals-nocmd.json");
+            const find = (r) => r.evalResults.find((x) => x.evalName === "no-force-push");
+            if (find(on)?.outcome !== "pass") {
+              console.error("baseline: the command eval should pass by default, got", find(on)?.outcome);
+              process.exitCode = 1;
+            }
+            const skipped = find(off);
+            if (skipped?.outcome !== "skipped") {
+              console.error("--no-commands must skip the command eval, got", JSON.stringify(skipped));
+              process.exitCode = 1;
+            }
+            if (!/command execution is disabled/.test(skipped?.skipReason ?? "")) {
+              console.error("expected a stated reason for the skip, got", skipped?.skipReason);
+              process.exitCode = 1;
+            }
+            // The flag must be surgical: every other verdict, and the exit
+            // code, identical to the default run.
+            const others = (r) => JSON.stringify(
+              r.evalResults
+                .filter((x) => x.evalName !== "no-force-push")
+                .map((x) => [x.artifactName, x.evalName, x.outcome])
+                .sort()
+            );
+            if (others(on) !== others(off)) {
+              console.error("--no-commands changed an unrelated verdict:");
+              console.error(others(on));
+              console.error(others(off));
+              process.exitCode = 1;
+            }
+            if (on.exitCode !== off.exitCode) {
+              console.error("--no-commands changed the exit code:", on.exitCode, off.exitCode);
+              process.exitCode = 1;
+            }
           '
 
       # `--report-unused-artifacts` is the opt-in half of the same observation:

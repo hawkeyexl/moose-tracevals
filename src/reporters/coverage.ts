@@ -57,3 +57,18 @@ export function availabilityLines(report: AvailabilityReport): string[] {
   }
   return lines;
 }
+
+/**
+ * The staleness note for one coverage entry, or "" when it is not stale.
+ *
+ * Kept beside `coverageLocation` and separate from it: the location answers
+ * "which file", and this answers "is that file still what the session saw"
+ * (ADR 01021). Collapsing them would drop the path for a stale entry, which is
+ * exactly the row where a reader most wants to open the file.
+ */
+export function coverageStaleness(entry: CoverageEntry): string {
+  if (entry.stale !== true) return "";
+  return entry.modifiedAt !== undefined
+    ? `modified after the session ended (${entry.modifiedAt})`
+    : "modified after the session ended";
+}

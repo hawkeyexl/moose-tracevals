@@ -6,6 +6,7 @@ import {
   availabilityLines,
   availabilityTag,
   coverageLocation,
+  coverageStaleness,
 } from "./coverage.js";
 
 const OUTCOME_LABEL: Record<EvalResult["outcome"], string> = {
@@ -78,10 +79,20 @@ export function renderHuman(report: RunReport): string {
   lines.push(pc.bold("Artifact coverage"));
   for (const entry of report.coverage) {
     const tag = availabilityTag(entry);
+    const location = coverageLocation(entry);
+    const stale = coverageStaleness(entry);
+    // Joined from the non-empty parts: an aggregated entry has no location, and
+    // interpolating one anyway leaves a double space before the note. The two
+    // markers are independent — a row can be both offered-but-unused and stale.
     lines.push(
-      `  ${coverageMark(entry)} ${entry.kind}: ${entry.ref}${
-        tag === undefined ? "" : ` ${pc.yellow(`[${tag}]`)}`
-      } ${pc.dim(coverageLocation(entry))}`,
+      [
+        `  ${coverageMark(entry)} ${entry.kind}: ${entry.ref}`,
+        tag === undefined ? "" : pc.yellow(`[${tag}]`),
+        location ? pc.dim(location) : "",
+        stale ? pc.yellow(`⚠ ${stale}`) : "",
+      ]
+        .filter((part) => part !== "")
+        .join(" "),
     );
   }
 

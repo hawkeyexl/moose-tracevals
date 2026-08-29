@@ -158,3 +158,66 @@ describe("renderTrace", () => {
     expect(scoped).toContain("never invoked");
   });
 });
+
+describe("renderTrace redaction", () => {
+  // Fake credential shapes only: nothing here resolves anywhere.
+  const leaky = makeTrace({
+    events: [
+      {
+        kind: "user",
+        text: "deploy with sk-ant-api03-NOTAREALKEYNOTAREALKEY01",
+        raw: {},
+        index: 0,
+      },
+      { kind: "tool_call", toolName: "Bash", raw: {}, index: 1 },
+      {
+        kind: "assistant",
+        text: "exported AWS_SECRET_ACCESS_KEY=fakefakefake",
+        raw: {},
+        index: 2,
+      },
+    ],
+    toolCalls: [
+      {
+        name: "Bash",
+        input: {
+          command: "curl -H 'Authorization: Bearer tok_abcdefghijklmnop123'",
+        },
+        sidechain: false,
+        index: 1,
+      },
+    ],
+    userMessages: ["deploy with sk-ant-api03-NOTAREALKEYNOTAREALKEY01"],
+  });
+
+  it("redacts secrets in messages, assistant text, and tool inputs", () => {
+    const out = renderTrace(leaky);
+    expect(out).not.toContain("NOTAREALKEYNOTAREALKEY01");
+    expect(out).not.toContain("tok_abcdefghijklmnop123");
+    expect(out).not.toContain("fakefakefake");
+    expect(out).toContain("[redacted:api-key]");
+    expect(out).toContain("[redacted:auth-token]");
+    expect(out).toContain("AWS_SECRET_ACCESS_KEY=[redacted:secret-value]");
+  });
+
+  it("redacts before clipping, so truncation cannot bisect a secret", () => {
+    // A block cap landing mid-key would leave a usable prefix behind if
+    // clipping ran first.
+    const out = renderTrace(leaky, { maxBlockChars: 24 });
+    expect(out).not.toContain("sk-ant-api03");
+    expect(out).not.toContain("sk-ant");
+  });
+
+  it("applies configured patterns as well as the built-ins", () => {
+    const out = renderTrace(leaky, { redact: ["deploy"] });
+    expect(out).not.toContain("deploy");
+    expect(out).toContain("[redacted]");
+    expect(out).toContain("[redacted:api-key]");
+  });
+
+  it("leaves a trace with nothing secret byte-identical", () => {
+    // The cache key is sha256 of this digest, so a no-op redaction must not
+    // move it — a config change that changes nothing must not cost a replay.
+    expect(renderTrace(trace)).toBe(renderTrace(trace, { redact: [] }));
+  });
+});
