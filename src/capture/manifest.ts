@@ -78,6 +78,33 @@ export async function writeManifest(
 }
 
 /**
+ * Every member `run` actually consumes, checked one by one.
+ *
+ * A partial read is the dangerous failure here, not a loud one. An artifact
+ * entry with no `path` puts `undefined` in the comparison map's key, and one
+ * whose `sha256` is not a string puts a value no real digest can equal — so a
+ * half-read manifest reports **`mismatch`**, "this artifact changed since the
+ * session", which is the most alarming thing this feature can say and would be
+ * said off nothing but the file's own corruption. A manifest is optional
+ * evidence, so anything malformed has to read as *no* evidence.
+ */
+function isManifestArtifact(value: unknown): boolean {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+  const entry = value as Record<string, unknown>;
+  return (
+    typeof entry.path === "string" &&
+    entry.path.length > 0 &&
+    typeof entry.sha256 === "string" &&
+    entry.sha256.length > 0 &&
+    typeof entry.name === "string" &&
+    typeof entry.type === "string" &&
+    typeof entry.bytes === "number"
+  );
+}
+
+/**
  * Read one manifest, or null. Absent, unreadable, unparseable, the wrong shape,
  * or written by a newer format version all produce null: consuming a manifest
  * is optional evidence-gathering, so every failure has to degrade to "no
@@ -106,7 +133,12 @@ export async function readManifest(
     return null;
   }
   if (typeof record.sessionId !== "string") return null;
+  // `capturedAt` is printed in the report and `root` is a base the join is
+  // keyed on; both are consumed, so neither may be half-there.
+  if (typeof record.capturedAt !== "string") return null;
+  if (typeof record.root !== "string") return null;
   if (!Array.isArray(record.artifacts)) return null;
+  if (!record.artifacts.every(isManifestArtifact)) return null;
   return parsed as SessionManifest;
 }
 
@@ -120,6 +152,12 @@ export interface FindManifestOptions {
   captureDir: string;
   /** An explicitly named manifest, which is used without searching. */
   explicit?: string;
+  /**
+   * Called for each candidate that was readable but refused, with why. A
+   * refusal that leaves no trace is indistinguishable from never having
+   * captured anything, which is the wrong thing for a reader to conclude.
+   */
+  onRefused?: (path: string, reason: string) => void;
 }
 
 export interface FoundManifest {
@@ -136,13 +174,32 @@ export interface FoundManifest {
  *    session store together with the state directory.
  * 3. `<projectDir>/<captureDir>/<session-id>.json` — where `capture` writes.
  *
- * **A manifest recorded for a different session is refused**, not used. It is
- * evidence about that session, and letting it stand in here would be the one
- * way a manifest could produce a confidently wrong answer.
+ * **A manifest that cannot be shown to belong to this trace is refused**, not
+ * used. It is evidence about some other session, and letting it stand in here
+ * would be the one way a manifest could produce a confidently wrong answer.
+ *
+ * Two ways that can happen, and the trace's own id decides which:
+ *
+ * - The ids **disagree** — refused outright, however the manifest was reached.
+ * - The trace records **no id at all**. A Claude Code session file whose
+ *   records predate `sessionId`, or a `claude -p` stream-json transcript
+ *   captured without its `system`/`init` record, both parse fine and both
+ *   arrive here with nothing to check against. A manifest found *by
+ *   convention* beside such a trace is refused, because convention is not
+ *   provenance and the file could describe any session on the machine.
+ *
+ * An **explicitly named** `--manifest` is the exception to that second case,
+ * and only that one. Naming a file is the caller's own assertion that it
+ * belongs to this trace — the assertion the ADR already treats as
+ * load-bearing when it makes an unusable named manifest an error rather than a
+ * shrug — and it is the only assertion available for a trace format that
+ * records no id. Refusing it would leave `--manifest` structurally unusable
+ * there while buying no safety a discovered manifest does not already get.
  */
 export async function findManifest(
   options: FindManifestOptions,
 ): Promise<FoundManifest | null> {
+  const explicit = options.explicit !== undefined;
   const candidates: string[] = [];
   if (options.explicit !== undefined) {
     candidates.push(options.explicit);
@@ -165,13 +222,32 @@ export async function findManifest(
   for (const path of candidates) {
     const manifest = await readManifest(path);
     if (manifest === null) continue;
-    if (
-      options.sessionId !== undefined &&
-      manifest.sessionId !== options.sessionId
-    ) {
+    const refusal = refuse(manifest, options.sessionId, explicit);
+    if (refusal !== null) {
+      options.onRefused?.(path, refusal);
       continue;
     }
     return { path, manifest };
+  }
+  return null;
+}
+
+/** Why this manifest cannot be trusted for this trace, or null if it can. */
+function refuse(
+  manifest: SessionManifest,
+  sessionId: string | undefined,
+  explicit: boolean,
+): string | null {
+  if (sessionId === undefined) {
+    if (explicit) return null;
+    return (
+      `the trace records no session id, so a manifest found by convention ` +
+      `cannot be verified as belonging to it (it records "${manifest.sessionId}"). ` +
+      `Pass --manifest to use it anyway.`
+    );
+  }
+  if (manifest.sessionId !== sessionId) {
+    return `it was recorded for a different session ("${manifest.sessionId}", not "${sessionId}")`;
   }
   return null;
 }
@@ -198,6 +274,14 @@ export function checkContent(
   const recorded = new Map(manifest.artifacts.map((a) => [a.path, a.sha256]));
   const missing: string[] = [];
   let matched = 0;
+  /**
+   * The first agreeing pair, captured where both halves are in hand. `expected`
+   * means "what the manifest claimed" in every branch, so it has to be read off
+   * the manifest in every branch — going back to `actual` afterwards would
+   * report the file twice, and on a match the two are equal, so nothing would
+   * ever catch it.
+   */
+  let agreed: { expected: string; actual: string } | undefined;
 
   for (const [path, digest] of actual) {
     const expected = recorded.get(path);
@@ -208,6 +292,7 @@ export function checkContent(
     if (expected !== digest) {
       return { status: "mismatch", expected, actual: digest };
     }
+    agreed ??= { expected, actual: digest };
     matched += 1;
   }
 
@@ -226,12 +311,12 @@ export function checkContent(
       reason: `not recorded in the session manifest: ${missing.join(", ")}`,
     };
   }
-  const only = [...actual.entries()][0];
+  // Digests only for a row covering one file: an aggregated project-rules row
+  // has no single pair to report, and picking one of several would be a claim
+  // about the row that is not true of it.
   return {
     status: "match",
-    ...(actual.size === 1 && only !== undefined
-      ? { expected: only[1], actual: only[1] }
-      : {}),
+    ...(actual.size === 1 && agreed !== undefined ? agreed : {}),
   };
 }
 
