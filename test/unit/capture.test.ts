@@ -232,6 +232,89 @@ describe("buildManifest", () => {
     );
     expect(await readManifest(path)).toBeNull();
   });
+
+  /**
+   * A half-read manifest is worse than no manifest. An entry with no `path`, or
+   * a `sha256` that is not a string, puts `undefined` — or a number — into the
+   * comparison map, and the comparison then reports **`mismatch`**: "this
+   * artifact changed since the session", the most alarming thing the feature
+   * can say, off nothing but the file's own corruption.
+   */
+  describe("a malformed artifact entry makes the whole file unusable", () => {
+    async function read(artifacts: unknown): Promise<SessionManifest | null> {
+      const path = join(dir, "malformed.json");
+      await writeFile(
+        path,
+        JSON.stringify({
+          version: MANIFEST_VERSION,
+          sessionId: "s1",
+          capturedAt: "2026-06-01T00:00:00.000Z",
+          hookEvent: "SessionStart",
+          root: "/proj",
+          device: { id: "0123456789abcdef", platform: "linux" },
+          tool: { name: "moose-tracevals", version: "0.0.0" },
+          artifacts,
+          config: {},
+        }),
+        "utf-8",
+      );
+      return readManifest(path);
+    }
+
+    const good = {
+      name: "CLAUDE.md",
+      type: "project-rules",
+      path: "CLAUDE.md",
+      sha256: "a".repeat(64),
+      bytes: 7,
+    };
+
+    it.each([
+      ["a recorded digest that is not a string", [{ ...good, sha256: 12345 }]],
+      ["no recorded digest at all", [{ ...good, sha256: undefined }]],
+      ["no path to join on", [{ ...good, path: undefined }]],
+      ["an empty path", [{ ...good, path: "" }]],
+      ["a name that is not a string", [{ ...good, name: 7 }]],
+      ["a byte count that is not a number", [{ ...good, bytes: "7" }]],
+      ["an entry that is not an object", ["CLAUDE.md"]],
+      ["a null entry", [null]],
+      ["one good entry and one bad", [good, { ...good, path: "AGENTS.md", sha256: null }]],
+    ])("refuses %s", async (_label, artifacts) => {
+      expect(await read(artifacts)).toBeNull();
+    });
+
+    it("still reads a well-formed one", async () => {
+      const manifest = await read([good]);
+      expect(manifest?.artifacts).toHaveLength(1);
+      // And the point of the guard: nothing malformed reaches the comparison,
+      // so the only `mismatch` it can report is a real one.
+      expect(
+        checkContent(manifest as SessionManifest, new Map([["CLAUDE.md", "a".repeat(64)]]))
+          .status,
+      ).toBe("match");
+    });
+  });
+
+  it("refuses one whose consumed members are the wrong type", async () => {
+    // `root` is the base the join is keyed on, and `capturedAt` is printed in
+    // the report. Neither is optional, and half a manifest is not evidence.
+    for (const bad of [{ root: 42 }, { capturedAt: { when: "then" } }]) {
+      const path = join(dir, "wrong-type.json");
+      await writeFile(
+        path,
+        JSON.stringify({
+          version: MANIFEST_VERSION,
+          sessionId: "s1",
+          capturedAt: "2026-06-01T00:00:00.000Z",
+          root: "/proj",
+          artifacts: [],
+          ...bad,
+        }),
+        "utf-8",
+      );
+      expect(await readManifest(path)).toBeNull();
+    }
+  });
 });
 
 // ── Comparing content ────────────────────────────────────────────
@@ -261,6 +344,26 @@ describe("checkContent", () => {
     const check = checkContent(manifest(), new Map([["CLAUDE.md", "a".repeat(64)]]));
     expect(check.status).toBe("match");
     expect(check.expected).toBe("a".repeat(64));
+  });
+
+  /**
+   * `expected` means "what the manifest claimed" in every branch, so it has to
+   * be read off the manifest in every branch. On a match the two digests are
+   * equal by construction, which is exactly why the source has to be pinned
+   * here rather than left to coincide: nothing else would ever notice.
+   */
+  it("reports the manifest's own digest as `expected`, not a re-read of the file", () => {
+    const recorded = manifest();
+    const check = checkContent(
+      recorded,
+      // A view that answers a *second* traversal differently. The digests are
+      // compared during the first one; anything that goes back to `actual` to
+      // fill in `expected` is reporting the file, not the manifest.
+      shifting("CLAUDE.md", "a".repeat(64), "f".repeat(64)),
+    );
+    expect(check.status).toBe("match");
+    expect(check.expected).toBe(recorded.artifacts[0]?.sha256);
+    expect(check.actual).toBe("a".repeat(64));
   });
 
   it("mismatches when a covered file hashes to something else", () => {
@@ -294,6 +397,34 @@ describe("checkContent", () => {
     expect(check.status).toBe("skipped");
   });
 });
+
+/**
+ * A `ReadonlyMap` whose entries change after the first traversal. It exists to
+ * separate "the value the comparison used" from "a value read back out of
+ * `actual` afterwards" — two things a single traversal keeps identical, which
+ * is why the digest's source cannot be pinned with a plain `Map`.
+ */
+function shifting(
+  key: string,
+  first: string,
+  later: string,
+): ReadonlyMap<string, string> {
+  let traversals = 0;
+  const snapshot = (): Map<string, string> =>
+    new Map([[key, traversals++ === 0 ? first : later]]);
+  return {
+    size: 1,
+    get: (k: string) => (k === key ? first : undefined),
+    has: (k: string) => k === key,
+    keys: () => snapshot().keys(),
+    values: () => snapshot().values(),
+    entries: () => snapshot().entries(),
+    forEach: (fn: (v: string, k: string, m: ReadonlyMap<string, string>) => void) => {
+      snapshot().forEach(fn as never);
+    },
+    [Symbol.iterator]: () => snapshot()[Symbol.iterator](),
+  } as ReadonlyMap<string, string>;
+}
 
 // ── Finding one beside a trace ───────────────────────────────────
 
@@ -364,14 +495,76 @@ describe("findManifest", () => {
     expect(found).toBeNull();
   });
 
-  it("still finds one beside the trace when the trace records no session id", async () => {
+  /**
+   * A trace that records no session id — a legacy `claude -p` stream-json
+   * transcript with no `system/init` line, say — gives the guard nothing to
+   * check against. Discovery is convention, so an unverifiable sibling is a
+   * manifest that *may* belong to any session at all; using it is the one way
+   * a manifest could produce a confidently wrong answer.
+   */
+  it("refuses a discovered manifest when the trace records no session id", async () => {
     await put(join(dir, "traces", "t.manifest.json"), "s1");
     const found = await findManifest({
       tracePath: join(dir, "traces", "t.jsonl"),
       projectDir: dir,
       captureDir: ".moose-tracevals/sessions",
     });
+    expect(found).toBeNull();
+  });
+
+  it("says which manifest it refused and why", async () => {
+    await put(join(dir, "traces", "t.manifest.json"), "s1");
+    const refused: string[] = [];
+    await findManifest({
+      tracePath: join(dir, "traces", "t.jsonl"),
+      projectDir: dir,
+      captureDir: ".moose-tracevals/sessions",
+      onRefused: (path, reason) => refused.push(`${path}: ${reason}`),
+    });
+    expect(refused).toHaveLength(1);
+    expect(refused[0]).toMatch(/t\.manifest\.json/);
+    expect(refused[0]).toMatch(/records no session id/);
+  });
+
+  it("reports a foreign session id as the reason it refused", async () => {
+    await put(join(dir, "traces", "t.manifest.json"), "OTHER");
+    const refused: string[] = [];
+    await findManifest({
+      tracePath: join(dir, "traces", "t.jsonl"),
+      sessionId: "s1",
+      projectDir: dir,
+      captureDir: ".moose-tracevals/sessions",
+      onRefused: (path, reason) => refused.push(`${path}: ${reason}`),
+    });
+    expect(refused[0]).toMatch(/recorded for a different session/);
+  });
+
+  /**
+   * Naming a file is the caller's own assertion that it belongs to this trace,
+   * and it is the only assertion available for a format that records no id.
+   * Refusing it would make `--manifest` structurally unusable there.
+   */
+  it("uses an explicitly named manifest when the trace records no session id", async () => {
+    await put(join(dir, "named.json"), "s1");
+    const found = await findManifest({
+      tracePath: join(dir, "traces", "t.jsonl"),
+      projectDir: dir,
+      captureDir: ".moose-tracevals/sessions",
+      explicit: join(dir, "named.json"),
+    });
     expect(found?.manifest.sessionId).toBe("s1");
+  });
+
+  it("still refuses an explicitly named manifest that contradicts the trace", async () => {
+    await put(join(dir, "named.json"), "OTHER");
+    const found = await findManifest({
+      tracePath: join(dir, "traces", "t.jsonl"),
+      sessionId: "s1",
+      projectDir: dir,
+      captureDir: ".moose-tracevals/sessions",
+      explicit: join(dir, "named.json"),
+    });
+    expect(found).toBeNull();
   });
 });
 
