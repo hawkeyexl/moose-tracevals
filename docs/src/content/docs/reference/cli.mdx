@@ -358,6 +358,13 @@ Install the bundled plugin, which pre-wires the hook — `plugin/.claude-plugin/
 **began**, which is exactly the "then" that staleness compares against. `compact` and `clear` reset
 the model's context without re-reading a single artifact.
 
+`resume` is left out for the same reason, and it is worth knowing what that means: **a resumed
+session keeps the manifest captured at its original start.** Edit a `SKILL.md`, resume, and the
+turns after the resume are compared against what the file said before the edit — reported as
+`mismatch`, which is true of the session as a whole and blunt about the later turns. Add `resume` to
+the matcher if you would rather each resume re-snapshot the project; the policy lives in your
+`settings.json`, not in the command.
+
 ### Where `run` looks for one
 
 Most specific first, and the first usable hit wins:
@@ -368,6 +375,12 @@ Most specific first, and the first usable hit wins:
 
 A manifest whose `sessionId` does not match the trace's is **refused**, and the run proceeds as if
 there were none: it is evidence about a different session.
+
+So is one the trace gives no way to check. A trace that records **no** session id — a `claude -p`
+stream-json transcript captured without its `system`/`init` record, say — cannot be joined to any
+manifest by convention, so locations 2 and 3 have no key to look under and location 1 is refused
+with a warning naming the file. Name it with `--manifest` to use it anyway: that is your assertion
+that the file belongs to this trace, and for such a trace it is the only one available.
 
 ## `list`
 
