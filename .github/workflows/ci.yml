@@ -530,6 +530,75 @@ jobs:
             }
           '
 
+      - name: Dogfood run (an unverifiable manifest is refused)
+        shell: bash
+        env:
+          MOOSE_TRACEVALS_HOME: test/fixtures/home
+        run: |
+          set +e
+          rm -rf .tmp/unverifiable
+          mkdir -p .tmp/unverifiable
+          # A stream-json trace whose `system`/`init` record has lost its
+          # session id. It still parses — every other record keeps an id, which
+          # is what the format sniffer reads — and it records nothing a manifest
+          # can be joined to, which is the case the guard exists for.
+          node -e '
+            const fs = require("fs");
+            const lines = fs.readFileSync("test/fixtures/traces/claude-stream.jsonl", "utf8").split("\n").filter((l) => l.trim());
+            const out = lines.map((l) => {
+              const r = JSON.parse(l);
+              if (r.type === "system") delete r.session_id;
+              return JSON.stringify(r);
+            });
+            fs.writeFileSync(".tmp/unverifiable/stream.jsonl", out.join("\n") + "\n");
+          '
+          node dist/cli.js capture --session-id anybody --project test/fixtures/project --out .tmp/unverifiable/stream.manifest.json > /dev/null 2>&1
+          # Beside the trace, so discovery finds it — and must refuse it.
+          node dist/cli.js run .tmp/unverifiable/stream.jsonl --project test/fixtures/project --deterministic-only --format json > .tmp/unverifiable/discovered.json
+          discovered=$?
+          node dist/cli.js run .tmp/unverifiable/stream.jsonl --project test/fixtures/project --manifest .tmp/unverifiable/stream.manifest.json --deterministic-only --format json > .tmp/unverifiable/named.json
+          named=$?
+          set -e
+          if [ "$discovered" -ne 0 ] || [ "$named" -ne 0 ]; then
+            echo "Expected exit 0 from both runs, got $discovered / $named"
+            cat .tmp/unverifiable/discovered.json
+            exit 1
+          fi
+          node -e '
+            const read = (f) => {
+              let raw = require("fs").readFileSync(`.tmp/unverifiable/${f}.json`, "utf8");
+              if (raw.charCodeAt(0) === 0xfeff) raw = raw.slice(1);
+              return JSON.parse(raw);
+            };
+            const fail = (msg) => { console.error(msg); process.exitCode = 1; };
+            const [discovered, named] = ["discovered", "named"].map(read);
+
+            // The trace really does record no id, or this proves nothing.
+            if (discovered.trace.sessionId !== undefined) {
+              fail(`expected no session id, got ${discovered.trace.sessionId}`);
+            }
+            // Convention is not provenance: a sibling manifest that cannot be
+            // checked against the trace could describe any session at all.
+            if (discovered.manifest !== undefined) {
+              fail(`an unverifiable manifest was used: ${JSON.stringify(discovered.manifest)}`);
+            }
+            // Refused out loud — a silent fall back to the mtime guess is
+            // indistinguishable from never having captured anything.
+            if (!discovered.warnings.some((w) => /ignoring the session manifest at/.test(w))) {
+              fail(`expected a refusal warning, got ${JSON.stringify(discovered.warnings)}`);
+            }
+            // Naming the file is the caller assertion of provenance, and the
+            // only one available for a trace that records no id.
+            if (named.manifest?.sessionId !== "anybody") {
+              fail(`--manifest should still be honoured, got ${JSON.stringify(named.manifest)}`);
+            }
+            // A refusal is an observation, never a verdict.
+            if (named.exitCode !== discovered.exitCode) fail("exit code moved");
+            if (JSON.stringify(named.summary) !== JSON.stringify(discovered.summary)) {
+              fail("summary moved");
+            }
+          '
+
       - name: Dogfood run (mock judge)
         shell: bash
         env:

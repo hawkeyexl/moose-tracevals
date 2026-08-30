@@ -49,20 +49,34 @@ export async function runEvals(options: EngineOptions): Promise<RunReport> {
   // Read-only, and optional. A manifest sharpens staleness for the artifacts it
   // recorded (ADR 01024); an absent one leaves the mtime heuristic exactly as
   // ADR 01021 shipped it, and every hash check reports `skipped` with a reason.
+  const refusals: { path: string; reason: string }[] = [];
   const found = await findManifest({
     tracePath: options.tracePath,
     ...(trace.sessionId !== undefined ? { sessionId: trace.sessionId } : {}),
     projectDir: options.projectDir ?? trace.cwd,
     captureDir: config.capture.dir,
     ...(options.manifest !== undefined ? { explicit: options.manifest } : {}),
+    onRefused: (path, reason) => refusals.push({ path, reason }),
   });
   if (found === null && options.manifest !== undefined) {
     // An explicitly named manifest that is not there is a mistake, not a
     // degradation: the caller asked for exactness and did not get it.
     throw new TracevalsError(
-      `no usable session manifest at ${options.manifest} — it is missing, unreadable, or was recorded for a different session`,
+      `no usable session manifest at ${options.manifest} — ${
+        refusals[0]?.reason ??
+        "it is missing, unreadable, or was recorded for a different session"
+      }`,
     );
   }
+  // A manifest that was found and then refused is a different situation from
+  // no manifest at all, and an unexplained fallback to the mtime guess gives a
+  // reader no way to tell them apart. Name the file, and say why.
+  const manifestWarnings =
+    found === null
+      ? refusals.map(
+          (r) => `ignoring the session manifest at ${r.path} — ${r.reason}`,
+        )
+      : [];
 
   const resolved = await resolveArtifacts(trace, {
     ...(options.projectDir !== undefined
@@ -287,6 +301,7 @@ export async function runEvals(options: EngineOptions): Promise<RunReport> {
     warnings: [
       ...(options.warnings ?? []),
       ...trace.warnings,
+      ...manifestWarnings,
       ...resolved.warnings,
     ],
     coverage: resolved.coverage,
