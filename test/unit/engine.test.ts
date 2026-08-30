@@ -1,5 +1,12 @@
-import { copyFile, mkdir, mkdtemp, rm } from "node:fs/promises";
-import { join } from "node:path";
+import {
+  copyFile,
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  writeFile,
+} from "node:fs/promises";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { runEvals } from "../../src/core/engine.js";
@@ -14,6 +21,9 @@ import type { TraceJudge } from "../../src/judge/trace-judge.js";
 
 const sessionFixture = fileURLToPath(
   new URL("../fixtures/traces/claude-session.jsonl", import.meta.url),
+);
+const streamFixture = fileURLToPath(
+  new URL("../fixtures/traces/claude-stream.jsonl", import.meta.url),
 );
 const fixtureProject = fileURLToPath(
   new URL("../fixtures/project", import.meta.url),
@@ -281,6 +291,69 @@ describe("runEvals", () => {
         expect(report.manifest).toBeUndefined();
       } finally {
         await rm(dir, { recursive: true, force: true });
+      }
+    });
+
+    /**
+     * The guard has to hold for every trace format, not only the ones that
+     * happen to record an id. A legacy `claude -p` stream-json transcript
+     * carries the session id on its `system`/`init` record and nowhere the
+     * parser reads, so one captured without that record — filtered, truncated,
+     * or resumed mid-stream — parses fine and records no id at all. A sibling
+     * manifest beside such a trace could belong to any session on the machine.
+     */
+    async function idlessTrace(prefix: string): Promise<string> {
+      await mkdir(".tmp", { recursive: true });
+      const dir = await mkdtemp(join(".tmp", prefix));
+      const trace = join(dir, "stream.jsonl");
+      const raw = await readFile(streamFixture, "utf-8");
+      const lines = raw.split("\n").filter((l) => l.trim() !== "");
+      const stripped = lines.map((line) => {
+        const record = JSON.parse(line) as Record<string, unknown>;
+        // Only the init record's id is read, so only it has to go; the others
+        // keep theirs, which is what the format sniffer keys on.
+        if (record.type !== "system") return line;
+        delete record.session_id;
+        return JSON.stringify(record);
+      });
+      await writeFile(trace, `${stripped.join("\n")}\n`, "utf-8");
+      return trace;
+    }
+
+    it("refuses a discovered manifest it cannot verify against the trace", async () => {
+      const trace = await idlessTrace("engine-unverifiable-");
+      await writeManifest(
+        siblingManifestPath(trace),
+        await buildManifest({ sessionId: "anybody", root: fixtureProject }),
+      );
+      try {
+        const report = await run({ tracePath: trace });
+        expect(report.trace.sessionId).toBeUndefined();
+        expect(report.manifest).toBeUndefined();
+        // Refused, and it says so: a manifest that silently does nothing is
+        // indistinguishable from one that was never captured.
+        expect(report.warnings.some((w) => /records no session id/.test(w))).toBe(
+          true,
+        );
+      } finally {
+        await rm(dirname(trace), { recursive: true, force: true });
+      }
+    });
+
+    it("uses an explicitly named manifest for a trace that records no session id", async () => {
+      const trace = await idlessTrace("engine-named-");
+      const named = join(dirname(trace), "named.json");
+      await writeManifest(
+        named,
+        await buildManifest({ sessionId: "anybody", root: fixtureProject }),
+      );
+      try {
+        // Naming the file is the caller's own assertion of provenance, and the
+        // only one available for a format that records no id.
+        const report = await run({ tracePath: trace, manifest: named });
+        expect(report.manifest?.sessionId).toBe("anybody");
+      } finally {
+        await rm(dirname(trace), { recursive: true, force: true });
       }
     });
   });
