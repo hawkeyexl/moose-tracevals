@@ -78,6 +78,13 @@ What a manifest recorded for a different session does:
 - It is used, since it is the only evidence available
 - It is an error
 
+What a manifest the trace cannot verify at all does — the trace records no session id, so there is
+nothing to compare it against:
+
+- A discovered one is refused; an explicitly named one is honoured on the caller's assertion
+- Both are refused, so the rule stays literally unconditional
+- Both are used, as today
+
 How `capture` behaves when wired to a hook:
 
 - Report to stderr, write nothing to stdout
@@ -87,7 +94,8 @@ How `capture` behaves when wired to a hook:
 
 Chosen option: **a `SessionStart` hook writing a manifest; an exact answer settles the row in either
 direction, and an unavailable one leaves mtime exactly as it was; searched most-specific-first;
-a foreign manifest is refused; and nothing is written to stdout in hook mode.**
+a manifest that cannot be shown to belong to the trace is refused, with `--manifest` the caller's
+own assertion of provenance; and nothing is written to stdout in hook mode.**
 
 ### `capture` is a separate command, and `run` never calls it
 
@@ -187,19 +195,46 @@ Three boundaries hold, and they are the same three ADR 01021 drew:
 - **It cannot silence a row it has no entry for.** `skipped` is not a shade of `match`; an
   aggregated project-rules row where only *some* files were recorded reports `skipped`, because a
   partial answer is not a clean one.
-- **A manifest recorded for a different session is refused**, and the run proceeds as if there were
-  none. Evidence about another session is not evidence about this one, and using it is the single
-  way a manifest could produce a confidently wrong answer.
+- **A manifest that cannot be shown to belong to this trace is refused**, and the run proceeds as if
+  there were none. Evidence about another session is not evidence about this one, and using it is
+  the single way a manifest could produce a confidently wrong answer. The trace's own session id is
+  what shows belonging, so there are two ways to fail that test and they are not the same failure:
+  - The ids **disagree** — refused outright, however the manifest was reached.
+  - The trace records **no id at all**, so there is nothing to compare. A Claude Code session file
+    whose records predate `sessionId`, and a `claude -p` stream-json transcript captured without its
+    `system`/`init` record, both parse fine and both arrive with nothing to check against. A
+    manifest reached **by convention** is refused there, because convention is not provenance: the
+    file beside the trace could describe any session on the machine. The run says which file it
+    ignored and why, since an unexplained fall back to the mtime guess is indistinguishable from
+    never having captured anything.
+
+**A manifest is also read strictly or not at all.** Version, `sessionId`, `capturedAt`, `root`, and
+every artifact entry's `name`/`type`/`path`/`sha256`/`bytes` are type-checked before any of it is
+believed; one malformed entry makes the whole file unusable. A half-read manifest is the worst
+outcome available here, not a lenient one: an entry with no `path` or a non-string `sha256` compares
+unequal to every real digest, so the row would report **`mismatch`** — "this artifact changed since
+the session", the most alarming thing this feature can say — off nothing but the file's own
+corruption.
 
 The one place a manifest is allowed to be *loud* about its absence is when someone asked for it by
 name: `--manifest <file>` that cannot be used is an error, not a shrug, because the caller asked for
-exactness and did not get it. It is refused against a corpus, since one manifest cannot be evidence
-about more than one session; a batch still finds one per trace by convention.
+exactness and did not get it, and the error says which of the ways it failed. It is refused against
+a corpus, since one manifest cannot be evidence about more than one session; a batch still finds one
+per trace by convention.
+
+Naming a file is also the **one** assertion of provenance that outranks a missing session id.
+`--manifest` against a trace that records none is honoured — the ids cannot disagree, and the caller
+has said this file belongs to this trace. That is a deliberate narrowing of "refused,
+unconditionally": for such a trace the guarantee is the caller's, not the tool's. The alternative
+was to refuse it too, which buys no safety a discovered manifest does not already get and leaves
+`--manifest` structurally unusable for a whole trace format.
 
 The search order is most-specific-first — `<trace>.manifest.json`, then
 `<trace dir>/<capture.dir>/<id>.json`, then `<project>/<capture.dir>/<id>.json`. A file someone put
 beside a trace is a stronger statement of intent than one found by convention, and it is the easiest
-thing for a CI job that uploads a trace to also produce.
+thing for a CI job that uploads a trace to also produce. Only the first is reachable without a
+session id, and that is exactly the one the guard above now refuses: the other two are *keyed* on
+the id, so they cannot be looked up at all.
 
 ### The hook must not talk to the model
 
@@ -245,6 +280,11 @@ rather than reaching the network at session start.
 - Bad, because a manifest can be hand-edited to make hashes agree. It is evidence about a device,
   stated as such; the same person could edit the `SKILL.md`, and ADR 01011 already executes that
   project's code.
+- Bad, because a trace that records no session id cannot use a manifest found by convention at all.
+  Such a trace has to name one with `--manifest`, and there the provenance guarantee is the caller's
+  assertion rather than a check the tool made. That is the narrowing this decision accepts, and it
+  is narrower than it sounds: the two conventional locations are *keyed* on the session id, so only
+  the file beside the trace was ever reachable without one.
 - Neutral, because the JSON report gains `manifest` and each coverage row gains `contentCheck`.
   Existing consumers read neither and are unaffected; the human and markdown reports say nothing
   extra when there is no manifest.
@@ -258,18 +298,26 @@ rather than reaching the network at session start.
   being ignored rather than trusted, and text that is not a JSON object being refused; then the
   manifest itself — POSIX-relative paths, the opaque device id, the git block, a corrupt or
   future-versioned file reading as `null`, and **that a redaction pattern matching everything leaves
-  `path`, `sha256`, and `sessionId` untouched while scrubbing the config and `root`**. `findManifest`
-  is pinned on all three locations, on preferring the one beside the trace, and on refusing a foreign
-  session id.
+  `path`, `sha256`, and `sessionId` untouched while scrubbing the config and `root`**, and a
+  malformed artifact entry — a missing `path`, a `sha256` that is not a string, an entry that is not
+  an object at all — making the whole file read as `null` rather than as evidence of change.
+  `checkContent` is pinned on reporting the **manifest's** digest as `expected` on a match, against a
+  map view that answers a second traversal differently, since a plain `Map` keeps the two values
+  equal and would never catch it. `findManifest` is pinned on all three locations, on preferring the
+  one beside the trace, on refusing a foreign session id, on refusing a *discovered* manifest when
+  the trace records no id, on naming the file and reason it refused, and on honouring an explicitly
+  named one in that same case.
 - `test/unit/artifacts.test.ts` pins the run side against a temp directory with a pinned mtime: no
   manifest reports `skipped` with a reason, a match clears a deliberately future-dated mtime, a
   mismatch fires even when mtime says the file is *older*, a comparison happens with no `endedAt` at
   all, an unrecorded file falls back to the heuristic, and a mismatched artifact still resolves with
   its content intact.
 - `test/unit/engine.test.ts` pins that the fixture corpus reports no manifest and a `skipped` check on
-  every row; that `--manifest` naming an unusable file throws; and that a real manifest clears the
+  every row; that `--manifest` naming an unusable file throws; that a real manifest clears the
   checkout's flags for the project's artifacts, leaves the out-of-project plugin skill on the guess
-  with its reason, and moves **no** verdict, summary, or exit code.
+  with its reason, and moves **no** verdict, summary, or exit code; and — against a stream-json
+  trace stripped of its `system`/`init` record, so it parses with no session id — that the sibling
+  manifest is refused with a warning naming it, while `--manifest` still consumes one.
 - `test/unit/reporters.test.ts` pins that the human and markdown reports name content identity rather
   than mtime for an exact mismatch, keep the markdown column count, print nothing at all with no
   manifest, and say how many rows still rest on the guess.
@@ -281,7 +329,10 @@ rather than reaching the network at session start.
   manifest's shape, then runs `run` three ways over one trace — no manifest, a fresh manifest, and a
   manifest invalidated by an edited artifact — asserting `skipped` / `match` / `mismatch`, the
   warning wording in each case, and that the eval outcomes and exit code are byte-identical across
-  all three.
+  all three. A fourth step drives the real binary against a stream-json trace whose `system`/`init`
+  record has lost its session id, with a manifest sitting beside it: the discovered one is refused
+  and named in a warning, `--manifest` still consumes it, and neither the summary nor the exit code
+  moves.
 
 ## Pros and Cons of the Options
 
@@ -338,6 +389,17 @@ rather than reaching the network at session start.
 - Good, because some evidence beats none.
 - Bad, because it is the one input that could make the tool confidently wrong: it would report a
   hash mismatch as this session's staleness when it is a fact about a different one.
+
+### Refuse an explicitly named manifest the trace cannot verify
+
+- Good, because "refused, unconditionally" would then be literally true, with no caller-supplied
+  exception to explain.
+- Good, because it needs no argument about who is responsible for provenance.
+- Bad, because it buys nothing. The danger is a *foreign* manifest being picked up silently, and
+  discovery is where that happens; a path typed on the command line is not picked up silently.
+- Bad, because it leaves `--manifest` structurally unusable for any trace that records no session
+  id, which is the whole legacy stream-json shape — a flag that can only ever error is worse than
+  one whose guarantee is stated honestly.
 
 ### Report to stdout in hook mode
 
