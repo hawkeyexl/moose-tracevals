@@ -321,12 +321,23 @@ skill — was never recordable, because `capture` is project-scoped; it says so 
 It is written by the machine the session ran on and travels with the repository, so it is evidence
 **about that device**. It never becomes an eval outcome, never changes the exit code, and cannot
 turn a `skipped` eval into a `pass` — it is not consulted anywhere a verdict is formed. A manifest
-recorded for a **different session** is refused outright and the run proceeds as if there were none
+that cannot be shown to belong to this trace is refused outright and the run proceeds as if there
+were none — whether it names a **different session**, or the trace records no session id to check it
+against at all
 ([ADR 01024](https://github.com/hawkeyexl/moose-tracevals/blob/main/adrs/01024-capture-a-session-manifest-so-staleness-is-exact.md)).
+In the second case the run warns and names the file it ignored; pass
+[`--manifest`](/moose-tracevals/reference/cli/#run) to assert that it does belong.
 </Aside>
 
 A manifest only helps sessions recorded **after** you install the hook. Everything already on disk
 keeps the mtime heuristic, which is why that heuristic exists and stays.
+
+It also describes one moment: the session's **start**. The hook fires on `startup`, not `resume`, so
+a session you come back to days later is still compared against the snapshot taken when it first
+began — which is the honest meaning of "changed since the session started", and a partial answer for
+the turns after the resume. See
+[wiring the hook](/moose-tracevals/reference/cli/#wire-it-up) if you would rather re-snapshot on
+every resume.
 
 ### Fixing a flagged row
 
