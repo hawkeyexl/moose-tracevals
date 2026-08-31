@@ -22,7 +22,7 @@ import {
 import { stat } from "node:fs/promises";
 import { extractEvals } from "../evals/extract.js";
 import { TracevalsError } from "../types.js";
-import { listInTree, safeRead } from "./fs.js";
+import { listInTree, safeRead, segments } from "./fs.js";
 import { PROJECT_RULES_FILENAMES } from "./resolve.js";
 import type { ArtifactType, ResolvedArtifact } from "./types.js";
 
@@ -64,10 +64,6 @@ const AGENT_DIRS = [join(".claude", "agents"), "agents"];
 const RULES_NAMES = new Set<string>(PROJECT_RULES_FILENAMES);
 
 /** Path segments, separator-normalized, for convention matching. */
-function segments(path: string): string[] {
-  return path.split(sep).join("/").split("/");
-}
-
 /** Which artifact type a path represents by convention, if any. */
 function classify(path: string): ArtifactType | undefined {
   const name = basename(path);
@@ -121,8 +117,16 @@ function nameFor(type: ArtifactType, path: string): string {
 function isRecognizedSlashCommand(path: string, anchor: string): boolean {
   const parts = relativeSegments(anchor, path);
   if (parts === null) return false;
-  const at = parts.indexOf("commands");
-  return at >= 1 && parts[at - 1] === ".claude" && at < parts.length - 1;
+  // Any `.claude/commands/` pair, not the first segment that happens to be
+  // named "commands": a project with a top-level `commands/` directory would
+  // otherwise fail the `at >= 1` test and have its real command files rejected.
+  return parts.some(
+    (part, at) =>
+      part === "commands" &&
+      at >= 1 &&
+      parts[at - 1] === ".claude" &&
+      at < parts.length - 1,
+  );
 }
 
 /** A skill file must sit as `<skillsDir>/<skillName>/SKILL.md`. */
