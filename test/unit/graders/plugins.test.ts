@@ -125,6 +125,12 @@ describe("loadGraderPlugins", () => {
       expect(message).not.toMatch(/unknown grader kind/);
     });
 
+    // The fixture throws on the first line, so nothing here is slow — but this
+    // is the file's first dynamic `import()`, and paying the module-graph
+    // warmup on a cold windows-latest runner has come in just over vitest's
+    // 5s default (measured: 5006ms). The assertion is that it rejects, not
+    // that it rejects quickly, so give the import room rather than leaving a
+    // marginal timeout to fail one CI leg at random.
     it("surfaces a plugin that throws while it is imported", async () => {
       await expect(
         loadGraderPlugins({
@@ -132,7 +138,7 @@ describe("loadGraderPlugins", () => {
           configDir: repoRoot,
         }),
       ).rejects.toThrow(/deliberately broken/);
-    });
+    }, 30_000);
 
     it("warns — but does not fail — when a plugin registers nothing", async () => {
       const { loaded, warnings } = await loadGraderPlugins({
