@@ -162,6 +162,7 @@ export {
   rescore,
   score,
   type JoinedLabel,
+  type AmbiguousLabel,
   type JoinResult,
   type Rescored,
   type ScoreInput,

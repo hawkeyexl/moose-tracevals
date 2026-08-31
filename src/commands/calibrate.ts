@@ -18,7 +18,7 @@ import { loadConfig } from "../core/config.js";
 import { renderCalibration, type ReportFormat } from "../reporters/index.js";
 import { TracevalsError, type EvalResult } from "../types.js";
 import { loadLabels, type EvalLabel } from "../calibrate/labels.js";
-import { joinLabels, score } from "../calibrate/score.js";
+import { joinLabels, score, type AmbiguousLabel } from "../calibrate/score.js";
 import type {
   CalibrationGate,
   CalibrationReport,
@@ -105,8 +105,9 @@ export async function runCalibrate(
   for (const outcome of batch.outcomes) {
     if ("report" in outcome) all.push(...outcome.report.evalResults);
   }
-  const { joined, unmatched } = joinLabels(batch.outcomes, labels);
+  const { joined, unmatched, ambiguous } = joinLabels(batch.outcomes, labels);
   assertNoUnmatched(unmatched, batch, labelsFile);
+  assertNoAmbiguous(ambiguous, labelsFile);
 
   // Without a sweep the reported outcomes are used verbatim, so the headline
   // numbers are exactly the verdicts `run` produced. With one, the corpus was
@@ -231,6 +232,30 @@ function assertNoUnmatched(
   });
   throw new TracevalsError(
     `${labelsFile}: label(s) matched no eval result:\n${lines.join("\n")}`,
+  );
+}
+
+/**
+ * A label that omits `type:` over a name two artifact kinds both answer cannot
+ * be resolved, and must not be guessed. Binding it to whichever result was
+ * indexed last would score agreement against a verdict belonging to a
+ * different artifact — the report would read as measured when it is wrong,
+ * which is the one thing this command exists not to do.
+ *
+ * Operational, like `assertNoUnmatched`: the labels file is under-specified,
+ * so this is exit 2 (bad input), not exit 1 (a check failed).
+ */
+function assertNoAmbiguous(
+  ambiguous: AmbiguousLabel[],
+  labelsFile: string,
+): void {
+  if (ambiguous.length === 0) return;
+  const lines = ambiguous.map(({ label, candidates }) => {
+    const kinds = [...new Set(candidates.map((r) => r.artifactType))].sort();
+    return `  ${label.artifact} › ${label.eval} on ${basename(label.traceFile)} matches ${kinds.join(" and ")} — add \`type:\` to say which`;
+  });
+  throw new TracevalsError(
+    `${labelsFile}: label(s) name an artifact two kinds answer:\n${lines.join("\n")}`,
   );
 }
 
