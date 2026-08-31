@@ -59,6 +59,22 @@ const stringValue =
       ? undefined
       : `options.when.${kind} must be a string`;
 
+/**
+ * Compiled once per pattern, as `globToRegExp` does. The pattern is fixed by
+ * the artifact, so rebuilding it for every eval on every trace of a batch is
+ * work with no new answer. No `g` flag here, so a shared instance carries no
+ * `lastIndex` between calls.
+ */
+const prompts = new Map<string, RegExp>();
+
+function promptRe(pattern: string): RegExp {
+  const cached = prompts.get(pattern);
+  if (cached !== undefined) return cached;
+  const built = new RegExp(pattern);
+  prompts.set(pattern, built);
+  return built;
+}
+
 const CONDITIONS = {
   "file-access": {
     validate: stringValue("file-access"),
@@ -83,7 +99,7 @@ const CONDITIONS = {
       return undefined;
     },
     test: (value, window) => {
-      const re = new RegExp(value as string);
+      const re = promptRe(value as string);
       return window.userMessages.some((text) => re.test(text));
     },
     reason: (value) => `no prompt matched /${value as string}/`,

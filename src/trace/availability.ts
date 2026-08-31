@@ -254,7 +254,15 @@ export function applyAvailabilityRecord(
     // `addedLines` is the tool's own name again rather than a description, and
     // is sometimes empty while `addedNames` is not; there is no description to
     // recover for a tool.
-    for (const name of asStrings(record.addedNames)) {
+    // `readdedNames` is the shape a re-offer actually takes: a tool that was
+    // withdrawn and is offered again arrives there, not in `addedNames`.
+    // Reading only `addedNames` left it withdrawn for the rest of the
+    // session, so `availableAt` answered false for a tool the session could
+    // still call.
+    for (const name of [
+      ...asStrings(record.addedNames),
+      ...asStrings(record.readdedNames),
+    ]) {
       offer(replay, "tool", name, index);
     }
     const servers: Array<[string, McpServerStatus]> = [
