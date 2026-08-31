@@ -42,7 +42,12 @@ export interface AvailabilityCoverage {
   coverage: CoverageEntry[];
 }
 
-const EMPTY: AvailabilityCounts = { offered: 0, used: 0, unused: 0 };
+/**
+ * A fresh zero row per call. One shared object assigned to both `skills` and
+ * `agents` would make a mutation of either silently move the other; every
+ * caller is read-only today, which is exactly why it would go unnoticed.
+ */
+const empty = (): AvailabilityCounts => ({ offered: 0, used: 0, unused: 0 });
 
 /**
  * Kinds the roster says nothing about, so no row of theirs may carry a state.
@@ -68,7 +73,7 @@ export function coverAvailability(
     // No listing records: unknown, not zero. Every row says so rather than
     // implying the session was offered nothing.
     return {
-      report: { recorded: false, skills: EMPTY, agents: EMPTY, listed: false },
+      report: { recorded: false, skills: empty(), agents: empty(), listed: false },
       coverage: coverage.map((entry) =>
         UNROSTERED.has(entry.kind)
           ? entry
