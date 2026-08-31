@@ -83,18 +83,44 @@ export function renderTrace(
       scoped
         ? `scope: ${scoped.label} — ${events.length} of ${trace.events.length} session events`
         : undefined,
-      `turns: ${trace.turnCount}`,
-      trace.skillInvocations.length
-        ? `skills used: ${trace.skillInvocations.map((s) => s.name).join(", ")}`
-        : "skills used: none",
-      trace.agentSpawns.length
-        ? `agents spawned: ${trace.agentSpawns.map((a) => a.subagentType).join(", ")}`
-        : undefined,
-      trace.subagentBranches.length
-        ? `subagent transcripts: ${trace.subagentBranches
-            .map((b) => `${b.agentType} (depth ${b.spawnDepth})`)
-            .join(", ")}`
-        : undefined,
+      // Everything below describes what the judge can actually see. On a
+      // scoped render the timeline is the window, so a session-wide count here
+      // reads as evidence that the rest was truncated away — the judge would
+      // discount a digest that is complete for what it was asked about. The
+      // session totals stay, in parentheses, because "3 of 87" is context the
+      // window count alone does not carry.
+      scoped
+        ? `turns: ${scoped.turnCount} (of ${trace.turnCount} in the session)`
+        : `turns: ${trace.turnCount}`,
+      ((): string => {
+        const used = (scoped ?? trace).skillInvocations.map((s) => s.name);
+        return used.length > 0
+          ? `skills used: ${used.join(", ")}`
+          : "skills used: none";
+      })(),
+      ((): string | undefined => {
+        // Spawns and branches inside the window only: an agent the parent
+        // session started after this skill handed over is not this artifact's
+        // to answer for.
+        const inWindow = new Set(events.map((e) => e.index));
+        const spawns = trace.agentSpawns.filter(
+          (a) => !scoped || inWindow.has(a.index),
+        );
+        return spawns.length > 0
+          ? `agents spawned: ${spawns.map((a) => a.subagentType).join(", ")}`
+          : undefined;
+      })(),
+      ((): string | undefined => {
+        const inWindow = new Set(events.map((e) => e.index));
+        const branches = trace.subagentBranches.filter(
+          (b) => !scoped || inWindow.has(b.spawnIndex),
+        );
+        return branches.length > 0
+          ? `subagent transcripts: ${branches
+              .map((b) => `${b.agentType} (depth ${b.spawnDepth})`)
+              .join(", ")}`
+          : undefined;
+      })(),
     ]
       .filter((line): line is string => line !== undefined)
       .join("\n"),
