@@ -7,11 +7,11 @@
  * trace that cannot be parsed degrades to one entry instead of losing the rest.
  */
 import { fileURLToPath } from "node:url";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, utimes, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { MockProvider, mockVerdict } from "@hawkeyexl/inference";
-import { runBatch, parseSince } from "../../src/commands/batch.js";
+import { runBatch, parseSince, resolveBatchTraces } from "../../src/commands/batch.js";
 import { aggregate, type BatchOutcome } from "../../src/aggregate.js";
 import { makeTraceJudge } from "../../src/judge/trace-judge.js";
 import { TracevalsError } from "../../src/types.js";
@@ -344,5 +344,71 @@ describe("runBatch", () => {
         await rm(historyDir, { recursive: true, force: true });
       }
     });
+  });
+});
+
+/**
+ * `--limit` is applied inside `discoverTraces`, before the `--since` filter,
+ * which reads like "5 newest overall, then narrowed to 7d" rather than
+ * "5 newest within 7d". Those are the same set, and this pins why.
+ *
+ * `discoverTraces` sorts newest-first and only then slices, and a recency
+ * floor keeps exactly a *prefix* of that order — so intersecting the first N
+ * with the prefix, or taking the first N of the prefix, both yield
+ * `t1..t min(N,K)`. Limiting early is also the cheaper half: a store holding
+ * thousands of sessions never materialises them to answer `--limit 5`.
+ *
+ * If either property ever changes — a different sort key, or a `--since` that
+ * is not a pure recency floor — the sets diverge and this test is what says so.
+ */
+describe("--limit combined with --since", () => {
+  let home: string;
+  const DAY = 86_400_000;
+
+  beforeAll(async () => {
+    await mkdir(".tmp", { recursive: true });
+    home = await mkdtemp(join(".tmp", "limit-since-"));
+    const proj = join(home, ".claude", "projects", "C--work-demo");
+    await mkdir(proj, { recursive: true });
+    // Three inside a 7d window, two well outside it.
+    for (const [i, days] of [1, 2, 3, 30, 60].entries()) {
+      const file = join(proj, "s" + i + ".jsonl");
+      const record = {
+        type: "user",
+        sessionId: "s" + i,
+        cwd: "/w",
+        message: { role: "user", content: "hi" },
+      };
+      await writeFile(file, JSON.stringify(record) + "\n", "utf-8");
+      const at = new Date(Date.now() - days * DAY);
+      await utimes(file, at, at);
+    }
+  });
+
+  afterAll(async () => {
+    await rm(home, { recursive: true, force: true });
+  });
+
+  const names = (paths: string[]) =>
+    paths.map((p) => p.split(/[\\/]/).pop()).sort();
+
+  it("a limit wider than the window yields every in-window trace, not fewer", async () => {
+    const got = await resolveBatchTraces({
+      allProjects: true,
+      since: "7d",
+      limit: 5,
+      env: { MOOSE_TRACEVALS_HOME: home },
+    });
+    expect(names(got)).toEqual(["s0.jsonl", "s1.jsonl", "s2.jsonl"]);
+  });
+
+  it("a limit narrower than the window yields the newest of the window", async () => {
+    const got = await resolveBatchTraces({
+      allProjects: true,
+      since: "7d",
+      limit: 2,
+      env: { MOOSE_TRACEVALS_HOME: home },
+    });
+    expect(names(got)).toEqual(["s0.jsonl", "s1.jsonl"]);
   });
 });
