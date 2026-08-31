@@ -194,3 +194,35 @@ describe("discoverArtifacts", () => {
     });
   });
 });
+
+/**
+ * `isRecognizedSlashCommand` used to take the *first* segment named "commands",
+ * so a project holding a top-level `commands/` directory failed its own
+ * `at >= 1` check and had every real `.claude/commands/` file rejected. The
+ * pair has to be found wherever it sits, not where it first looks like it does.
+ */
+describe("discoverArtifacts under a directory already named commands", () => {
+  let dir: string;
+
+  beforeAll(async () => {
+    await mkdir(".tmp", { recursive: true });
+    dir = await mkdtemp(join(".tmp", "discover-commands-"));
+    await mkdir(join(dir, "commands", ".claude", "commands"), {
+      recursive: true,
+    });
+    await writeFile(
+      join(dir, "commands", ".claude", "commands", "ship.md"),
+      "---\ndescription: Ship it.\n---\n\n# Ship\n",
+      "utf-8",
+    );
+  });
+
+  afterAll(async () => {
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  it("recognises the command file despite the earlier commands/ segment", async () => {
+    const result = await discoverArtifacts({ root: dir });
+    expect(ids(result.artifacts)).toEqual(["slash-command:ship.md"]);
+  });
+});

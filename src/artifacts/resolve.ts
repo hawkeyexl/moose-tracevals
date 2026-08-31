@@ -7,7 +7,7 @@
 import { basename, dirname, join, resolve, sep } from "node:path";
 import { homeDir } from "../trace/discover.js";
 import { coverAvailability } from "./availability.js";
-import { findGitRoot, findInTree, safeMtime, safeRead } from "./fs.js";
+import { findGitRoot, findInTree, safeMtime, safeRead, segments } from "./fs.js";
 import { checkContent, hashFile, relPosix } from "../capture/manifest.js";
 import type { SessionManifest } from "../capture/types.js";
 import type { Trace } from "../trace/types.js";
@@ -129,6 +129,8 @@ export async function resolveArtifacts(
       const skill = await resolveSkill(invocation.name, projectDir, home);
       if (skill.artifact) {
         addSkill(invocation.name, skill.artifact, skill.tried);
+        // Resolved as a skill, so the slash-command lookup below must not
+        // also record it — one reference yields one coverage row.
         continue;
       }
 
@@ -597,10 +599,6 @@ async function resolveSlashCommand(
 }
 
 /** Path segments, separator-normalized, for convention matching. */
-function segments(path: string): string[] {
-  return path.split(sep).join("/").split("/");
-}
-
 /**
  * Split `plugin:name` into its two halves.
  *
