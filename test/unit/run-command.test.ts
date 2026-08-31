@@ -6,7 +6,8 @@
  */
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
+import { listGraderKinds } from "../../src/graders/registry.js";
 import { runRun } from "../../src/commands/run.js";
 import { TracevalsError, type RunReport } from "../../src/types.js";
 
@@ -73,6 +74,18 @@ describe("runRun grader plugins", () => {
   // Order is load-bearing in this block. A plugin loads once per process, so
   // the first two cases have to run against a registry that has not seen one
   // yet; vitest runs a file's tests in declaration order.
+  //
+  // That premise is asserted rather than assumed: if something earlier in the
+  // process registers the kind, the first case would find it already present
+  // and pass for the wrong reason — reporting no error because the grader
+  // exists, not because the loader wired it. Fail loudly there instead.
+  beforeAll(() => {
+    expect(
+      listGraderKinds(),
+      "a prior test already registered stayed-in-scope; this block asserts the " +
+        "kind is unknown until a plugin loads it, so it must run first",
+    ).not.toContain("stayed-in-the-worktree");
+  });
 
   it("errors on the custom kind when nothing loads the plugin", async () => {
     // The gap this exists to close. Without it there is no way to reach a

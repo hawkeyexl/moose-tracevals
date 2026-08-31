@@ -140,6 +140,37 @@ describe("loadGraderPlugins", () => {
       ).rejects.toThrow(/deliberately broken/);
     }, 30_000);
 
+    // A separate failure mode, and previously unreachable from this suite:
+    // `broken.mjs` throws while its module body evaluates, so it never gets as
+    // far as the registrar and lands in the *first* catch. This one imports
+    // cleanly and throws from inside `register()`, which is the only way to
+    // exercise the second. ADR 01017 lists them separately because the messages
+    // have to be told apart — "could not load" points at the specifier, "threw
+    // while registering" points inside the plugin.
+    it("surfaces a plugin that throws while it is registering", async () => {
+      await expect(
+        loadGraderPlugins({
+          plugins: [fixture("register-throws.mjs")],
+          configDir: repoRoot,
+        }),
+      ).rejects.toThrow(/threw while registering/);
+    });
+
+    it("tells a registration failure apart from a load failure", async () => {
+      // The two catches must not be confusable: a reader who cannot tell which
+      // one fired does not know whether to look at their config or the plugin.
+      const message = await loadGraderPlugins({
+        plugins: [fixture("register-throws.mjs")],
+        configDir: repoRoot,
+      }).then(
+        () => "did not throw",
+        (err: Error) => err.message,
+      );
+      expect(message).toMatch(/register-throws\.mjs/);
+      expect(message).toMatch(/fails while registering/);
+      expect(message).not.toMatch(/could not load/);
+    });
+
     it("warns — but does not fail — when a plugin registers nothing", async () => {
       const { loaded, warnings } = await loadGraderPlugins({
         plugins: [fixture("registers-nothing.mjs")],

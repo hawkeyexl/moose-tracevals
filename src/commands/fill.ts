@@ -130,7 +130,16 @@ export async function runFill(options: FillOptions = {}): Promise<FillRun> {
   const cwd = options.cwd ?? process.cwd();
   const root = resolve(options.project ?? cwd);
   const configDir = options.configDir ?? cwd;
-  const config = await loadConfig(configDir);
+  const loaded = await loadConfig(configDir);
+  // `--require` is folded into the resolved config, the same way `run` does it,
+  // rather than merged inline at the load call. Downstream code reads one
+  // fully-resolved `config.plugins`; two commands disagreeing about whether it
+  // includes the flag is how a knob starts behaving differently depending on
+  // which command reached it.
+  const config = {
+    ...loaded,
+    plugins: [...loaded.plugins, ...(options.require ?? [])],
+  };
 
   // The same list `run` loads, appended to the same way, for the same reason:
   // a repo whose config names its house graders must not behave differently
@@ -139,7 +148,7 @@ export async function runFill(options: FillOptions = {}): Promise<FillRun> {
   // plugin that *replaces* a built-in replaces the `validateOptions` the gate
   // ground-checks proposals with (ADR 01017).
   const plugins = await loadGraderPlugins({
-    plugins: [...config.plugins, ...(options.require ?? [])],
+    plugins: config.plugins,
     configDir,
   });
 
