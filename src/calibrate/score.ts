@@ -47,6 +47,20 @@ export interface JoinResult {
    * would otherwise deflate every count on the report by one.
    */
   unmatched: EvalLabel[];
+  /**
+   * Labels that omit `type:` over a name two artifact kinds both answer. Never
+   * bound to one of them: a skill and the slash command that types it can share
+   * a name in one trace, and picking whichever was indexed last would measure
+   * agreement against a verdict belonging to something else — a false pass or
+   * false fail reported with total confidence.
+   */
+  ambiguous: AmbiguousLabel[];
+}
+
+/** An untyped label and every result its name matched. */
+export interface AmbiguousLabel {
+  label: EvalLabel;
+  candidates: EvalResult[];
 }
 
 /**
@@ -59,16 +73,15 @@ export function joinLabels(
   outcomes: BatchOutcome[],
   labels: EvalLabel[],
 ): JoinResult {
-  const byKey = new Map<string, EvalResult>();
+  // Typed keys are unique by construction. Untyped ones are not: two artifact
+  // kinds may answer the same name, so keep every candidate rather than
+  // letting the last one indexed overwrite the rest.
+  const byType = new Map<string, EvalResult>();
+  const byName = new Map<string, EvalResult[]>();
   for (const outcome of outcomes) {
     if (!("report" in outcome)) continue;
     for (const result of outcome.report.evalResults) {
-      // Indexed both ways so a label may state the type or leave it out.
-      byKey.set(
-        labelKey(outcome.file, result.artifactName, result.evalName),
-        result,
-      );
-      byKey.set(
+      byType.set(
         labelKey(
           outcome.file,
           result.artifactName,
@@ -77,19 +90,33 @@ export function joinLabels(
         ),
         result,
       );
+      const key = labelKey(outcome.file, result.artifactName, result.evalName);
+      const seen = byName.get(key);
+      if (seen === undefined) byName.set(key, [result]);
+      else seen.push(result);
     }
   }
 
   const joined: JoinedLabel[] = [];
   const unmatched: EvalLabel[] = [];
+  const ambiguous: AmbiguousLabel[] = [];
   for (const label of labels) {
-    const result = byKey.get(
-      labelKey(label.traceFile, label.artifact, label.eval, label.type),
-    );
-    if (result === undefined) unmatched.push(label);
-    else joined.push({ label, result });
+    if (label.type !== undefined) {
+      const result = byType.get(
+        labelKey(label.traceFile, label.artifact, label.eval, label.type),
+      );
+      if (result === undefined) unmatched.push(label);
+      else joined.push({ label, result });
+      continue;
+    }
+    const candidates =
+      byName.get(labelKey(label.traceFile, label.artifact, label.eval)) ?? [];
+    const kinds = new Set(candidates.map((r) => r.artifactType));
+    if (candidates.length === 0) unmatched.push(label);
+    else if (kinds.size > 1) ambiguous.push({ label, candidates });
+    else joined.push({ label, result: candidates[0] as EvalResult });
   }
-  return { joined, unmatched };
+  return { joined, unmatched, ambiguous };
 }
 
 export interface Rescored {

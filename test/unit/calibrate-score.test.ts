@@ -249,3 +249,98 @@ labels:
     expect(unscored[0]?.skipReason).toBe("trigger not met");
   });
 });
+
+/**
+ * Two artifacts in one trace legitimately share a name — a skill and the slash
+ * command that types it, or a skill and an agent — which is the only reason
+ * the labels file has an optional `type:` at all. A label that omits it and
+ * matches both must be refused: silently binding it to whichever artifact was
+ * indexed last would measure agreement against a verdict belonging to
+ * something else, and report a false pass or a false fail with total
+ * confidence.
+ */
+describe("joinLabels over a shared artifact name", () => {
+  const labelsText = `
+version: 1
+labels:
+  - trace: a.jsonl
+    artifact: release
+    eval: no-shell
+    expected: pass
+`;
+  const untyped = parseLabels(labelsText, "labels.yaml");
+  const traceFile = untyped[0]?.traceFile as string;
+
+  const asSkill = deterministic({
+    evalName: "no-shell",
+    artifactName: "release",
+    artifactType: "skill",
+    artifact: "/p/.claude/skills/release/SKILL.md",
+    outcome: "pass",
+  });
+  const asCommand = deterministic({
+    evalName: "no-shell",
+    artifactName: "release",
+    artifactType: "slash-command",
+    artifact: "/p/.claude/commands/release.md",
+    outcome: "fail",
+  });
+  const outcomes = [
+    {
+      file: traceFile,
+      report: { evalResults: [asSkill, asCommand] } as never,
+    },
+  ];
+
+  it("refuses an untyped label that two artifact kinds both answer", () => {
+    const { joined, unmatched, ambiguous } = joinLabels(outcomes, untyped);
+    expect(joined).toHaveLength(0);
+    expect(unmatched).toHaveLength(0);
+    expect(ambiguous).toHaveLength(1);
+    expect(ambiguous[0]?.label.eval).toBe("no-shell");
+    expect(ambiguous[0]?.candidates.map((r) => r.artifactType).sort()).toEqual([
+      "skill",
+      "slash-command",
+    ]);
+  });
+
+  it("joins a colliding name that states its type, and never calls it ambiguous", () => {
+    const typed = parseLabels(
+      `
+version: 1
+labels:
+  - trace: a.jsonl
+    artifact: release
+    type: slash-command
+    eval: no-shell
+    expected: pass
+  - trace: a.jsonl
+    artifact: release
+    type: skill
+    eval: no-shell
+    expected: pass
+`,
+      "labels.yaml",
+    );
+    const { joined, unmatched, ambiguous } = joinLabels(outcomes, typed);
+    expect(ambiguous).toHaveLength(0);
+    expect(unmatched).toHaveLength(0);
+    // Each label reached its own artifact's verdict, not the other's.
+    expect(joined.map((j) => [j.label.type, j.result.outcome])).toEqual([
+      ["slash-command", "fail"],
+      ["skill", "pass"],
+    ]);
+  });
+
+  it("leaves a name only one kind answers joinable without a type", () => {
+    // The refusal is scoped to an actual collision: an untyped label over a
+    // unique name must keep working, which is how nearly every label is written.
+    const { joined, ambiguous } = joinLabels(
+      [{ file: traceFile, report: { evalResults: [asSkill] } as never }],
+      untyped,
+    );
+    expect(ambiguous).toHaveLength(0);
+    expect(joined).toHaveLength(1);
+    expect(joined[0]?.result.artifactType).toBe("skill");
+  });
+});
