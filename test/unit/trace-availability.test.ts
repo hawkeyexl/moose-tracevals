@@ -227,9 +227,13 @@ describe("availability roster (ADR 01016)", () => {
         removedNames: ["WebSearch"],
       }),
       user("u2", "a2", "more"),
+      // `readdedNames` alone, which is the shape a real re-offer takes. Naming
+      // it in `addedNames` as well would let the added-path handle it and leave
+      // the readded-path untested — the case would pass whether or not
+      // `readdedNames` is read at all.
       attachment("a3", "u2", {
         type: "deferred_tools_delta",
-        addedNames: ["WebSearch"],
+        addedNames: [],
         readdedNames: ["WebSearch"],
         removedNames: [],
       }),
