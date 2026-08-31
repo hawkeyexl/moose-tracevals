@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { fileURLToPath } from "node:url";
 import { parseTraceFile } from "../../src/trace/claude.js";
 import { renderTrace } from "../../src/judge/render.js";
+import { windowFor } from "../../src/graders/util.js";
 import { makeArtifact, makePlan, makeTrace } from "../helpers.js";
 
 const sidecarFixture = fileURLToPath(
@@ -161,6 +162,52 @@ describe("renderTrace", () => {
     expect(scoped).toContain("[tool:general-purpose] Grep");
     expect(scoped).toContain('scope: agent "Explore"');
     expect(scoped.length).toBeLessThan(whole.length);
+  });
+
+  /**
+   * The header has to describe what the judge can see. A session-wide turn
+   * count beside a windowed timeline reads as evidence the rest was truncated
+   * away, so a judge would discount a digest that is complete for the thing it
+   * was asked about. The session total is still worth carrying, which is why
+   * it stays in parentheses rather than being dropped.
+   */
+  it("counts the window's turns in a scoped header, with the session as context", async () => {
+    const parsed = await parseTraceFile(sidecarFixture);
+    const scoped = renderTrace(
+      parsed,
+      {},
+      makePlan({ artifact: makeArtifact({ name: "Explore", type: "agent" }) }),
+    );
+    const turns = /turns: (\d+) \(of (\d+) in the session\)/.exec(scoped);
+    expect(turns, `no scoped turns line in:\n${scoped.slice(0, 400)}`).not.toBeNull();
+    const [, windowTurns, sessionTurns] = turns as RegExpExecArray;
+    // Exact, not relational: the two counts can legitimately coincide on a
+    // short fixture, so "window < session" would pass or fail on the corpus
+    // rather than on the behaviour. Compare each against its own source.
+    const plan = makePlan({
+      artifact: makeArtifact({ name: "Explore", type: "agent" }),
+    });
+    expect(Number(sessionTurns)).toBe(parsed.turnCount);
+    expect(Number(windowTurns)).toBe(windowFor(parsed, plan).turnCount);
+
+    const whole = renderTrace(parsed);
+    expect(whole).toContain(`turns: ${parsed.turnCount}`);
+    expect(whole).not.toContain("in the session)");
+  });
+
+  it("lists only the agents spawned inside the window", async () => {
+    const parsed = await parseTraceFile(sidecarFixture);
+    const scoped = renderTrace(
+      parsed,
+      {},
+      makePlan({ artifact: makeArtifact({ name: "Explore", type: "agent" }) }),
+    );
+    const header = scoped.slice(0, scoped.indexOf("## Timeline"));
+    const whole = renderTrace(parsed);
+    // Spawns the parent session made outside the Explore branch are not this
+    // artifact's to answer for, but must still appear on an unscoped render.
+    expect(whole).toContain("agents spawned:");
+    expect(header).not.toContain("doc-writer");
   });
 
   it("leaves a project-rules eval rendering the whole session", async () => {
