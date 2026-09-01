@@ -295,3 +295,38 @@ describe("per-eval model", () => {
     expect(asked).toEqual([]);
   });
 });
+
+describe("a target that needs the parsed session, without one", () => {
+  const judgeWithout = async (target: unknown) => {
+    const judge = makeTraceJudge({
+      provider: new MockProvider(
+        Array.from({ length: 3 }, () => mockVerdict("pass", 0.95)),
+        "default-model",
+      ),
+      cacheDir: undefined,
+      noCache: true,
+    });
+    const plan = makeRulesPlan({
+      grader: "ai",
+      assertion: "The session behaved.",
+      ...(target === undefined ? {} : { target: target as never }),
+    });
+    // No `context`, so the judge has the rendered digest and nothing else.
+    return (await judge([plan], () => "rendered transcript"))[0];
+  };
+
+  it("errors rather than quietly grading the transcript instead", async () => {
+    const r = await judgeWithout("files");
+    expect(r?.outcome).toBe("error");
+    expect(r?.error).toContain("needs the parsed session");
+    expect(r?.error).toContain("files");
+  });
+
+  it("still serves the two targets that need nothing parsed", async () => {
+    for (const target of [undefined, "transcript", "artifact"]) {
+      const r = await judgeWithout(target);
+      expect(r?.outcome).toBe("pass");
+      expect(r?.error).toBeUndefined();
+    }
+  });
+});
