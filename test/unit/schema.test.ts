@@ -196,6 +196,21 @@ metadata:
       assertion: Something the registry will learn to check.
       grader: memory-usage`,
   ],
+  [
+    // The positive half of N4. Dropping `assertion` from `required` in
+    // proposal.2 is only meaningful if some entry can actually omit it: a
+    // deterministic grader says everything in `options`, and the assertion it
+    // would otherwise carry is a sentence no grader reads.
+    "14 a deterministic grader with no assertion",
+    true,
+    `metadata:
+  evals:
+    - id: read-before-write
+      grader: tool-usage
+      options:
+        tool: Read
+        expect: used`,
+  ],
 
   // Migration negatives: the artifact-evals-0.2 spellings this replaces.
   [
@@ -327,14 +342,14 @@ describe("docmeta:artifact-evals:1.0.0-proposal.2", () => {
  */
 describe("vendored schema identity", () => {
   const EXPECTED_SHA256 =
-    "b5d99cfedf3f26594d021ffabfb90ee3e03a9a4645b81f3ba20e952e9a857553";
+    "c930c4457c3d2160c16a81a65d3b307497617122a16e9bc3675f8081f7f50428";
 
   it("is byte-identical to the vendored copy this repo was verified against", async () => {
     const bytes = await readFile(artifactEvalsSchemaPath());
     const actual = createHash("sha256").update(bytes).digest("hex");
     expect(
       actual,
-      "schemas/artifact-evals-1.0.0-proposal.1.json changed. If this is a " +
+      "schemas/artifact-evals-1.0.0-proposal.2.json changed. If this is a " +
         "deliberate re-sync from docmeta, update EXPECTED_SHA256; if it is a " +
         "local patch, revert it — the shape belongs upstream (ADR 01010).",
     ).toBe(EXPECTED_SHA256);

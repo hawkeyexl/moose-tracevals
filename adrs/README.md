@@ -38,3 +38,4 @@ Every **behavior change** in moose-tracevals ships with an ADR here. The ADR rec
 | [01022](01022-measure-the-judge-against-a-labels-sidecar.md) | Measure the judge against a labels sidecar, and sweep the knobs for free | accepted |
 | [01023](01023-give-slash-commands-their-own-artifact-type.md) | Give slash commands their own artifact type, and let the filesystem say what a `/name` is | accepted |
 | [01024](01024-capture-a-session-manifest-so-staleness-is-exact.md) | Capture a session manifest, and make staleness exact instead of a guess | accepted |
+| [01025](01025-adopt-artifact-evals-proposal-2.md) | Adopt `docmeta:artifact-evals:1.0.0-proposal.2` | accepted |
