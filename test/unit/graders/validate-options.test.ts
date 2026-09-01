@@ -16,6 +16,7 @@ const optionConfigured = (): string[] =>
 /** Options accepted by every kind, so the "valid" leg of each table is honest. */
 const VALID: Record<string, Record<string, unknown>> = {
   "tool-usage": { tool: "Read" },
+  "tool-order": { before: "Read", after: "Write" },
   "skill-invoked": { skill: "fix-bug" },
   "file-access": { path: "src/index.ts" },
   "turn-count": { max: 10 },

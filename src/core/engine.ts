@@ -1,6 +1,6 @@
 /**
- * Orchestration: parse trace → resolve artifacts → plan evals → deterministic
- * graders → AI judge → aggregate. The judge is injectable so the engine
+ * Orchestration: parse trace â†’ resolve artifacts â†’ plan evals â†’ deterministic
+ * graders â†’ AI judge â†’ aggregate. The judge is injectable so the engine
  * tests fully offline.
  */
 import { parseTraceFile } from "../trace/claude.js";
@@ -68,7 +68,7 @@ export async function runEvals(options: EngineOptions): Promise<RunReport> {
     }
     // `human` is judged per session: every trace is new, so unlike the page
     // side there is no verdict to cache and nothing to defer to a later run.
-    // It reports in deterministic-only runs too — a review queue is not an
+    // It reports in deterministic-only runs too â€” a review queue is not an
     // inference call.
     if (plan.grader === "human") {
       results.push({
@@ -84,7 +84,7 @@ export async function runEvals(options: EngineOptions): Promise<RunReport> {
     if (!grader) {
       // The grader vocabulary is an open enum: any kebab name validates, and
       // the registry is the authority that rejects it. This is where a stale
-      // `llm` — the pre-1.0 spelling of `ai` — surfaces.
+      // `llm` â€” the pre-1.0 spelling of `ai` â€” surfaces.
       results.push({
         ...base,
         outcome: "error",
@@ -206,7 +206,11 @@ export async function runEvals(options: EngineOptions): Promise<RunReport> {
       ...(trace.model !== undefined ? { model: trace.model } : {}),
       turnCount: trace.turnCount,
     },
-    warnings: [...trace.warnings, ...resolved.warnings],
+    warnings: [
+      ...trace.warnings,
+      ...resolved.warnings,
+      ...vanityMetricWarnings(plans),
+    ],
     coverage: resolved.coverage,
     evalResults: results,
     summary,
@@ -214,4 +218,38 @@ export async function runEvals(options: EngineOptions): Promise<RunReport> {
     costUsd: results.reduce((sum, r) => sum + (r.costUsd ?? 0), 0),
     durationMs: Date.now() - start,
   };
+}
+
+/**
+ * Artifacts whose only check is that their skill fired.
+ *
+ * `claude plugin eval` treats the trigger check as display-only: it reports
+ * whether the plugin fired but excludes it from the score in both arms, and
+ * its authoring interview refuses to let it stand as a case's only grader.
+ * The reasoning transfers exactly — "the skill fired" is not "the session
+ * adhered to the skill", and a suite whose only criterion is `skill-invoked`
+ * reports coverage while asserting nothing about behavior.
+ *
+ * A warning rather than an error: it is a statement about how much the suite
+ * is worth, not about whether this run is valid.
+ */
+function vanityMetricWarnings(plans: EvalPlan[]): string[] {
+  const byArtifact = new Map<string, EvalPlan[]>();
+  for (const plan of plans) {
+    if (plan.implicit) continue;
+    const list = byArtifact.get(plan.artifact.path) ?? [];
+    list.push(plan);
+    byArtifact.set(plan.artifact.path, list);
+  }
+  const warnings: string[] = [];
+  for (const [path, group] of byArtifact) {
+    if (group.length > 0 && group.every((p) => p.grader === "skill-invoked")) {
+      warnings.push(
+        `${path}: every eval here is skill-invoked, which checks that the skill fired, ` +
+          `not that the session followed it. Add at least one eval about what the ` +
+          `session actually did.`,
+      );
+    }
+  }
+  return warnings;
 }
