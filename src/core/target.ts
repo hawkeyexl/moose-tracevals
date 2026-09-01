@@ -15,7 +15,7 @@
  * verdict at all.
  */
 import { readFileSync } from "node:fs";
-import { isAbsolute, relative, resolve } from "node:path";
+import { isAbsolute, relative, resolve, sep } from "node:path";
 import type { Trace } from "../trace/types.js";
 
 /** The subject a grader is pointed at. */
@@ -84,7 +84,12 @@ export function readTarget(
     };
   }
   const abs = resolve(ctx.root, t.path);
-  if (relative(ctx.root, abs).startsWith("..")) {
+  // `startsWith("..")` alone rejects a legitimate file whose name merely
+  // begins with two dots — `..rc`, `..config/x` — so the segment has to end
+  // there. `isAbsolute` catches the Windows case where the target is on
+  // another drive and `relative` cannot express the step at all.
+  const rel = relative(ctx.root, abs);
+  if (rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute(rel)) {
     return {
       ok: false,
       reason: `target file "${t.path}" resolves outside the project root`,

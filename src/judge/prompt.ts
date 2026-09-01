@@ -5,7 +5,7 @@
  */
 import type { EvalPlan } from "../core/plan.js";
 
-export const PROMPT_VERSION = 1;
+export const PROMPT_VERSION = 2;
 
 export const JUDGE_SYSTEM_PROMPT = `You are an adherence judge for AI agent sessions. You are given the transcript of an agent session (messages, tool calls, skills used) and one assertion drawn from the instructions the session was operating under — a skill definition, an agent definition, or project rules.
 
@@ -53,16 +53,26 @@ export function buildUserContent(
   if (artifactBody.length > MAX_ARTIFACT_CHARS) {
     artifactBody = `${artifactBody.slice(0, MAX_ARTIFACT_CHARS)}\n[... artifact truncated ...]`;
   }
-  parts.push(
-    `# Source ${plan.artifact.type} ("${plan.artifact.name}")\n${artifactBody}`,
-  );
+
+  // `target: artifact` makes the source and the graded content the same bytes.
+  // Sending them twice under two headings costs tokens and invites the judge
+  // to treat them as two documents to reconcile — and it defeats the
+  // truncation cap, because the copy under "graded content" is not cut.
+  const gradingTheArtifact = targetLabel === "artifact";
+  const artifactHeading = `${plan.artifact.type} ("${plan.artifact.name}")`;
+  if (!gradingTheArtifact) {
+    parts.push(`# Source ${artifactHeading}\n${artifactBody}`);
+  }
+
   // Name what the judge is looking at. Told "session transcript" while being
   // handed a written file or a final assistant message, a judge reasons about
   // the wrong thing and says so confidently.
   parts.push(
     targetLabel === "transcript"
       ? `# Session transcript\n${graded}`
-      : `# Graded content (${targetLabel})\n${graded}`,
+      : gradingTheArtifact
+        ? `# Graded content: the ${artifactHeading} itself\n${artifactBody}`
+        : `# Graded content (${targetLabel})\n${graded}`,
   );
   return parts.join("\n\n");
 }

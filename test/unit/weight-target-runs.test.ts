@@ -13,11 +13,15 @@
  * - `runs` changes how many ensemble runs one eval buys.
  */
 import { describe, expect, it } from "vitest";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, sep } from "node:path";
 import { MockProvider, mockVerdict } from "@hawkeyexl/inference";
 import { graderFor } from "../../src/graders/registry.js";
 import { makeTraceJudge } from "../../src/judge/trace-judge.js";
 import { readTarget } from "../../src/core/target.js";
-import { makePlan, makeRulesPlan, makeTrace } from "../helpers.js";
+import { buildUserContent } from "../../src/judge/prompt.js";
+import { makeArtifact, makePlan, makeRulesPlan, makeTrace } from "../helpers.js";
 
 describe("target", () => {
   const trace = makeTrace({
@@ -79,6 +83,36 @@ describe("target", () => {
     const r = readTarget({ source: "file", path: "nope.txt" }, ctx);
     expect(r.ok).toBe(false);
     expect(!r.ok && r.reason).toContain("could not be read");
+  });
+
+  it("does not mistake a leading-dots filename for a climb", () => {
+    // `..rc` starts with two dots and goes nowhere. Rejecting it as an escape
+    // would be a refusal the author cannot act on, since the file is inside
+    // the root and named exactly what they wrote.
+    const root = mkdtempSync(join(tmpdir(), "tracevals-target-"));
+    writeFileSync(join(root, "..rc"), "inside the root\n");
+    try {
+      const r = readTarget(
+        { source: "file", path: "..rc" },
+        { ...ctx, root },
+      );
+      expect(r.ok).toBe(true);
+      expect(r.ok && r.text).toContain("inside the root");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("still refuses a climb that only returns to the root", () => {
+    // `a/../../root` lands back inside, but only by leaving first. The guard
+    // reads the resolved path, so this is a pass — the test pins that the
+    // fix above did not widen into "any path containing dots is fine".
+    const r = readTarget(
+      { source: "file", path: `..${sep}outside.txt` },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(!r.ok && r.reason).toContain("outside the project root");
   });
 });
 
@@ -174,5 +208,90 @@ describe("per-eval runs", () => {
     const { provider, go } = judge(5, 2);
     await go();
     expect(provider.requests).toHaveLength(2);
+  });
+});
+
+describe("the judge prompt under target", () => {
+  const plan = makeRulesPlan({
+    grader: "ai",
+    assertion: "The rules were followed.",
+    artifact: makeArtifact({
+      name: "CLAUDE.md",
+      type: "project-rules",
+      path: "CLAUDE.md",
+      content: "RULES BODY",
+    }),
+  });
+
+  it("sends the artifact once when it is also the graded subject", () => {
+    // Under `target: artifact` the source and the graded content are the same
+    // bytes. Two copies cost tokens, invite the judge to reconcile them as two
+    // documents, and defeat the truncation cap on the second copy.
+    const user = buildUserContent(plan, "RULES BODY", "artifact");
+    expect(user.split("RULES BODY")).toHaveLength(2);
+    expect(user).not.toContain("# Source project-rules");
+    expect(user).toContain("# Graded content: the project-rules");
+  });
+
+  it("still sends both when the subject is not the artifact", () => {
+    const user = buildUserContent(plan, "THE TRANSCRIPT", "transcript");
+    expect(user).toContain("# Source project-rules");
+    expect(user).toContain("# Session transcript");
+    expect(user).toContain("RULES BODY");
+    expect(user).toContain("THE TRANSCRIPT");
+  });
+});
+
+describe("per-eval model", () => {
+  /** Records what the judge asked the factory to build. */
+  const spyJudge = (planModel?: string, cliModel?: string) => {
+    const asked: Array<{ name: string; model?: string }> = [];
+    const judge = makeTraceJudge({
+      provider: new MockProvider(
+        Array.from({ length: 6 }, () => mockVerdict("pass", 0.95)),
+        "default-model",
+      ),
+      providerFor: (name, model) => {
+        asked.push({ name, ...(model === undefined ? {} : { model }) });
+        return {
+          provider: new MockProvider(
+            Array.from({ length: 6 }, () => mockVerdict("pass", 0.95)),
+            model ?? "default-model",
+          ),
+        };
+      },
+      ...(cliModel === undefined ? {} : { model: cliModel }),
+      cacheDir: undefined,
+      noCache: true,
+    });
+    const plan = makeRulesPlan({
+      grader: "ai",
+      assertion: "The session behaved.",
+      ...(planModel === undefined ? {} : { model: planModel }),
+    });
+    return {
+      asked,
+      go: () => judge([plan], () => "transcript", { trace: makeTrace({}) }),
+    };
+  };
+
+  it("builds a provider at the model the eval named", async () => {
+    const { asked, go } = spyJudge("claude-opus-4-5");
+    await go();
+    expect(asked).toEqual([{ name: "mock", model: "claude-opus-4-5" }]);
+  });
+
+  it("does not build anything when the eval names the running model", async () => {
+    const { asked, go } = spyJudge("default-model");
+    await go();
+    expect(asked).toEqual([]);
+  });
+
+  it("lets an explicit --model outrank the eval", async () => {
+    // CLI > eval > default. The flag is already applied to the run's provider,
+    // so honouring the eval here would silently undo what the operator typed.
+    const { asked, go } = spyJudge("claude-opus-4-5", "claude-haiku-4-5");
+    await go();
+    expect(asked).toEqual([]);
   });
 });

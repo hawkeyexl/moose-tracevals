@@ -41,6 +41,11 @@ export interface EvalPlan {
   timeoutMs?: number;
   /** sha256 of `assertion` when the check script was generated. */
   generatedAssertionHash?: string;
+  /**
+   * Models that proposed this assertion, from `metadata.eval-provenance`.
+   * A judge whose model appears here is grading a criterion it wrote.
+   */
+  proposedBy?: string[];
   /** True for the zero-config whole-artifact adherence eval. */
   implicit: boolean;
   /** Set when the artifact's evals block failed schema validation. */
@@ -129,6 +134,10 @@ export async function planEvals(
       if (entry.timeoutMs !== undefined) plan.timeoutMs = entry.timeoutMs;
       if (entry.generatedAssertionHash !== undefined) {
         plan.generatedAssertionHash = entry.generatedAssertionHash;
+      }
+      const proposedBy = extracted.proposedBy.get(entry.id);
+      if (proposedBy !== undefined && proposedBy.length > 0) {
+        plan.proposedBy = proposedBy;
       }
       if (entry.skip) {
         plan.skipped = true;

@@ -42,7 +42,17 @@ export interface TraceJudgeOptions {
    * Without this hook such an eval errors rather than being judged silently by
    * the default model — an eval that names a provider is asking for that one.
    */
-  providerFor?: (name: string) => { provider: InferenceProvider; pricing?: Pricing };
+  providerFor?: (
+    name: string,
+    model?: string,
+  ) => { provider: InferenceProvider; pricing?: Pricing };
+  /**
+   * Model named by an explicit operator flag (`--model`), already applied to
+   * `provider`. Recorded so the judge can tell an operator override from the
+   * provider's own default: precedence is CLI > eval > default, so an eval's
+   * `model` must not quietly win over a flag someone just typed.
+   */
+  model?: string;
   /** Ensemble size; default 3. */
   runs?: number;
   /** Default 0; nonzero adds verdict noise. */
@@ -156,8 +166,25 @@ export function makeTraceJudge(options: TraceJudgeOptions): TraceJudge {
       // adding an alias would be the change that makes it matter.
       let evalProvider = provider;
       let evalPricing = pricing;
-      if (plan.provider !== undefined && plan.provider !== provider.provider()) {
-        const resolved = resolveOverride(plan.provider, options);
+      // Either half is enough to need a different instance. `model` alone is
+      // the common case — "judge this one assertion with a bigger model" —
+      // and it names a model *within* the run's provider, so the provider
+      // falls back to the default rather than being required alongside it.
+      // CLI `--model` still wins: it is applied when `provider` is built, and
+      // an eval that pinned a model is an authoring preference, not an
+      // operator's explicit "right now".
+      const wantsProvider =
+        plan.provider !== undefined && plan.provider !== provider.provider();
+      const wantsModel =
+        options.model === undefined &&
+        plan.model !== undefined &&
+        plan.model !== provider.modelName();
+      if (wantsProvider || wantsModel) {
+        const resolved = resolveOverride(
+          plan.provider ?? provider.provider(),
+          options,
+          wantsModel ? plan.model : undefined,
+        );
         if ("error" in resolved) {
           results.push({
             ...base,
@@ -265,10 +292,17 @@ export function makeTraceJudge(options: TraceJudgeOptions): TraceJudge {
       // run's default: an eval that names its own model is exactly the case a
       // run-wide check would miss.
       const judgeModel = evalProvider.modelName();
+      // Two distinct biases, and the session axis is reported first because
+      // its remedy is the stronger one. Judging your own session is bias about
+      // the behavior under test; judging your own assertion is bias about the
+      // yardstick — the fix there is a human confirming the criterion, not a
+      // second model, since another model would still grade the same wording.
       const selfPreference =
         sessionModel !== undefined && sessionModel === judgeModel
           ? ({ axis: "session", model: judgeModel } as const)
-          : undefined;
+          : plan.proposedBy?.includes(judgeModel) === true
+            ? ({ axis: "criterion", model: judgeModel } as const)
+            : undefined;
 
       results.push({
         ...base,
@@ -296,6 +330,7 @@ export function makeTraceJudge(options: TraceJudgeOptions): TraceJudge {
 function resolveOverride(
   name: string,
   options: TraceJudgeOptions,
+  model?: string,
 ): { provider: InferenceProvider; pricing?: Pricing } | { error: string } {
   if (options.providerFor === undefined) {
     return {
@@ -303,10 +338,12 @@ function resolveOverride(
     };
   }
   try {
-    return options.providerFor(name);
+    return options.providerFor(name, model);
   } catch (err) {
     return {
-      error: `could not construct provider "${name}" for this eval: ${err instanceof Error ? err.message : String(err)}`,
+      error: `could not construct provider "${name}"${
+        model === undefined ? "" : ` at model "${model}"`
+      } for this eval: ${err instanceof Error ? err.message : String(err)}`,
     };
   }
 }

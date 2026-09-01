@@ -69,3 +69,7 @@ parameter shape is replaced here.
 `test/unit/weight-target-runs.test.ts` pins the default of three, a smaller per-eval count, and an
 explicit `--runs` overriding the eval. `test/unit/self-preference.test.ts` now builds its session
 through the context object, which is also what proves the model still reaches the check.
+`test/unit/weight-target-runs.test.ts` pins that a per-eval `model` actually builds a
+provider at that model, that naming the running model builds nothing, and that an
+explicit `--model` outranks the eval — the precedence above, asserted rather than
+described.

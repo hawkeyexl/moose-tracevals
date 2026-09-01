@@ -55,3 +55,87 @@ describe("self-preference (session axis)", () => {
     expect(r?.selfPreference).toBeUndefined();
   });
 });
+
+describe("self-preference (criterion axis)", () => {
+  /**
+   * The second axis: the judge wrote the *assertion*, not the session.
+   * `eval-provenance.generated-by` records it, `fill` writes it, and until the
+   * plan carried it back the axis was declared in the type and never set.
+   */
+  const judgeCriterion = async (judgeModel: string, proposedBy?: string[]) => {
+    const judge = makeTraceJudge({
+      provider: new MockProvider(
+        [
+          mockVerdict("pass", 0.95),
+          mockVerdict("pass", 0.95),
+          mockVerdict("pass", 0.95),
+        ],
+        judgeModel,
+      ),
+      cacheDir: undefined,
+      noCache: true,
+    });
+    const results = await judge(
+      [
+        makePlan({
+          grader: "ai",
+          assertion: "The session behaved.",
+          ...(proposedBy === undefined ? {} : { proposedBy }),
+        }),
+      ],
+      () => "rendered transcript",
+      { trace: makeTrace({ model: "some-other-model" }) },
+    );
+    return results[0];
+  };
+
+  it("flags a judge grading an assertion it proposed", async () => {
+    const r = await judgeCriterion("claude-opus-4-5", ["claude-opus-4-5"]);
+    expect(r?.selfPreference).toEqual({
+      axis: "criterion",
+      model: "claude-opus-4-5",
+    });
+  });
+
+  it("stays silent when another model proposed the assertion", async () => {
+    const r = await judgeCriterion("claude-opus-4-5", ["gpt-5"]);
+    expect(r?.selfPreference).toBeUndefined();
+  });
+
+  it("stays silent when nothing recorded who proposed it", async () => {
+    // Hand-written evals have no provenance. Absent is "unknown", and an
+    // unknown author is not evidence of bias.
+    const r = await judgeCriterion("claude-opus-4-5");
+    expect(r?.selfPreference).toBeUndefined();
+  });
+
+  it("reports the session axis first when both apply", async () => {
+    // Judging your own session is bias about the behavior under test; judging
+    // your own assertion is bias about the yardstick. Only one field carries
+    // the report, and the stronger remedy wins.
+    const judge = makeTraceJudge({
+      provider: new MockProvider(
+        [
+          mockVerdict("pass", 0.95),
+          mockVerdict("pass", 0.95),
+          mockVerdict("pass", 0.95),
+        ],
+        "claude-opus-4-5",
+      ),
+      cacheDir: undefined,
+      noCache: true,
+    });
+    const results = await judge(
+      [
+        makePlan({
+          grader: "ai",
+          assertion: "The session behaved.",
+          proposedBy: ["claude-opus-4-5"],
+        }),
+      ],
+      () => "rendered transcript",
+      { trace: makeTrace({ model: "claude-opus-4-5" }) },
+    );
+    expect(results[0]?.selfPreference?.axis).toBe("session");
+  });
+});

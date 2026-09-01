@@ -45,3 +45,4 @@ Every **behavior change** in moose-tracevals ships with an ADR here. The ADR rec
 | [01029](01029-target-selects-the-graded-subject.md) | `target` selects the graded subject, alongside graders' own narrowing options | accepted |
 | [01030](01030-weight-feeds-a-reported-pass-rate.md) | `weight` feeds a reported pass rate, not a gate | accepted |
 | [01031](01031-per-eval-runs-and-model.md) | Per-eval `runs` and `model`, and the judge context that carries them | accepted |
+| [01032](01032-the-criterion-axis-of-self-preference.md) | The criterion axis of self-preference, and reading `eval-provenance` back | accepted |
