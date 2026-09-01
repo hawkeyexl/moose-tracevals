@@ -13,7 +13,8 @@ import {
 export interface EvalPlan {
   artifact: ResolvedArtifact;
   evalName: string;
-  assertion: string;
+  /** Absent on graders whose options say everything (artifact-evals proposal.2). */
+  assertion?: string;
   /** "ai", "human", "command", or a deterministic grader kind. */
   grader: string;
   options?: Record<string, unknown>;

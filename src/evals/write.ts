@@ -22,7 +22,7 @@ import type { Severity } from "./extract.js";
 /** An eval to add. Mirrors the artifact-evals object entry form. */
 export interface NewEvalEntry {
   id: string;
-  assertion: string;
+  assertion?: string;
   type?: "capability" | "regression";
   grader?: string;
   options?: Record<string, unknown>;

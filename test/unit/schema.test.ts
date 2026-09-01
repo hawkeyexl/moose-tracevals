@@ -1,5 +1,5 @@
 /**
- * Pins the vendored `docmeta:artifact-evals:1.0.0-proposal.1` vocabulary.
+ * Pins the vendored `docmeta:artifact-evals:1.0.0-proposal.2` vocabulary.
  *
  * The cases are a port of docmeta's own verification ladder
  * (`docs/proposals/0023/ladders/artifact-evals-examples.cjs`), kept case-for-case
@@ -269,13 +269,13 @@ metadata:
   ],
 ];
 
-describe("docmeta:artifact-evals:1.0.0-proposal.1", () => {
+describe("docmeta:artifact-evals:1.0.0-proposal.2", () => {
   it("carries docmeta's id, not one of ours", async () => {
     const schema = await loadSchema();
     expect(schema.$id).toBe(ARTIFACT_EVALS_SCHEMA_ID);
     // A vocabulary docmeta publishes; this repo implements behavior against it
     // (ADR 01010). The pre-1.0 URL `$id` said we owned the shape — we do not.
-    expect(schema.$id).toBe("docmeta:artifact-evals:1.0.0-proposal.1");
+    expect(schema.$id).toBe("docmeta:artifact-evals:1.0.0-proposal.2");
   });
 
   it("resolves the schema to a file that actually exists", () => {
@@ -289,11 +289,11 @@ describe("docmeta:artifact-evals:1.0.0-proposal.1", () => {
   });
 
   it("keeps the prerelease hyphen, which sorts below the 1.0.0 it registers as", async () => {
-    // `+proposal.1` would be build metadata and compare *equal* to the release.
+    // `+proposal.2` would be build metadata and compare *equal* to the release.
     expect(artifactEvalsSchemaPath()).toMatch(
-      /artifact-evals-1\.0\.0-proposal\.1\.json$/,
+      /artifact-evals-1\.0\.0-proposal\.2\.json$/,
     );
-    expect(String((await loadSchema()).$id)).toContain("-proposal.1");
+    expect(String((await loadSchema()).$id)).toContain("-proposal.2");
   });
 
   it.each(CASES)("%s", async (_name, expected, yamlText) => {
