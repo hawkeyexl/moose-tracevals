@@ -15,6 +15,7 @@ import { join, dirname } from "node:path";
 import { extractFrontmatter, Validator, type FieldError } from "docmeta";
 import type { ResolvedArtifact } from "../artifacts/types.js";
 import { TracevalsError } from "../types.js";
+import type { TraceTarget } from "../core/target.js";
 
 export const ARTIFACT_EVALS_SCHEMA_ID = "docmeta:artifact-evals:1.0.0-proposal.2";
 
@@ -68,6 +69,14 @@ export interface EvalEntry {
   grader: string;
   /** Overrides the configured judge provider for this eval only. */
   provider?: string;
+  /** Overrides the judge model for this eval only; a CLI --model still wins. */
+  model?: string;
+  /** Ensemble runs for this eval only; a CLI --runs still wins. */
+  runs?: number;
+  /** Which bytes the grader receives. Absent means the whole transcript. */
+  target?: TraceTarget;
+  /** Relative contribution to the run's pass rate. Never changes the outcome. */
+  weight?: number;
   options?: Record<string, unknown>;
   severity: Severity;
   evidence?: string;
@@ -96,6 +105,16 @@ export interface ExtractedEvals {
   declared: boolean;
   /** `metadata.eval-skip` — skip this artifact's evals entirely. */
   skip: boolean;
+  /**
+   * Which model proposed each eval, by eval id, from
+   * `metadata.eval-provenance`. Written by `fill` and, until now, never read
+   * back: it is what lets the judge notice it is grading an assertion it
+   * wrote itself, which is bias on the *criterion* rather than on the session.
+   *
+   * A list because one id may appear under several `generated-by` entries —
+   * a re-fill by a second model extends the block rather than replacing it.
+   */
+  proposedBy: Map<string, string[]>;
 }
 
 /**
@@ -125,12 +144,12 @@ export async function extractEvals(
   const declared = extracted.present && bag !== undefined && bag.evals !== undefined;
 
   if (!extracted.present) {
-    return { evals: [], errors: [], declared: false, skip: false };
+    return { evals: [], errors: [], declared: false, skip: false, proposedBy: new Map() };
   }
 
   const typoErrors = reservedPrefixErrors(bag, extracted.lineFor);
   if (typoErrors.length > 0) {
-    return { evals: [], errors: typoErrors, declared, skip: false };
+    return { evals: [], errors: typoErrors, declared, skip: false, proposedBy: new Map() };
   }
 
   // Skip the validator only for an artifact this vocabulary has nothing to say
@@ -144,7 +163,13 @@ export async function extractEvals(
     bag === undefined ||
     ![...RESERVED_EVAL_KEYS].some((key) => bag[key] !== undefined);
   if (wellFormed && claimsNothing) {
-    return { evals: [], errors: [], declared: false, skip: false };
+    return {
+      evals: [],
+      errors: [],
+      declared: false,
+      skip: false,
+      proposedBy: new Map(),
+    };
   }
 
   const errors = await validator.validate(
@@ -153,13 +178,46 @@ export async function extractEvals(
     extracted.lineFor,
   );
   if (errors.length > 0) {
-    return { evals: [], errors, declared, skip: false };
+    return { evals: [], errors, declared, skip: false, proposedBy: new Map() };
   }
 
   // Validation passed, so `metadata` is an object if it is present at all.
   const valid = bag ?? {};
   const skip = valid["eval-skip"] === true;
-  return { evals: normalizeBlock(valid.evals), errors: [], declared, skip };
+  return {
+    evals: normalizeBlock(valid.evals),
+    errors: [],
+    declared,
+    skip,
+    proposedBy: readProvenance(valid["eval-provenance"]),
+  };
+}
+
+/**
+ * `metadata.eval-provenance` as eval id → the models that proposed it.
+ *
+ * Tolerant by design: the block has already passed the schema, and a shape it
+ * did not constrain is not worth failing a run over — the worst outcome of
+ * ignoring a malformed entry is one missing bias warning, while the worst
+ * outcome of throwing is a run that will not start.
+ */
+function readProvenance(raw: unknown): Map<string, string[]> {
+  const out = new Map<string, string[]>();
+  if (!Array.isArray(raw)) return out;
+  for (const entry of raw) {
+    if (!isPlainObject(entry)) continue;
+    const by = entry["generated-by"];
+    if (typeof by !== "string" || by.length === 0) continue;
+    const ids = entry.evals;
+    if (!Array.isArray(ids)) continue;
+    for (const id of ids) {
+      if (typeof id !== "string") continue;
+      const list = out.get(id) ?? [];
+      if (!list.includes(by)) list.push(by);
+      out.set(id, list);
+    }
+  }
+  return out;
 }
 
 /**
@@ -231,6 +289,12 @@ function normalizeEntry(raw: unknown, index: number): EvalEntry {
     severity: (obj.severity as Severity | undefined) ?? "error",
   };
   if (typeof obj.provider === "string") entry.provider = obj.provider;
+  if (typeof obj.model === "string") entry.model = obj.model;
+  if (typeof obj.runs === "number") entry.runs = obj.runs;
+  if (typeof obj.weight === "number") entry.weight = obj.weight;
+  if (typeof obj.target === "string" || (obj.target && typeof obj.target === "object")) {
+    entry.target = obj.target as TraceTarget;
+  }
   if (obj.options && typeof obj.options === "object") {
     entry.options = obj.options as Record<string, unknown>;
   }

@@ -183,12 +183,18 @@ export function aggregate(
     error: 0,
     needsReview: 0,
     skipped: 0,
+    passRate: 1,
     traces: outcomes.length,
     tracesPassed: 0,
     tracesFailed: 0,
     tracesErrored: 0,
   };
   let costUsd = 0;
+  // Weighted over every trace's evals, not an average of the per-trace rates.
+  // Averaging would give a 2-eval trace the same say as a 40-eval one, which
+  // is the opposite of what a batch is for.
+  let gradedWeight = 0;
+  let passedWeight = 0;
 
   for (const outcome of outcomes) {
     if ("error" in outcome) {
@@ -240,6 +246,15 @@ export function aggregate(
         budgetTraces.add(outcome.file);
         budgetReason = result.skipReason;
       }
+      if (
+        result.outcome === "pass" ||
+        result.outcome === "fail" ||
+        result.outcome === "error"
+      ) {
+        const weight = result.weight ?? 1;
+        gradedWeight += weight;
+        if (result.outcome === "pass") passedWeight += weight;
+      }
       const base = artifactKey(result);
       accumulate(artifactRows, base, result, outcome.file, false);
       accumulate(
@@ -251,6 +266,10 @@ export function aggregate(
       );
     }
   }
+
+  // 1 when nothing was graded, matching the single-trace rule: a batch that
+  // graded nothing has not failed anything.
+  summary.passRate = gradedWeight === 0 ? 1 : passedWeight / gradedWeight;
 
   const budget: BatchBudget | undefined =
     budgetSkips > 0

@@ -271,6 +271,7 @@ describe("runBatch", () => {
           error: 0,
           needsReview: 0,
           skipped: judged ? 0 : 1,
+          passRate: 1,
         },
         exitCode: 0,
         costUsd: judged ? 0.5 : 0,

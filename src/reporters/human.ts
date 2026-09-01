@@ -131,6 +131,17 @@ export function renderHuman(report: RunReport): string {
       }, ${s.error} error, ${s.needsReview} needs-review, ${s.skipped} skipped`,
     ),
   );
+  // Only when it says something the counts do not. With every weight at 1 the
+  // rate is just pass/graded, which the line above already shows; printing it
+  // anyway would be a second way to read the same number.
+  const weighted = report.evalResults.some(
+    (r) => r.weight !== undefined && r.weight !== 1,
+  );
+  if (weighted) {
+    lines.push(
+      pc.dim(`weighted pass rate ${(s.passRate * 100).toFixed(0)}%`),
+    );
+  }
   if (report.costUsd > 0) {
     lines.push(pc.dim(`judge cost $${report.costUsd.toFixed(4)}`));
   }

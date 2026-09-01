@@ -41,3 +41,8 @@ Every **behavior change** in moose-tracevals ships with an ADR here. The ADR rec
 | [01025](01025-adopt-artifact-evals-proposal-2.md) | Adopt `docmeta:artifact-evals:1.0.0-proposal.2` | accepted |
 | [01026](01026-a-tool-order-grader.md) | A `tool-order` grader, with the weakest useful semantics | accepted |
 | [01027](01027-skill-invoked-is-not-an-adherence-suite.md) | `skill-invoked` alone is not an adherence suite | accepted |
+| [01028](01028-a-judge-grading-its-own-session.md) | A judge grading its own session is reported | accepted (signature superseded by 01031) |
+| [01029](01029-target-selects-the-graded-subject.md) | `target` selects the graded subject, alongside graders' own narrowing options | accepted |
+| [01030](01030-weight-feeds-a-reported-pass-rate.md) | `weight` feeds a reported pass rate, not a gate | accepted |
+| [01031](01031-per-eval-runs-and-model.md) | Per-eval `runs` and `model`, and the judge context that carries them | accepted |
+| [01032](01032-the-criterion-axis-of-self-preference.md) | The criterion axis of self-preference, and reading `eval-provenance` back | accepted |

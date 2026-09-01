@@ -9,6 +9,7 @@ import {
   type EvalEntry,
   type Severity,
 } from "../evals/extract.js";
+import type { TraceTarget } from "./target.js";
 
 export interface EvalPlan {
   artifact: ResolvedArtifact;
@@ -23,12 +24,28 @@ export interface EvalPlan {
   examples?: EvalEntry["examples"];
   /** Overrides the configured judge provider for this eval only. */
   provider?: string;
+  /** Overrides the judge model for this eval only; a CLI --model still wins. */
+  model?: string;
+  /** Ensemble runs for this eval only; a CLI --runs still wins. */
+  runs?: number;
+  /** Which bytes the grader receives. Absent means the whole transcript. */
+  target?: TraceTarget;
+  /**
+   * Relative contribution to the run's pass rate. Defaults to 1, which is what
+   * makes weighting inert until someone asks for it.
+   */
+  weight?: number;
   /** Command-graded evals: argv, with `{trace}` substituted at grade time. */
   command?: string[];
   successExitCodes?: number[];
   timeoutMs?: number;
   /** sha256 of `assertion` when the check script was generated. */
   generatedAssertionHash?: string;
+  /**
+   * Models that proposed this assertion, from `metadata.eval-provenance`.
+   * A judge whose model appears here is grading a criterion it wrote.
+   */
+  proposedBy?: string[];
   /** True for the zero-config whole-artifact adherence eval. */
   implicit: boolean;
   /** Set when the artifact's evals block failed schema validation. */
@@ -101,6 +118,10 @@ export async function planEvals(
         evalName: entry.id,
         assertion: entry.assertion,
         grader: entry.grader,
+        ...(entry.model !== undefined ? { model: entry.model } : {}),
+        ...(entry.runs !== undefined ? { runs: entry.runs } : {}),
+        ...(entry.target !== undefined ? { target: entry.target } : {}),
+        ...(entry.weight !== undefined ? { weight: entry.weight } : {}),
         severity: entry.severity,
         implicit: false,
       };
@@ -113,6 +134,10 @@ export async function planEvals(
       if (entry.timeoutMs !== undefined) plan.timeoutMs = entry.timeoutMs;
       if (entry.generatedAssertionHash !== undefined) {
         plan.generatedAssertionHash = entry.generatedAssertionHash;
+      }
+      const proposedBy = extracted.proposedBy.get(entry.id);
+      if (proposedBy !== undefined && proposedBy.length > 0) {
+        plan.proposedBy = proposedBy;
       }
       if (entry.skip) {
         plan.skipped = true;

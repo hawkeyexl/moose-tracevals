@@ -152,19 +152,27 @@ export async function prepareRun(
       // model default, API-key env, and price override rather than a bare name.
       // Memoized: the judge calls this once per eval, and twenty evals naming
       // one provider should not build twenty of it.
-      providerFor: (name) => {
-        const cached = overrideProviders.get(name);
+      providerFor: (name, model) => {
+        // Keyed on the pair: two evals naming one provider at two models are
+        // two instances, and caching on the name alone would hand the second
+        // the first's model.
+        const key = model === undefined ? name : `${name}\u0000${model}`;
+        const cached = overrideProviders.get(key);
         if (cached) return cached;
         const built = {
-          provider: makeJudgeProvider(config, { provider: name }),
+          provider: makeJudgeProvider(config, {
+            provider: name,
+            ...(model !== undefined ? { model } : {}),
+          }),
           ...(() => {
             const p = pricingOverrideFor(config, { provider: name });
             return p !== undefined ? { pricing: p } : {};
           })(),
         };
-        overrideProviders.set(name, built);
+        overrideProviders.set(key, built);
         return built;
       },
+      ...(options.model !== undefined ? { model: options.model } : {}),
       runs: options.runs ?? config.judge.ensembleRuns,
       temperature: config.judge.temperature,
       zones: config.judge.zones,

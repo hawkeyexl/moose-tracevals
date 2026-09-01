@@ -277,3 +277,70 @@ describe("extractEvals", () => {
     expect(result.evals).toEqual([]);
   });
 });
+
+describe("eval-provenance, read back", () => {
+  // `fill` has always written this block; nothing read it until the judge
+  // needed to know whether it was grading an assertion it wrote itself.
+  const withProvenance = (provenance: string[]) =>
+    artifact([
+      "---",
+      "name: demo",
+      "metadata:",
+      "  evals:",
+      "    - id: used-read",
+      "      assertion: The session read a file.",
+      "    - id: hand-written",
+      "      assertion: A human wrote this one.",
+      "  eval-provenance:",
+      ...provenance,
+      "---",
+    ]);
+
+  it("maps each eval id to the model that proposed it", async () => {
+    const r = await extractEvals(
+      withProvenance([
+        "    - generated-by: anthropic:claude-opus-4-5",
+        "      evals: [used-read]",
+      ]),
+    );
+    expect(r.errors).toEqual([]);
+    expect(r.proposedBy.get("used-read")).toEqual([
+      "anthropic:claude-opus-4-5",
+    ]);
+    // Absent, not empty: a hand-written eval has no author on record.
+    expect(r.proposedBy.get("hand-written")).toBeUndefined();
+  });
+
+  it("collects every model that proposed the same eval", async () => {
+    // A re-fill by a second model extends the block rather than replacing it,
+    // so one id can appear under two entries and both are self-preference.
+    const r = await extractEvals(
+      withProvenance([
+        "    - generated-by: anthropic:claude-opus-4-5",
+        "      evals: [used-read]",
+        "    - generated-by: openai:gpt-5",
+        "      evals: [used-read, hand-written]",
+      ]),
+    );
+    expect(r.proposedBy.get("used-read")).toEqual([
+      "anthropic:claude-opus-4-5",
+      "openai:gpt-5",
+    ]);
+    expect(r.proposedBy.get("hand-written")).toEqual(["openai:gpt-5"]);
+  });
+
+  it("is empty rather than throwing when the block is absent", async () => {
+    const r = await extractEvals(
+      artifact([
+        "---",
+        "name: demo",
+        "metadata:",
+        "  evals:",
+        "    - id: used-read",
+        "      assertion: The session read a file.",
+        "---",
+      ]),
+    );
+    expect(r.proposedBy.size).toBe(0);
+  });
+});

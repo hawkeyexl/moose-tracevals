@@ -10,6 +10,7 @@ import { TracevalsError } from "../types.js";
 import type { CoverageEntry } from "../artifacts/types.js";
 import type { ManifestReport } from "../capture/types.js";
 import { planEvals, type EvalPlan } from "./plan.js";
+import { MAX_ARTIFACT_CHARS, artifactWasTruncated } from "../judge/prompt.js";
 import { graderFor, listGraderKinds } from "../graders/registry.js";
 import { windowFor } from "../graders/util.js";
 import { renderTrace } from "../judge/render.js";
@@ -249,16 +250,25 @@ export async function runEvals(options: EngineOptions): Promise<RunReport> {
       // `judge.redact` rides along with the render caps: the digest is the one
       // thing that leaves the machine, so its size limits and its redaction
       // list are decided in the same place (ADR 01020).
-      const judged = await options.judge(aiPlans, (plan) =>
-        renderTrace(
+      const judged = await options.judge(
+        aiPlans,
+        (plan) =>
+          renderTrace(
+            trace,
+            { ...config.render, redact: config.judge.redact },
+            plan,
+          ),
+        {
           trace,
-          { ...config.render, redact: config.judge.redact },
-          plan,
-        ),
+          ...(options.projectDir !== undefined
+            ? { projectRoot: options.projectDir }
+            : {}),
+        },
       );
       judged.forEach((j, i) => {
         const plan = aiPlans[i];
         results.push({
+          ...(j.selfPreference ? { selfPreference: j.selfPreference } : {}),
           evalName: j.evalName,
           artifact: j.artifact,
           artifactName: j.artifactName,
@@ -276,6 +286,23 @@ export async function runEvals(options: EngineOptions): Promise<RunReport> {
     }
   }
 
+  // Weight rides on the result so the summary can read it without threading
+  // the plan list through, and so `--format json` consumers can see why a rate
+  // moved. Counts stay unweighted: "1 failed" answers how many evals failed,
+  // the rate answers how much that mattered, and weighting both would make
+  // each answer the other's question.
+  const weightOf = new Map<string, number>();
+  for (const plan of plans) {
+    weightOf.set(weightKey(plan.artifact.path, plan.evalName), plan.weight ?? 1);
+  }
+  for (const r of results) {
+    r.weight = weightOf.get(weightKey(r.artifact, r.evalName)) ?? 1;
+  }
+  const gradedRows = results.filter(
+    (r) => r.outcome === "pass" || r.outcome === "fail" || r.outcome === "error",
+  );
+  const gradedWeight = gradedRows.reduce((n, r) => n + (r.weight ?? 1), 0);
+
   const summary: RunSummary = {
     total: results.length,
     pass: results.filter((r) => r.outcome === "pass").length,
@@ -283,6 +310,12 @@ export async function runEvals(options: EngineOptions): Promise<RunReport> {
     error: results.filter((r) => r.outcome === "error").length,
     needsReview: results.filter((r) => r.outcome === "needs-review").length,
     skipped: results.filter((r) => r.outcome === "skipped").length,
+    passRate:
+      gradedWeight > 0
+        ? gradedRows
+            .filter((r) => r.outcome === "pass")
+            .reduce((n, r) => n + (r.weight ?? 1), 0) / gradedWeight
+        : 1,
   };
   const failing =
     summary.fail > 0 ||
@@ -304,6 +337,7 @@ export async function runEvals(options: EngineOptions): Promise<RunReport> {
       ...manifestWarnings,
       ...resolved.warnings,
       ...vanityMetricWarnings(plans),
+      ...truncatedArtifactWarnings(plans),
     ],
     coverage: resolved.coverage,
     // An observation about the session's configuration, never a verdict: it is
@@ -318,6 +352,25 @@ export async function runEvals(options: EngineOptions): Promise<RunReport> {
     costUsd: results.reduce((sum, r) => sum + (r.costUsd ?? 0), 0),
     durationMs: Date.now() - start,
   };
+}
+
+
+/**
+ * Key for the plan-to-result weight lookup.
+ *
+ * `U+0000` is written as an escape and never as a literal character. A raw NUL
+ * in the source makes git classify this file as **binary**, and a binary file
+ * does not merge: git reports the conflict, writes "ours" to the working tree
+ * with no markers, and renders every diff as `Binary files differ`. This file
+ * carried one for exactly one merge, which silently dropped the other side.
+ *
+ * The separator itself is defensive rather than load-bearing — an artifact
+ * path ends in a filename, so the two halves cannot currently be forged into
+ * a colliding key. A separator that cannot appear in either half keeps that
+ * true if artifact naming ever loosens.
+ */
+function weightKey(artifact: string, evalName: string): string {
+  return `${artifact}\u0000${evalName}`;
 }
 
 /**
@@ -350,6 +403,34 @@ function vanityMetricWarnings(plans: EvalPlan[]): string[] {
           `session actually did.`,
       );
     }
+  }
+  return warnings;
+}
+
+
+/**
+ * Artifacts the judge only saw part of.
+ *
+ * The prompt already tells the judge it is reading an excerpt; nothing told
+ * the person reading the report. A verdict about adherence to a 20,000-word
+ * skill, formed from its first 8,000 characters, is not wrong so much as
+ * unlabelled — and an unlabelled partial verdict is the kind that gets
+ * trusted.
+ */
+function truncatedArtifactWarnings(plans: EvalPlan[]): string[] {
+  const seen = new Set<string>();
+  const warnings: string[] = [];
+  for (const plan of plans) {
+    if (plan.grader !== "ai") continue;
+    const path = plan.artifact.path;
+    if (seen.has(path)) continue;
+    if (!artifactWasTruncated(plan.artifact.content)) continue;
+    seen.add(path);
+    warnings.push(
+      `${path}: only the first ${String(MAX_ARTIFACT_CHARS)} characters were shown to the judge ` +
+        `(the artifact is ${String(plan.artifact.content.length)}). Verdicts about instructions ` +
+        `beyond that point rest on text the judge never read.`,
+    );
   }
   return warnings;
 }
