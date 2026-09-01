@@ -429,12 +429,37 @@ describe("runEvals", () => {
     });
 
     it("does not warn about an artifact carrying no evals of its own", async () => {
-      // An artifact with no declared evals is planned implicitly, and an
-      // implicit plan is not an authoring choice to warn about. Counting it
-      // would fire on every unannotated file in the project.
-      const dir = await projectWithEvals(behavioral);
+      // No `metadata.evals` at all, so the artifact is planned implicitly.
+      // The warning is about an authoring choice, and there is none here.
+      //
+      // The `plan.implicit` guard this walks through is defensive rather than
+      // load-bearing today: an implicit plan is only created when nothing was
+      // declared, and it is always `ai`-graded, so it could not satisfy
+      // "every eval is skill-invoked" anyway. It keeps the rule true — the
+      // warning is about what an author wrote — if implicit planning ever
+      // learns to emit another grader.
+      await mkdir(".tmp", { recursive: true });
+      const dir = await mkdtemp(join(".tmp", "engine-vanity-implicit-"));
+      const skill = join(dir, ".claude", "skills", "fix-bug");
+      await mkdir(skill, { recursive: true });
+      await writeFile(
+        join(skill, "SKILL.md"),
+        [
+          "---",
+          "name: fix-bug",
+          "description: Fix a reported bug.",
+          "---",
+          "",
+          "# Fix Bug",
+          "",
+        ].join("\n"),
+      );
       try {
         const report = await run({ projectDir: dir });
+        // The artifact was planned — the run saw it — and still did not warn.
+        expect(
+          report.evalResults.some((r) => r.artifact.includes("SKILL.md")),
+        ).toBe(true);
         expect(vanity(report.warnings)).toHaveLength(0);
       } finally {
         await rm(dir, { recursive: true, force: true });

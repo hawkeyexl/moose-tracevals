@@ -124,6 +124,20 @@ describe("command grader", () => {
     expect(result.findings).toEqual([]);
   });
 
+  it("errors when a hash is present but the assertion is gone", async () => {
+    // proposal.2 made `assertion` optional, which created a shape that could
+    // not exist before: a hash with nothing to check it against. Hashing the
+    // empty string and comparing would pass for one specific stored hash and
+    // fail confusingly for every other, so the half write-back is reported.
+    const result = await grade({
+      assertion: undefined,
+      command: [NODE, "-e", "process.exit(0)"],
+      generatedAssertionHash: createHash("sha256").update("gone").digest("hex"),
+    });
+    expect(result.error).toContain("no assertion");
+    expect(result.findings).toEqual([]);
+  });
+
   it("errors when the assertion has drifted from its generated command", async () => {
     const result = await grade({
       assertion: "The assertion was edited after the script was generated.",
