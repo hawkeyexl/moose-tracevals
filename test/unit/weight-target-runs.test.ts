@@ -103,10 +103,10 @@ describe("target", () => {
     }
   });
 
-  it("still refuses a climb that only returns to the root", () => {
-    // `a/../../root` lands back inside, but only by leaving first. The guard
-    // reads the resolved path, so this is a pass — the test pins that the
-    // fix above did not widen into "any path containing dots is fine".
+  it("still refuses a single step out of the root", () => {
+    // The other half of the case above: `..` followed by a separator *is* a
+    // climb, and narrowing the guard to whole segments must not have widened
+    // it into "any path containing dots is fine".
     const r = readTarget(
       { source: "file", path: `..${sep}outside.txt` },
       ctx,
@@ -328,5 +328,55 @@ describe("a target that needs the parsed session, without one", () => {
       expect(r?.outcome).toBe("pass");
       expect(r?.error).toBeUndefined();
     }
+  });
+});
+
+describe("a non-transcript target reaches the prompt", () => {
+  // `readTarget` is unit-tested and the no-trace branch is covered, but
+  // nothing asserted that the selected text actually arrives at the provider
+  // when a trace *is* supplied. That seam is the whole point of `target`.
+  const judgeWith = async (target: string): Promise<string> => {
+    const provider = new MockProvider(
+      Array.from({ length: 3 }, () => mockVerdict("pass", 0.95)),
+      "judge-model",
+    );
+    const judge = makeTraceJudge({
+      provider,
+      cacheDir: undefined,
+      noCache: true,
+    });
+    const plan = makeRulesPlan({
+      grader: "ai",
+      assertion: "The session behaved.",
+      target: target as never,
+    });
+    await judge([plan], () => "THE WHOLE TRANSCRIPT", {
+      trace: makeTrace({
+        assistantTexts: ["first answer", "THE FINAL ANSWER"],
+        fileAccesses: [{ path: "src/touched.ts", op: "write", index: 0 }],
+      }),
+    });
+    const req = provider.requests[0];
+    if (!req) throw new Error("no request recorded");
+    return req.user;
+  };
+
+  it("sends the final message rather than the transcript", async () => {
+    const user = await judgeWith("last-message");
+    expect(user).toContain("THE FINAL ANSWER");
+    expect(user).not.toContain("THE WHOLE TRANSCRIPT");
+    // And it names the subject, so the judge is not told it holds a transcript.
+    expect(user).toContain("last-message");
+  });
+
+  it("sends the touched paths for files", async () => {
+    const user = await judgeWith("files");
+    expect(user).toContain("src/touched.ts");
+    expect(user).not.toContain("THE WHOLE TRANSCRIPT");
+  });
+
+  it("still sends the rendered digest for the default target", async () => {
+    const user = await judgeWith("transcript");
+    expect(user).toContain("THE WHOLE TRANSCRIPT");
   });
 });

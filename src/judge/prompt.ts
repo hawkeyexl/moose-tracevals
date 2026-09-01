@@ -5,16 +5,18 @@
  */
 import type { EvalPlan } from "../core/plan.js";
 
-export const PROMPT_VERSION = 2;
+export const PROMPT_VERSION = 3;
 
-export const JUDGE_SYSTEM_PROMPT = `You are an adherence judge for AI agent sessions. You are given the transcript of an agent session (messages, tool calls, skills used) and one assertion drawn from the instructions the session was operating under — a skill definition, an agent definition, or project rules.
+export const JUDGE_SYSTEM_PROMPT = `You are an adherence judge for AI agent sessions. You are given some evidence from an agent session and one assertion drawn from the instructions the session was operating under — a skill definition, an agent definition, or project rules.
+
+The evidence is whatever the eval asked to be graded, and its heading says which: usually the session transcript (messages, tool calls, skills used), but it may instead be the session's final message, the list of files it touched, the instruction artifact itself, or one named file. Judge the assertion against what you were actually given.
 
 Decide whether the session adhered to the assertion:
 - "pass" only when the session fully satisfied it.
 - "partial" when it partly satisfied it.
 - "fail" when it violated it or plainly did not do it.
 
-Ground every judgment in the transcript: cite the specific messages, tool calls, or omissions that support your verdict in the "observed" field. If the assertion concerns something the transcript cannot show (e.g. events outside the session), say so and lower your confidence.
+Ground every judgment in the graded content: quote or cite the specific part of it — a message, a tool call, a line, or a telling omission — that supports your verdict in the "observed" field. If the assertion concerns something the graded content cannot show (e.g. events outside what you were given), say so and lower your confidence.
 
 Respond with a single JSON object matching the provided schema. No prose outside the JSON.`;
 

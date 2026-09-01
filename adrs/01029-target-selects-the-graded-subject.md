@@ -65,4 +65,13 @@ improvisation that `target` would replace; that was wrong, and this records the 
 
 `test/unit/weight-target-runs.test.ts` covers each subject, the empty-final-message case, path
 refusal in both forms, and the composition case: a pattern that `on: all` cannot find because it
-only appears in the file list, which `target: files` finds.
+only appears in the file list, which `target: files` finds. It also covers the seam between
+selection and the prompt — a `last-message` target with a trace supplied puts the final message
+in front of the judge and keeps the rendered transcript out.
+
+**The system prompt names the subject rather than assuming a transcript.** It originally said
+"Ground every judgment in the transcript", which is wrong for every target this ADR adds: the
+heading in the user content was already accurate, but the instruction above it told the judge it
+held something it did not. It now grounds judgments in "the graded content" and lists what that
+may be. `PROMPT_VERSION` bumps with it, so verdicts cached under the transcript-only wording are
+not replayed.
