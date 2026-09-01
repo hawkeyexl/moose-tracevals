@@ -1,6 +1,7 @@
 /** Grader registry: static built-ins plus consumer-registered kinds. */
 import type { TraceGrader } from "./types.js";
 import { toolUsageGrader } from "./tool-usage.js";
+import { toolOrderGrader } from "./tool-order.js";
 import { skillInvokedGrader } from "./skill-invoked.js";
 import { fileAccessGrader } from "./file-access.js";
 import { turnCountGrader } from "./turn-count.js";
@@ -12,6 +13,7 @@ import { commandGrader } from "./command.js";
 const graders = new Map<string, TraceGrader>(
   [
     toolUsageGrader,
+    toolOrderGrader,
     skillInvokedGrader,
     fileAccessGrader,
     turnCountGrader,

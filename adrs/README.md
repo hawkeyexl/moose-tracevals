@@ -39,3 +39,5 @@ Every **behavior change** in moose-tracevals ships with an ADR here. The ADR rec
 | [01023](01023-give-slash-commands-their-own-artifact-type.md) | Give slash commands their own artifact type, and let the filesystem say what a `/name` is | accepted |
 | [01024](01024-capture-a-session-manifest-so-staleness-is-exact.md) | Capture a session manifest, and make staleness exact instead of a guess | accepted |
 | [01025](01025-adopt-artifact-evals-proposal-2.md) | Adopt `docmeta:artifact-evals:1.0.0-proposal.2` | accepted |
+| [01026](01026-a-tool-order-grader.md) | A `tool-order` grader, with the weakest useful semantics | accepted |
+| [01027](01027-skill-invoked-is-not-an-adherence-suite.md) | `skill-invoked` alone is not an adherence suite | accepted |

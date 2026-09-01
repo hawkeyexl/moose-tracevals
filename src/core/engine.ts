@@ -303,6 +303,7 @@ export async function runEvals(options: EngineOptions): Promise<RunReport> {
       ...trace.warnings,
       ...manifestWarnings,
       ...resolved.warnings,
+      ...vanityMetricWarnings(plans),
     ],
     coverage: resolved.coverage,
     // An observation about the session's configuration, never a verdict: it is
@@ -317,6 +318,40 @@ export async function runEvals(options: EngineOptions): Promise<RunReport> {
     costUsd: results.reduce((sum, r) => sum + (r.costUsd ?? 0), 0),
     durationMs: Date.now() - start,
   };
+}
+
+/**
+ * Artifacts whose only check is that their skill fired.
+ *
+ * `claude plugin eval` treats the trigger check as display-only: it reports
+ * whether the plugin fired but excludes it from the score in both arms, and
+ * its authoring interview refuses to let it stand as a case's only grader.
+ * The reasoning transfers exactly — "the skill fired" is not "the session
+ * adhered to the skill", and a suite whose only criterion is `skill-invoked`
+ * reports coverage while asserting nothing about behavior.
+ *
+ * A warning rather than an error: it is a statement about how much the suite
+ * is worth, not about whether this run is valid.
+ */
+function vanityMetricWarnings(plans: EvalPlan[]): string[] {
+  const byArtifact = new Map<string, EvalPlan[]>();
+  for (const plan of plans) {
+    if (plan.implicit) continue;
+    const list = byArtifact.get(plan.artifact.path) ?? [];
+    list.push(plan);
+    byArtifact.set(plan.artifact.path, list);
+  }
+  const warnings: string[] = [];
+  for (const [path, group] of byArtifact) {
+    if (group.length > 0 && group.every((p) => p.grader === "skill-invoked")) {
+      warnings.push(
+        `${path}: every eval here is skill-invoked, which checks that the skill fired, ` +
+          `not that the session followed it. Add at least one eval about what the ` +
+          `session actually did.`,
+      );
+    }
+  }
+  return warnings;
 }
 
 /**

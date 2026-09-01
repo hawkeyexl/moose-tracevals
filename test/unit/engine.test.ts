@@ -357,4 +357,148 @@ describe("runEvals", () => {
       }
     });
   });
+  describe("vanity-metric warning", () => {
+    /**
+     * A project whose one skill carries `evals` verbatim, so each test states
+     * the eval set it is about and nothing else varies.
+     */
+    async function projectWithEvals(evals: string[]): Promise<string> {
+      await mkdir(".tmp", { recursive: true });
+      const dir = await mkdtemp(join(".tmp", "engine-vanity-"));
+      const skill = join(dir, ".claude", "skills", "fix-bug");
+      await mkdir(skill, { recursive: true });
+      await writeFile(
+        join(skill, "SKILL.md"),
+        [
+          "---",
+          "name: fix-bug",
+          "description: Fix a reported bug.",
+          "metadata:",
+          "  evals:",
+          ...evals,
+          "---",
+          "",
+          "# Fix Bug",
+          "",
+        ].join("\n"),
+      );
+      return dir;
+    }
+
+    const invoked = [
+      "    - id: skill-fired",
+      "      assertion: The fix-bug skill was invoked.",
+      "      grader: skill-invoked",
+      "      options:",
+      "        skill: fix-bug",
+      "        expect: invoked",
+    ];
+    const behavioral = [
+      "    - id: used-read",
+      "      assertion: The session read a source file before editing.",
+      "      grader: tool-usage",
+      "      options:",
+      "        tool: Read",
+      "        expect: used",
+    ];
+    const vanity = (w: string[]) =>
+      w.filter((m) => m.includes("which checks that the skill fired"));
+
+    it("warns when every eval on an artifact is skill-invoked", async () => {
+      const dir = await projectWithEvals(invoked);
+      try {
+        const report = await run({ projectDir: dir });
+        expect(vanity(report.warnings)).toHaveLength(1);
+        expect(vanity(report.warnings)[0]).toContain("SKILL.md");
+      } finally {
+        await rm(dir, { recursive: true, force: true });
+      }
+    });
+
+    it("stays silent when one eval is about behavior", async () => {
+      // The rule is about the *suite*, not the grader: one behavioral eval is
+      // enough to make the trigger check a supporting fact rather than the
+      // whole claim, so the same skill-invoked eval must not warn here.
+      const dir = await projectWithEvals([...invoked, ...behavioral]);
+      try {
+        const report = await run({ projectDir: dir });
+        expect(vanity(report.warnings)).toHaveLength(0);
+      } finally {
+        await rm(dir, { recursive: true, force: true });
+      }
+    });
+
+    it("does not warn about an artifact carrying no evals of its own", async () => {
+      // No `metadata.evals` at all, so the artifact is planned implicitly.
+      // The warning is about an authoring choice, and there is none here.
+      //
+      // The `plan.implicit` guard this walks through is defensive rather than
+      // load-bearing today: an implicit plan is only created when nothing was
+      // declared, and it is always `ai`-graded, so it could not satisfy
+      // "every eval is skill-invoked" anyway. It keeps the rule true — the
+      // warning is about what an author wrote — if implicit planning ever
+      // learns to emit another grader.
+      await mkdir(".tmp", { recursive: true });
+      const dir = await mkdtemp(join(".tmp", "engine-vanity-implicit-"));
+      const skill = join(dir, ".claude", "skills", "fix-bug");
+      await mkdir(skill, { recursive: true });
+      await writeFile(
+        join(skill, "SKILL.md"),
+        [
+          "---",
+          "name: fix-bug",
+          "description: Fix a reported bug.",
+          "---",
+          "",
+          "# Fix Bug",
+          "",
+        ].join("\n"),
+      );
+      try {
+        const report = await run({ projectDir: dir });
+        // The artifact was planned — the run saw it — and still did not warn.
+        expect(
+          report.evalResults.some((r) => r.artifact.includes("SKILL.md")),
+        ).toBe(true);
+        expect(vanity(report.warnings)).toHaveLength(0);
+      } finally {
+        await rm(dir, { recursive: true, force: true });
+      }
+    });
+
+    it("names each affected artifact rather than warning once", async () => {
+      const dir = await projectWithEvals(invoked);
+      try {
+        const other = join(dir, ".claude", "skills", "ship-it");
+        await mkdir(other, { recursive: true });
+        await writeFile(
+          join(other, "SKILL.md"),
+          [
+            "---",
+            "name: ship-it",
+            "description: Ship the change.",
+            "metadata:",
+            "  evals:",
+            "    - id: ship-fired",
+            "      assertion: The ship-it skill was invoked.",
+            "      grader: skill-invoked",
+            "      options:",
+            "        skill: ship-it",
+            "        expect: invoked",
+            "---",
+            "",
+            "# Ship It",
+            "",
+          ].join("\n"),
+        );
+        const report = await run({ projectDir: dir });
+        const messages = vanity(report.warnings);
+        expect(messages).toHaveLength(2);
+        expect(messages.some((m) => m.includes("fix-bug"))).toBe(true);
+        expect(messages.some((m) => m.includes("ship-it"))).toBe(true);
+      } finally {
+        await rm(dir, { recursive: true, force: true });
+      }
+    });
+  });
 });

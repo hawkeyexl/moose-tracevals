@@ -46,6 +46,15 @@ export function requiredString(options: Options, key: string): OptionCheck {
   return undefined;
 }
 
+export function optionalString(options: Options, key: string): OptionCheck {
+  const value = options[key];
+  if (value === undefined) return undefined;
+  if (typeof value !== "string" || value.length === 0) {
+    return `options.${key} must be a non-empty string`;
+  }
+  return undefined;
+}
+
 export function optionalEnum(
   options: Options,
   key: string,
