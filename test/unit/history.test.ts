@@ -51,6 +51,12 @@ function report(results: EvalResult[]): RunReport {
     },
     warnings: [],
     coverage: [],
+    availability: {
+      recorded: false,
+      skills: { offered: 0, used: 0, unused: 0 },
+      agents: { offered: 0, used: 0, unused: 0 },
+      listed: false,
+    },
     evalResults: results,
     summary,
     exitCode: summary.fail + summary.error > 0 ? 1 : 0,

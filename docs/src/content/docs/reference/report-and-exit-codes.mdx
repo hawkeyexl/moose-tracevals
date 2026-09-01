@@ -7,9 +7,10 @@ sidebar:
 
 import { Aside } from '@astrojs/starlight/components';
 
-**Scope:** everything `run` emits. The policy discussion, meaning what to do about `needs-review`
-in a pipeline, is in [Exit codes & reports](/moose-tracevals/ci/exit-codes-and-reports/). Source of truth:
-`src/types.ts`, `src/reporters/`, `src/history.ts`.
+**Scope:** everything `run` and `calibrate` emit. The policy discussion, meaning what to do about
+`needs-review` in a pipeline, is in
+[Exit codes & reports](/moose-tracevals/ci/exit-codes-and-reports/). Source of truth:
+`src/types.ts`, `src/calibrate/types.ts`, `src/reporters/`, `src/history.ts`.
 
 ## Exit codes
 
@@ -20,6 +21,10 @@ in a pipeline, is in [Exit codes & reports](/moose-tracevals/ci/exit-codes-and-r
 | `2` | operational error — bad usage, unreadable trace, unknown format, nonexistent path |
 
 `2` is written to stderr as `moose-tracevals: <message>`; `0` and `1` write the report to stdout.
+
+[`calibrate`](/moose-tracevals/reference/cli/#calibrate) reads `0` and `1` differently, because it
+measures rather than gates: disagreeing with your labels is exit `0`, and only a threshold you asked
+for — or a trace that could not be evaluated — makes it `1`.
 
 ## Outcomes
 
@@ -47,10 +52,16 @@ The complete `RunReport`:
   },
   "warnings": ["1 unparseable JSONL line(s) were skipped"],
   "coverage": [ /* CoverageEntry[] */ ],
+  "availability": {
+    "recorded": true,
+    "skills": { "offered": 5, "used": 2, "unused": 3 },
+    "agents": { "offered": 3, "used": 2, "unused": 1 },
+    "listed": false
+  },
   "evalResults": [ /* EvalResult[] */ ],
   "summary": {
-    "total": 7, "pass": 1, "fail": 1,
-    "error": 0, "needsReview": 0, "skipped": 5
+    "total": 12, "pass": 4, "fail": 1,
+    "error": 0, "needsReview": 1, "skipped": 6
   },
   "exitCode": 1,
   "costUsd": 0,
@@ -76,7 +87,7 @@ The complete `RunReport`:
 | `evalName` | string | The eval's name, or `adheres-to-artifact` / `evals-block-valid`. |
 | `artifact` | string | Absolute path to the artifact file. |
 | `artifactName` | string | Its display name — `fix-bug`, `CLAUDE.md`. |
-| `artifactType` | string | `skill`, `agent`, or `project-rules`. |
+| `artifactType` | string | `skill`, `agent`, `project-rules`, or `slash-command`. |
 | `grader` | string | The grader kind, `ai` for judged. |
 | `implicit` | boolean | `true` for the whole-artifact eval. |
 | `outcome` | string | One of the five outcomes above. |
@@ -110,14 +121,21 @@ One entry per artifact reference found in the trace, resolved or not.
 | Field | Type | Notes |
 |---|---|---|
 | `ref` | string | The reference as it appeared, e.g. `fix-bug`, `plugin:skill`. |
-| `kind` | string | `skill`, `agent`, or `project-rules`. |
+| `kind` | string | `skill`, `agent`, `project-rules`, or `slash-command`. |
 | `resolved` | boolean | Whether a file was found. |
 | `path` | string? | The resolved file. Absent for an aggregated `project-rules` entry covering several files. |
 | `tried` | string[] | Every location searched, in order. Usually enough to diagnose a miss. |
 | `note` | string? | Why it will never resolve, e.g. `built-in agent (no definition file)`. |
+| `availability` | string? | `offered-and-used`, `offered-not-used`, `not-offered`, or `unknown`. Absent for `project-rules`, which is always in force. |
+| `stale` | boolean? | The file is newer than the session's end time. Absent when the trace records no end time. |
+| `modifiedAt` | string? | The file's mtime, ISO-8601. Present whenever `stale` is. |
 
 An unresolved reference is **not** a failing eval. It is a coverage note plus a warning, so a missing
 plugin never crashes a run or turns a build red on its own.
+
+`stale` is likewise **never** an eval outcome and never an exit code — it is a heuristic
+(mtime is not content identity, and a checkout rewrites every mtime) that says how much to trust the
+verdicts, not what they are. See [Staleness](/moose-tracevals/declare/coverage/#staleness).
 
 #### The location shown for an entry
 
@@ -131,6 +149,22 @@ The third case is real rather than theoretical: project rules resolve as **one a
 covering several files (`CLAUDE.md` *and* `AGENTS.md`), so the entry is `resolved: true` with no
 `path`. Its locations are all in `tried`. An unresolved entry falls back to
 `not found (<n> location(s) tried)`.
+
+### `availability`
+
+What the session was **offered**, next to what it used. `recorded: false` means the trace carried no
+availability roster at all — *unknown*, not *nothing offered* — and every `CoverageEntry` then reads
+`unknown`.
+
+| Field | Type | Notes |
+|---|---|---|
+| `recorded` | boolean | Whether the trace carried a roster. |
+| `skills`, `agents` | object | `{ offered, used, unused }` counts of distinct names. |
+| `listed` | boolean | Whether the offered-but-unused rows were included in `coverage` too. `--report-unused-artifacts` turns this on. |
+
+**It is never a verdict.** Availability contributes nothing to `summary` and nothing to `exitCode`;
+the report is identical in both with and without `--report-unused-artifacts`. Reading the three
+states is covered in [Account for every artifact](/moose-tracevals/declare/coverage/#offered-used-and-never-on-the-menu).
 
 ## `--format human`
 
@@ -146,18 +180,33 @@ claude-code · claude-opus-4-8 · 2 turn(s) · /work/demo-project
   PASS   fix-bug › no-force-push
   REVIEW fix-bug › refactor-preserved-intent
          awaiting human review
+  PASS   reviewer › reviewer-is-read-only
+  SKIP   doc-writer › doc-writer-wrote-docs
+         agent "doc-writer" was spawned but recorded no subagent turns (no inline
+         sidechain records and no sidecar transcript), so it governed no turns
   SKIP   CLAUDE.md › adheres-to-artifact (implicit)
          ai evals skipped (deterministic-only run)
 
 Artifact coverage
   ✓ skill: fix-bug   /work/demo-project/.claude/skills/fix-bug/SKILL.md
   ○ agent: Explore   built-in agent (no definition file)
+  ✓ agent: reviewer  /work/demo-project/.claude/agents/reviewer.md
+
+Availability
+  5 skill(s) offered, 2 used, 3 never used
+  3 agent(s) offered, 2 used, 1 never used
+  pass --report-unused-artifacts to list them
 
 Warnings
   ! 1 unparseable JSONL line(s) were skipped
 
-9 eval(s): 2 pass, 1 fail, 0 error, 1 needs-review, 5 skipped
+12 eval(s): 4 pass, 1 fail, 0 error, 1 needs-review, 6 skipped
 ```
+
+`forbidden-tool` forbids `Bash`, and this session ran it twice — but only once after the `fix-bug`
+skill was invoked, and only that one is the skill's business. `doc-writer` was spawned and recorded
+no turns, so its evals report `skipped` rather than a verdict about work it had no part in. Both are
+[eval windowing](/moose-tracevals/reference/graders/#shared-behavior).
 
 Outcome labels are `PASS`, `FAIL`, `ERROR`, `REVIEW`, `SKIP`. For a **non-passing judged** eval, two
 extra lines appear: the vote split and the first `observed`.
@@ -168,15 +217,222 @@ extra lines appear: the vote split and the first `observed`.
          The session edited src/app.ts at turn 2 without a preceding test run.
 ```
 
-Coverage marks: `✓` resolved, `○` not. The location follows the rule
-[above](#the-location-shown-for-an-entry).
+Coverage marks: `✓` resolved, `○` referenced but not found, `·` offered and never used. The location
+follows the rule [above](#the-location-shown-for-an-entry) — except for a `·` row, which reports
+`offered, never used` plus the roster's own description, because nothing was ever looked for on disk.
+A stale entry appends `⚠ modified after the session ended (<iso>)` after the location — in markdown,
+into the same **Where** cell, so the table keeps its column count.
 
 ## `--format markdown`
 
 The same run as tables: `# moose-tracevals report`, bullet metadata, then `## Evals`
 (`| Outcome | Artifact | Eval | Grader | Detail |`), `## Artifact coverage`
-(`| Resolved | Kind | Ref | Where |`), `## Warnings`, and a bold summary sentence. Pipe characters
+(`| Resolved | Kind | Ref | Availability | Where |`), `## Availability`, `## Warnings`, and a bold
+summary sentence. An offered-but-unused row reads `n/a` under **Resolved**, never `no`. Pipe characters
 in messages are escaped. Suited to a build summary or a PR comment.
+
+## Batch runs
+
+Naming more than one trace — or selecting them with `--all-projects`, `--since`, or `--limit` —
+emits a **`BatchReport`** instead. It answers a different question: not *did this hold?* but *how
+often does it hold?*
+
+Naming exactly one trace still emits the `RunReport` above, byte for byte. What decides the shape is
+how the traces were selected, never how many came back; see
+[the CLI reference](/moose-tracevals/reference/cli/#which-report-you-get).
+
+```jsonc
+{
+  "traces": [ /* BatchTraceEntry[] */ ],
+  "artifacts": [ /* AggregateRow[] — one per artifact */ ],
+  "evals": [ /* AggregateRow[] — one per eval */ ],
+  "summary": {
+    "total": 14, "pass": 4, "fail": 1, "error": 0, "needsReview": 1, "skipped": 8,
+    "traces": 2, "tracesPassed": 1, "tracesFailed": 1, "tracesErrored": 0
+  },
+  "warnings": [],
+  "exitCode": 1,
+  "costUsd": 0,
+  "durationMs": 75
+}
+```
+
+`summary` is the single-run `RunSummary` counts **summed over every trace**, plus four per-trace
+tallies: `traces` selected, `tracesPassed`, `tracesFailed` (reported exit 1), and `tracesErrored`
+(could not be parsed at all).
+
+### `AggregateRow`
+
+One artifact, or one eval within it, summed across the batch.
+
+| Field | Type | Notes |
+|---|---|---|
+| `key` | string | `<type>:<name>`, plus `::<evalName>` on eval rows. The sort key. |
+| `artifactName` | string | `fix-bug`, `CLAUDE.md`. |
+| `artifactType` | string | `skill`, `agent`, `project-rules`, or `slash-command`. |
+| `artifacts` | string[] | Distinct paths this row aggregated from. More than one means the row spans projects. |
+| `evalName` | string? | Absent on artifact rows. |
+| `graders` | string[]? | Grader kinds seen, sorted. Eval rows only. |
+| `traces` | number | Traces that produced at least one result for this row. |
+| `total` | number | Eval results contributing. |
+| `counts` | object | `{ pass, fail, error, needsReview, skipped }`. |
+| `graded` | number | `total` minus `skipped` — the pass-rate denominator. |
+| `passRate` | number\|null | `pass / graded`, or `null` when nothing was graded. |
+| `failingTraces` | string[] | Traces where this row produced a `fail` or `error`, in batch order. |
+| `reviewTraces` | string[] | Traces where it produced a `needs-review`. |
+| `skipReasons` | string[] | Distinct skip reasons, sorted. |
+
+Two things about `passRate` are deliberate and worth knowing before you build on it:
+
+- **`skipped` is out of the denominator.** A check that never armed is not evidence in either
+  direction, so it is excluded rather than counted as a pass. An artifact that was resolved but
+  never invoked reports `null`, rendered as `—`, not `100%`.
+- **`needs-review` is in the denominator and not in the numerator.** It fails the run by default, so
+  counting it as a pass would contradict the [exit-code contract](#exit-codes). A row that is all
+  review therefore reads `0%`, with the traces named in `reviewTraces`.
+
+Rows are keyed by artifact **type and name**, not by path, so the same skill evaluated across
+several projects is one rate. Ordering is a byte comparison on `key`, so two runs over the same
+corpus produce comparable reports on any platform.
+
+### `BatchTraceEntry`
+
+| Field | Type | Notes |
+|---|---|---|
+| `file` | string | The trace, as it was named or discovered. |
+| `sessionId` | string? | When the trace records one. |
+| `error` | string? | Set when the trace could not be evaluated at all. `summary` is then absent. |
+| `summary` | object? | That trace's own `RunSummary`. |
+| `warnings` | string[] | That trace's warnings. |
+| `exitCode` | number | `0` or `1`. An errored trace is `1`. |
+| `costUsd` | number | Judge spend for that trace. |
+| `durationMs` | number | Time for that trace. |
+
+<Aside type="caution" title="The judge budget is shared, not per trace">
+`maxCostUsd` applies to the whole invocation. Once it is exhausted the remaining evals report
+`skipped` with the reason `judge cost budget exhausted ($N)` — on later traces as well as later
+evals — and the reason survives into the row's `skipReasons`. It is never a `pass`, and never a
+silently absent row.
+</Aside>
+
+### `--format human` and `--format markdown`
+
+The human batch report leads with the rate table, names the outlier traces beneath each row, then
+lists artifact rates and one line per trace. Rows are in `key` order, so a batch is comparable to
+the one before it. Run against this repository's own fixture corpus:
+
+```
+moose-tracevals — 2 trace(s)
+1 passed · 1 failed · 0 unreadable
+
+Eval pass rates
+       —  doc-writer › doc-writer-followed-its-brief (1 trace(s))
+          0 pass, 0 fail, 0 error, 0 review, 1 skip
+          skipped: agent "doc-writer" was spawned but recorded no subagent turns (no inline sidechain records and no sidecar transcript), so it governed no turns
+       —  doc-writer › doc-writer-wrote-docs (1 trace(s))
+          0 pass, 0 fail, 0 error, 0 review, 1 skip
+          skipped: agent "doc-writer" was spawned but recorded no subagent turns (no inline sidechain records and no sidecar transcript), so it governed no turns
+    100%  reviewer › reviewer-is-read-only (1 trace(s))
+          1 pass, 0 fail, 0 error, 0 review, 0 skip
+    100%  reviewer › reviewer-read-something (1 trace(s))
+          1 pass, 0 fail, 0 error, 0 review, 0 skip
+       —  AGENTS.md › eval-1 (2 trace(s))
+          0 pass, 0 fail, 0 error, 0 review, 2 skip
+          skipped: ai evals skipped (deterministic-only run)
+       —  CLAUDE.md › adheres-to-artifact (2 trace(s))
+          0 pass, 0 fail, 0 error, 0 review, 2 skip
+          skipped: ai evals skipped (deterministic-only run)
+       —  fix-bug › eval-5 (1 trace(s))
+          0 pass, 0 fail, 0 error, 0 review, 1 skip
+          skipped: ai evals skipped (deterministic-only run)
+      0%  fix-bug › forbidden-tool (1 trace(s))
+          0 pass, 1 fail, 0 error, 0 review, 0 skip
+          failing: claude-session.jsonl
+    100%  fix-bug › no-force-push (1 trace(s))
+          1 pass, 0 fail, 0 error, 0 review, 0 skip
+      0%  fix-bug › refactor-preserved-intent (1 trace(s))
+          0 pass, 0 fail, 0 error, 1 review, 0 skip
+          review: claude-session.jsonl
+    100%  fix-bug › used-read (1 trace(s))
+          1 pass, 0 fail, 0 error, 0 review, 0 skip
+       —  writing-toolkit:identify-ai-tells › adheres-to-artifact (1 trace(s))
+          0 pass, 0 fail, 0 error, 0 review, 1 skip
+          skipped: artifact skipped via metadata.eval-skip
+
+Artifact pass rates
+       —  agent: doc-writer 0 pass, 0 fail, 0 error, 0 review, 2 skip
+    100%  agent: reviewer 2 pass, 0 fail, 0 error, 0 review, 0 skip
+       —  project-rules: AGENTS.md 0 pass, 0 fail, 0 error, 0 review, 2 skip
+       —  project-rules: CLAUDE.md 0 pass, 0 fail, 0 error, 0 review, 2 skip
+     50%  skill: fix-bug 2 pass, 1 fail, 0 error, 1 review, 1 skip
+       —  skill: writing-toolkit:identify-ai-tells 0 pass, 0 fail, 0 error, 0 review, 1 skip
+
+Traces
+  FAIL   claude-session.jsonl 4 pass, 1 fail, 0 error, 1 review, 6 skip
+  PASS   claude-session-sidecar.jsonl 0 pass, 0 fail, 0 error, 0 review, 2 skip
+
+14 eval(s) across 2 trace(s): 4 pass, 1 fail, 0 error, 1 needs-review, 8 skipped
+```
+
+Three rows worth reading closely. `forbidden-tool` is `0%` over the one trace that invoked the
+skill — the other trace never did, so it is not in the denominator. `refactor-preserved-intent` is
+`0%` for a different reason: it is awaiting human review, named under `review:` rather than
+`failing:`. And `doc-writer`'s rows are `—`, because that agent governed no turns in either trace;
+a `100%` there would be a rate computed from nothing.
+
+The markdown form is the same content as three tables — `## Eval pass rates`
+(`| Rate | Artifact | Eval | Grader | Traces | Outcomes | Outliers |`), `## Artifact pass rates`, and
+`## Traces` — suited to a build summary or a PR comment.
+
+## Calibration runs
+
+`calibrate` emits a **`CalibrationReport`**, a third shape alongside `RunReport` and `BatchReport`.
+It answers *was it right?*, so it leads with the two kinds of mistake rather than with a rate.
+
+```jsonc
+{
+  "labelsFile": "/repo/tracevals/labels.yaml",
+  "corpus": [ /* absolute trace paths, in batch order */ ],
+  "setting": { "ensembleRuns": 3, "zones": { "autoPass": 0.8, "autoFail": 0.8 } },
+  "counts": {
+    "labels": 10, "scored": 8, "agree": 5,
+    "falsePass": 1, "falseFail": 1, "review": 0, "missedReview": 1,
+    "errored": 0, "skipped": 2,
+    "reviewVolume": 1, "insufficient": 0, "agreement": 0.625
+  },
+  "disagreements": [ /* Disagreement[] */ ],
+  "unscored": [ /* Disagreement[] — labelled, but no evidence either way */ ],
+  "sweep": [ /* SweepCell[] — only with --sweep */ ],
+  "gates": [ /* CalibrationGate[] — only for thresholds you set */ ],
+  "batch": { /* the BatchReport the counts were computed from */ },
+  "warnings": [],
+  "exitCode": 0,
+  "costUsd": 0,
+  "durationMs": 240
+}
+```
+
+| Field | Type | Notes |
+|---|---|---|
+| `counts.labels` | number | Labels that joined to a result. A label matching nothing is exit `2`, never a missing row. |
+| `counts.scored` | number | `labels` minus `skipped` — the `agreement` denominator. |
+| `counts.falsePass` | number | Labelled `fail`, judged `pass`. |
+| `counts.falseFail` | number | Labelled `pass`, judged `fail`. |
+| `counts.review` | number | Labelled `pass` or `fail`, routed to a human instead. |
+| `counts.missedReview` | number | Labelled `needs-review`, decided anyway. |
+| `counts.reviewVolume` | number | `needs-review` across **every** eval in the corpus, labelled or not. |
+| `counts.insufficient` | number | Rows whose cached ensemble was too small to score at this setting. Non-zero also raises a warning. |
+| `counts.agreement` | number \| null | `agree / scored`; `null` when nothing was scored. |
+| `disagreements[].kind` | string | `false-pass`, `false-fail`, `review`, `missed-review`, or `error`. |
+| `disagreements[].consensus` | object? | Vote tally, agreement, mean confidence, and run count **at the setting scored** — not at the depth the corpus was judged. |
+| `disagreements[].note` | string? | Whatever you wrote in the labels file. |
+| `sweep[].axis` | string | `baseline`, `ensembleRuns`, `zones.autoPass`, or `zones.autoFail`. |
+| `sweep[].value` | number | The value of that axis on this row. |
+| `gates[].exceeded` | boolean | Any `true` makes `exitCode` `1`. |
+
+The human and markdown forms carry the same content: the headline counts, the disagreement list with
+its evidence and notes, the unscored rows with their skip reasons, the sweep table, and the
+thresholds. See [Calibrate the judge](/moose-tracevals/judge/calibrate/).
 
 ## `--output`
 

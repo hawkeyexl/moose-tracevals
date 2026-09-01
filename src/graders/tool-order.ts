@@ -15,7 +15,7 @@
  *
  * Semantics are deliberately the weakest useful ones: **some** occurrence of
  * `before` precedes **some** occurrence of `after`. Requiring every `after` to
- * be preceded by an `before` would fail an otherwise adherent session that
+ * be preceded by a `before` would fail an otherwise adherent session that
  * did the right thing once and then repeated the second half.
  */
 import type { ToolCall } from "../trace/types.js";
@@ -54,36 +54,28 @@ function validateOptions(options: Options): string | undefined {
   );
 }
 
-/** Index of the first call matching `tool`, or -1. */
-function firstIndex(
+/**
+ * Ordinals of the calls matching `tool`, in `trace.events` order.
+ *
+ * Position in `trace.toolCalls` is deliberately not what this reads. `index`
+ * is each call's ordinal in `trace.events` (ADR 01013), and it is the only
+ * thing that stays true after the list is filtered — and after sidecar
+ * subagent branches are spliced in (ADR 01014), where a branch's calls sit
+ * together in the array but interleave in time with the main chain.
+ */
+function ordinalsOf(
   calls: ToolCall[],
   tool: string,
   inputMatch: string | undefined,
-): number {
+): number[] {
   const re = inputMatch === undefined ? undefined : new RegExp(inputMatch);
-  return calls.findIndex(
-    (c) => c.name === tool && (re === undefined || re.test(JSON.stringify(c.input))),
-  );
-}
-
-/** Index of the last call matching `tool`, or -1. */
-function lastIndex(
-  calls: ToolCall[],
-  tool: string,
-  inputMatch: string | undefined,
-): number {
-  const re = inputMatch === undefined ? undefined : new RegExp(inputMatch);
-  for (let i = calls.length - 1; i >= 0; i--) {
-    const c = calls[i];
-    if (
-      c !== undefined &&
-      c.name === tool &&
-      (re === undefined || re.test(JSON.stringify(c.input)))
-    ) {
-      return i;
-    }
-  }
-  return -1;
+  return calls
+    .filter(
+      (c) =>
+        c.name === tool &&
+        (re === undefined || re.test(JSON.stringify(c.input))),
+    )
+    .map((c) => c.index);
 }
 
 function describe(tool: string, inputMatch: string | undefined): string {
@@ -105,21 +97,28 @@ export const toolOrderGrader: TraceGrader = {
     const includeSidechains = options.includeSidechains === true;
 
     const calls = trace.toolCalls.filter((c) => includeSidechains || !c.sidechain);
-    const firstBefore = firstIndex(calls, before, beforeMatch);
-    const lastAfter = lastIndex(calls, after, afterMatch);
+    const beforeOrdinals = ordinalsOf(calls, before, beforeMatch);
+    const afterOrdinals = ordinalsOf(calls, after, afterMatch);
+    // `undefined` rather than -1: an ordinal of 0 is the session's very first
+    // event, and a sentinel that collides with a real position is how an
+    // off-by-one becomes a wrong verdict.
+    const firstBefore =
+      beforeOrdinals.length > 0 ? Math.min(...beforeOrdinals) : undefined;
+    const lastAfter =
+      afterOrdinals.length > 0 ? Math.max(...afterOrdinals) : undefined;
 
     // Neither happened: the ordering claim has nothing to bite on. That is a
     // pass, not a silent one — a suite that wants the calls to happen at all
     // says so with tool-usage, which is the grader for that question.
-    if (firstBefore === -1 && lastAfter === -1) return pass;
+    if (firstBefore === undefined && lastAfter === undefined) return pass;
 
-    if (lastAfter === -1) {
+    if (lastAfter === undefined) {
       return fail(
         plan,
         `${describe(after, afterMatch)} was never used, so it could not follow ${describe(before, beforeMatch)}`,
       );
     }
-    if (firstBefore === -1) {
+    if (firstBefore === undefined) {
       return fail(
         plan,
         `${describe(after, afterMatch)} was used without ${describe(before, beforeMatch)} ever being used first`,

@@ -14,8 +14,8 @@ trusted the same. `docmeta:artifact-evals:1.0.0-proposal.2` added a per-eval `ru
 beside the `provider` override this repo already had).
 
 Wiring `runs` was small. What needed deciding was how the judge gets the rest of what it now
-needs: `target` selection (ADR 01016) wants the parsed `Trace`, and the self-preference check
-(ADR 01015) had just taken a `sessionModel` string as a third positional parameter.
+needs: `target` selection (ADR 01029) wants the parsed `Trace`, and the self-preference check
+(ADR 01028) had just taken a `sessionModel` string as a third positional parameter.
 
 ## Decision Drivers
 
@@ -40,6 +40,13 @@ eval outranks the run default, which is the point of having it.
 **The third parameter becomes `TraceJudgeContext`** — `{ trace?, projectRoot? }` — replacing the
 `sessionModel` string. The model is read from `trace.model`, so the caller stops pulling one field
 out to pass it separately.
+
+This **supersedes the signature decision in ADR 01028**, which chose a `sessionModel` string as a
+third positional parameter rather than the whole trace. That reasoning was sound on its own
+evidence — the check needed one field, and handing the judge a whole trace to read one string is
+over-supply. It stopped being sound one ADR later, when `target` needed the trace anyway. ADR
+01028 is otherwise unchanged and still governs *what* the self-preference check reports; only its
+parameter shape is replaced here.
 
 ### Consequences
 

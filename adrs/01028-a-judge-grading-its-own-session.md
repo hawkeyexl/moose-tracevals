@@ -1,5 +1,5 @@
 ---
-status: "accepted"
+status: "accepted (signature superseded by 01031)"
 date: 2026-09-01
 decision-makers: [hawkeyexl]
 ---

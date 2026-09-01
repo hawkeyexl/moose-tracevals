@@ -12,8 +12,17 @@ import type { ArtifactType, ResolvedArtifact } from "../artifacts/types.js";
 import { ALLOWED_GRADERS } from "./gate.js";
 import type { ArtifactFacts } from "./facts.js";
 
-/** Part of the cache key: bump whenever the prompt or schema changes. */
-export const FILL_PROMPT_VERSION = 2;
+/**
+ * Part of the cache key: bump whenever the prompt or schema changes.
+ *
+ * A prompt edit that leaves this alone makes every cached proposal replay the
+ * *old* prompt output, silently, for as long as the cache lives.
+ * `test/unit/fill-prompt.test.ts` pins this to a digest of the prompt surface
+ * so the pair has to move together.
+ *
+ * 3 — added the `slash-command` type guidance (ADR 01023).
+ */
+export const FILL_PROMPT_VERSION = 3;
 
 export const MAX_BODY_CHARS = 6000;
 
@@ -24,6 +33,13 @@ const TYPE_GUIDANCE: Record<ArtifactType, string> = {
     "Its testable claims are entry criteria (what must be true before starting),",
     "process steps (what must actually happen), and output specifications (what",
     "the result must contain or must never contain).",
+  ].join("\n"),
+  "slash-command": [
+    "This artifact is a slash command: a procedure whose body is injected as a",
+    "prompt when a person types its name. Its testable claims are the steps it",
+    "mandates, the tools it permits or forbids, and the artifact it must leave",
+    "behind. Its `argument-hint` and `description` are harness metadata, not",
+    "assertions — do not test them.",
   ].join("\n"),
   agent: [
     "This artifact is an agent definition: a role with boundaries.",

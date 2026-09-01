@@ -11,6 +11,14 @@ export function makeTrace(overrides: Partial<Trace> = {}): Trace {
     toolCalls: [],
     skillInvocations: [],
     agentSpawns: [],
+    subagentBranches: [],
+    availability: {
+      recorded: false,
+      skills: [],
+      agents: [],
+      tools: [],
+      mcpServers: [],
+    },
     fileAccesses: [],
     userMessages: [],
     assistantTexts: [],
@@ -43,4 +51,20 @@ export function makePlan(overrides: Partial<EvalPlan> = {}): EvalPlan {
     implicit: false,
     ...overrides,
   };
+}
+
+/**
+ * A plan whose artifact is project rules — the one artifact type that grades
+ * the whole session (ADR 01015). Grader tests that are about grader logic
+ * rather than windowing use this so the window is never the variable.
+ */
+export function makeRulesPlan(overrides: Partial<EvalPlan> = {}): EvalPlan {
+  return makePlan({
+    artifact: makeArtifact({
+      name: "CLAUDE.md",
+      type: "project-rules",
+      path: "C:\work\demo-project\CLAUDE.md",
+    }),
+    ...overrides,
+  });
 }

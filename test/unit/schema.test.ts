@@ -12,6 +12,7 @@
  * JSON-literal port would not catch a shape that only YAML can express.
  */
 import { existsSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 import { Ajv2020 } from "ajv/dist/2020.js";
@@ -195,6 +196,21 @@ metadata:
       assertion: Something the registry will learn to check.
       grader: memory-usage`,
   ],
+  [
+    // The positive half of N4. Dropping `assertion` from `required` in
+    // proposal.2 is only meaningful if some entry can actually omit it: a
+    // deterministic grader says everything in `options`, and the assertion it
+    // would otherwise carry is a sentence no grader reads.
+    "14 a deterministic grader with no assertion",
+    true,
+    `metadata:
+  evals:
+    - id: read-before-write
+      grader: tool-usage
+      options:
+        tool: Read
+        expect: used`,
+  ],
 
   // Migration negatives: the artifact-evals-0.2 spellings this replaces.
   [
@@ -310,5 +326,32 @@ describe("docmeta:artifact-evals:1.0.0-proposal.2", () => {
   evals:
     - Reproduce the bug first.`),
     ).toBe(true);
+  });
+});
+
+/**
+ * The cases above pin the schema's *behavior*. They cannot notice a change that
+ * leaves behavior intact — a reworded description, a reordered key, an added
+ * `$comment` — yet CLAUDE.md requires this file stay byte-identical to
+ * docmeta's draft, `$id` included, and re-synced rather than patched.
+ *
+ * docmeta does not ship the schema in its package (`exports` is `.` and
+ * `./package.json` only), so there is nothing to diff against at test time.
+ * Pinning the digest is the next best thing: any edit fails here, and updating
+ * this constant is the deliberate act that records a re-sync.
+ */
+describe("vendored schema identity", () => {
+  const EXPECTED_SHA256 =
+    "c930c4457c3d2160c16a81a65d3b307497617122a16e9bc3675f8081f7f50428";
+
+  it("is byte-identical to the vendored copy this repo was verified against", async () => {
+    const bytes = await readFile(artifactEvalsSchemaPath());
+    const actual = createHash("sha256").update(bytes).digest("hex");
+    expect(
+      actual,
+      "schemas/artifact-evals-1.0.0-proposal.2.json changed. If this is a " +
+        "deliberate re-sync from docmeta, update EXPECTED_SHA256; if it is a " +
+        "local patch, revert it — the shape belongs upstream (ADR 01010).",
+    ).toBe(EXPECTED_SHA256);
   });
 });

@@ -4,7 +4,8 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { MockProvider, mockVerdict } from "@hawkeyexl/inference";
 import { makeTraceJudge } from "../../src/judge/trace-judge.js";
 import { cacheKey } from "../../src/judge/cache.js";
-import { makePlan } from "../helpers.js";
+import { renderTrace } from "../../src/judge/render.js";
+import { makePlan, makeTrace } from "../helpers.js";
 
 let tmpDir: string;
 beforeAll(async () => {
@@ -18,6 +19,11 @@ afterAll(async () => {
 
 const plan = makePlan({ grader: "ai" });
 
+const leakyTrace = makeTrace({
+  events: [{ kind: "user", text: "Fix the crash in app.ts", raw: {}, index: 0 }],
+  userMessages: ["Fix the crash in app.ts"],
+});
+
 describe("makeTraceJudge", () => {
   it("passes on a unanimous high-confidence ensemble", async () => {
     const judge = makeTraceJudge({
@@ -25,7 +31,7 @@ describe("makeTraceJudge", () => {
       runs: 3,
       noCache: true,
     });
-    const [result] = await judge([plan], "trace text");
+    const [result] = await judge([plan], () => "trace text");
     expect(result?.outcome).toBe("pass");
     expect(result?.consensus?.zone).toBe("auto-pass");
     expect(result?.consensus?.votes.pass).toBe(3);
@@ -37,7 +43,7 @@ describe("makeTraceJudge", () => {
       runs: 3,
       noCache: true,
     });
-    const [result] = await judge([plan], "trace text");
+    const [result] = await judge([plan], () => "trace text");
     expect(result?.outcome).toBe("fail");
   });
 
@@ -51,7 +57,7 @@ describe("makeTraceJudge", () => {
       runs: 3,
       noCache: true,
     });
-    const [result] = await judge([plan], "trace text");
+    const [result] = await judge([plan], () => "trace text");
     expect(result?.outcome).toBe("needs-review");
   });
 
@@ -68,7 +74,7 @@ describe("makeTraceJudge", () => {
       runs: 3,
       noCache: true,
     });
-    const [result] = await judge([plan], "trace text");
+    const [result] = await judge([plan], () => "trace text");
     expect(result?.outcome).toBe("needs-review");
     expect(result?.consensus?.votes.error).toBeGreaterThan(0);
   });
@@ -82,7 +88,7 @@ describe("makeTraceJudge", () => {
       runs: 1,
       noCache: true,
     });
-    const [result] = await judge([plan], "trace text");
+    const [result] = await judge([plan], () => "trace text");
     expect(result?.outcome).toBe("pass");
   });
 
@@ -93,14 +99,14 @@ describe("makeTraceJudge", () => {
       runs: 2,
       cacheDir,
     });
-    await first([plan], "same trace");
+    await first([plan], () => "same trace");
 
     const second = makeTraceJudge({
       provider: new MockProvider([mockVerdict("fail", 0.95)]),
       runs: 2,
       cacheDir,
     });
-    const [result] = await second([plan], "same trace");
+    const [result] = await second([plan], () => "same trace");
     expect(result?.outcome).toBe("pass");
     expect(result?.consensus?.runs.every((r) => r.cached)).toBe(true);
   });
@@ -112,9 +118,37 @@ describe("makeTraceJudge", () => {
       noCache: true,
       maxCostUsd: 0,
     });
-    const [result] = await judge([plan], "trace text");
+    const [result] = await judge([plan], () => "trace text");
     expect(result?.outcome).toBe("skipped");
     expect(result?.skipReason).toContain("budget");
+  });
+
+  // The batch's money bug (ADR 01018). A judge instance is called once per
+  // trace, so a per-call budget is no budget at all: 50 traces would cost 50x
+  // the configured cap and every run would look like it respected it.
+  it("spends one budget across successive calls, not one per call", async () => {
+    const priced = (match: "pass" | "fail") => ({
+      ...mockVerdict(match, 0.95),
+      // 1M input tokens at $1/MTok, so exactly one call exhausts a $1 budget.
+      usage: { inputTokens: 1_000_000, outputTokens: 0 },
+    });
+    const judge = makeTraceJudge({
+      provider: new MockProvider([priced("pass"), priced("pass")]),
+      runs: 1,
+      noCache: true,
+      maxCostUsd: 1,
+      pricing: { inputPerMTok: 1, outputPerMTok: 0 },
+    });
+
+    const [first] = await judge([plan], () => "trace one");
+    expect(first?.outcome).toBe("pass");
+    expect(first?.costUsd).toBeCloseTo(1, 5);
+
+    // Second trace, same judge. The budget is already gone.
+    const [second] = await judge([plan], () => "trace two");
+    expect(second?.outcome).toBe("skipped");
+    expect(second?.skipReason).toContain("budget");
+    expect(second?.costUsd).toBe(0);
   });
 });
 
@@ -133,6 +167,26 @@ describe("cacheKey", () => {
     ).not.toBe(base);
   });
 
+  // Redaction rewrites the digest, and the digest is a key component — so the
+  // cache does the right thing for free: a redacted run gets its own slot and
+  // can never replay a verdict formed on unredacted text, while a redaction
+  // that matched nothing keeps the existing entry.
+  it("separates a redacted digest from the unredacted one", () => {
+    const raw = renderTrace(leakyTrace);
+    const scrubbed = renderTrace(leakyTrace, { redact: ["Fix the crash"] });
+    expect(cacheKey("mock", "m", 3, 0, raw, plan)).not.toBe(
+      cacheKey("mock", "m", 3, 0, scrubbed, plan),
+    );
+  });
+
+  it("keeps the same entry when a pattern matched nothing", () => {
+    const raw = renderTrace(leakyTrace);
+    const unchanged = renderTrace(leakyTrace, { redact: ["nothing-matches-me"] });
+    expect(cacheKey("mock", "m", 3, 0, raw, plan)).toBe(
+      cacheKey("mock", "m", 3, 0, unchanged, plan),
+    );
+  });
+
   describe("per-eval provider override", () => {
     it("judges through the provider the eval names", async () => {
       const named = new MockProvider([mockVerdict("fail", 0.95)]);
@@ -145,7 +199,7 @@ describe("cacheKey", () => {
       });
       const [result] = await judge(
         [makePlan({ grader: "ai", provider: "mock-secondary" })],
-        "trace text",
+        () => "trace text",
       );
       expect(result?.outcome).toBe("fail");
       expect(named.requests.length).toBe(3);
@@ -162,7 +216,7 @@ describe("cacheKey", () => {
       });
       const [result] = await judge(
         [makePlan({ grader: "ai", provider: "typo" })],
-        "trace text",
+        () => "trace text",
       );
       expect(result?.outcome).toBe("error");
       expect(result?.error).toContain("typo");
@@ -177,7 +231,7 @@ describe("cacheKey", () => {
       });
       const [result] = await judge(
         [makePlan({ grader: "ai", provider: "claude-cli" })],
-        "trace text",
+        () => "trace text",
       );
       expect(result?.outcome).toBe("error");
     });

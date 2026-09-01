@@ -26,7 +26,7 @@ const judgeWith = async (judgeModel: string, sessionModel?: string) => {
     cacheDir: undefined,
     noCache: true,
   });
-  const results = await judge([plan()], "rendered transcript", {
+  const results = await judge([plan()], () => "rendered transcript", {
     trace: makeTrace(sessionModel === undefined ? {} : { model: sessionModel }),
   });
   return results[0];

@@ -17,16 +17,16 @@ import { MockProvider, mockVerdict } from "@hawkeyexl/inference";
 import { graderFor } from "../../src/graders/registry.js";
 import { makeTraceJudge } from "../../src/judge/trace-judge.js";
 import { readTarget } from "../../src/core/target.js";
-import { makePlan, makeTrace } from "../helpers.js";
+import { makePlan, makeRulesPlan, makeTrace } from "../helpers.js";
 
 describe("target", () => {
   const trace = makeTrace({
     assistantTexts: ["first answer", "the final answer"],
     userMessages: ["please do the thing"],
     fileAccesses: [
-      { path: "src/a.ts", op: "write" },
-      { path: "src/a.ts", op: "read" },
-      { path: "src/b.ts", op: "write" },
+      { path: "src/a.ts", op: "write", index: 0 },
+      { path: "src/a.ts", op: "read", index: 1 },
+      { path: "src/b.ts", op: "write", index: 2 },
     ],
   });
   const ctx = {
@@ -87,14 +87,14 @@ describe("target composes with a grader's own narrowing options", () => {
   const trace = makeTrace({
     assistantTexts: ["I edited the config"],
     userMessages: ["edit the config"],
-    fileAccesses: [{ path: "src/generated.ts", op: "write" }],
+    fileAccesses: [{ path: "src/generated.ts", op: "write", index: 3 }],
   });
 
   it("on picks the speaker within the transcript", async () => {
     // Unchanged behavior: `on` is a speaker axis and still works alone.
     const r = await grader.grade({
       trace,
-      plan: makePlan({
+      plan: makeRulesPlan({
         grader: "regex",
         options: { pattern: "^edit", on: "user" },
       }),
@@ -106,7 +106,7 @@ describe("target composes with a grader's own narrowing options", () => {
     // No message mentions the written path — only the file list does.
     const speakerOnly = await grader.grade({
       trace,
-      plan: makePlan({
+      plan: makeRulesPlan({
         grader: "regex",
         options: { pattern: "generated\\.ts", on: "all" },
       }),
@@ -115,7 +115,7 @@ describe("target composes with a grader's own narrowing options", () => {
 
     const subject = await grader.grade({
       trace,
-      plan: makePlan({
+      plan: makeRulesPlan({
         grader: "regex",
         options: { pattern: "generated\\.ts" },
         target: "files",
@@ -127,7 +127,7 @@ describe("target composes with a grader's own narrowing options", () => {
   it("reports an unreachable target as an eval error, not a session failure", async () => {
     const r = await grader.grade({
       trace,
-      plan: makePlan({
+      plan: makeRulesPlan({
         grader: "regex",
         options: { pattern: "x" },
         target: { source: "file", path: "../escape.txt" },
@@ -155,7 +155,7 @@ describe("per-eval runs", () => {
       assertion: "The session behaved.",
       ...(runs === undefined ? {} : { runs }),
     });
-    return { provider, go: () => run([plan], "transcript", { trace: makeTrace({}) }) };
+    return { provider, go: () => run([plan], () => "transcript", { trace: makeTrace({}) }) };
   };
 
   it("defaults to three", async () => {

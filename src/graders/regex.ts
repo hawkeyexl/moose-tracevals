@@ -1,5 +1,6 @@
 /** regex: assert a pattern does/doesn't appear in session text. */
 import type { TraceGrader } from "./types.js";
+import { evaluateWhen, skippedTrigger, validateWhen } from "./when.js";
 import {
   fail,
   firstError,
@@ -7,6 +8,8 @@ import {
   optionsError,
   pass,
   requiredString,
+  skippedWindow,
+  windowFor,
   type Options,
 } from "./util.js";
 import { readTarget } from "../core/target.js";
@@ -46,6 +49,7 @@ function validateOptions(options: Options): string | undefined {
     checkPattern(options),
     optionalEnum(options, "on", ["assistant", "user", "all"]),
     optionalEnum(options, "expect", ["match", "no-match"]),
+    validateWhen(options),
   );
 }
 
@@ -61,20 +65,26 @@ export const regexGrader: TraceGrader = {
     const on = (options.on as string | undefined) ?? "assistant";
     const expect = (options.expect as string | undefined) ?? "match";
 
+    const window = windowFor(trace, plan);
+    if (window.empty) return skippedWindow(window);
+    const trigger = evaluateWhen(options, window);
+    if (!trigger.armed) return skippedTrigger(trigger);
+
     // Two axes that compose rather than compete. `target` picks the *subject*
     // — the session, its final answer, the files it wrote, the artifact — and
     // `on` picks the *speaker* within a transcript. Only the transcript has
-    // speakers, so `on` applies there and nowhere else.
+    // speakers, so `on` applies there and nowhere else. Both read the window
+    // this artifact governed (ADR 01015), never the whole session.
     const target = plan.target ?? "transcript";
     let corpus: string[];
     let where: string;
     if (target === "transcript") {
       corpus =
         on === "user"
-          ? trace.userMessages
+          ? window.userMessages
           : on === "all"
-            ? [...trace.userMessages, ...trace.assistantTexts]
-            : trace.assistantTexts;
+            ? [...window.userMessages, ...window.assistantTexts]
+            : window.assistantTexts;
       where = `${on} text`;
     } else {
       const selected = readTarget(target, {

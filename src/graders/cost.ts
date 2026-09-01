@@ -1,5 +1,16 @@
-/** cost: assert the session stayed within cost/token budgets. */
+/**
+ * cost: assert the session stayed within cost/token budgets.
+ *
+ * Deliberately **not** windowed (ADR 01015). Every other deterministic grader
+ * counts events, which are attributable to the artifact that was governing when
+ * they happened; tokens are not. Usage is reported per assistant message for
+ * the whole context, so charging a slice of it to one skill would be an
+ * invented number. `cost` therefore grades the session no matter which artifact
+ * declared it — including one whose window is empty, where a session that blew
+ * its budget must still fail rather than quietly skip.
+ */
 import type { TraceGrader } from "./types.js";
+import { rejectWhen } from "./when.js";
 import {
   fail,
   firstError,
@@ -15,6 +26,7 @@ function validateOptions(options: Options): string | undefined {
     requireOneOf(options, ["maxUsd", "maxTokens"]),
     optionalNumber(options, "maxUsd", { min: 0 }),
     optionalNumber(options, "maxTokens", { min: 0 }),
+    rejectWhen("cost", options),
   );
 }
 

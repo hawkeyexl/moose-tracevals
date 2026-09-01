@@ -20,7 +20,8 @@
   },
   "files": [
     "dist",
-    "schemas"
+    "schemas",
+    "plugin"
   ],
   "repository": {
     "type": "git",
