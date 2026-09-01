@@ -22,7 +22,7 @@ import type { Severity } from "./extract.js";
 /** An eval to add. Mirrors the artifact-evals object entry form. */
 export interface NewEvalEntry {
   id: string;
-  assertion: string;
+  assertion?: string;
   type?: "capability" | "regression";
   grader?: string;
   options?: Record<string, unknown>;
@@ -77,10 +77,11 @@ function splitYamlFrontmatter(content: string, path: string): Split {
 
 /** Ordered plain object for one eval entry, with absent fields dropped. */
 function entryObject(entry: NewEvalEntry): Record<string, unknown> {
-  const obj: Record<string, unknown> = {
-    id: entry.id,
-    assertion: entry.assertion,
-  };
+  const obj: Record<string, unknown> = { id: entry.id };
+  // Optional since proposal.2. Emitting the key unconditionally would write
+  // `assertion: null` for a deterministic grader, which the schema rejects —
+  // the opposite of the point of letting it be omitted.
+  if (entry.assertion !== undefined) obj.assertion = entry.assertion;
   if (entry.type !== undefined) obj.type = entry.type;
   if (entry.grader !== undefined) obj.grader = entry.grader;
   if (entry.options !== undefined) obj.options = entry.options;

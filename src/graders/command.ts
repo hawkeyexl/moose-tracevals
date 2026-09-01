@@ -58,6 +58,18 @@ export const commandGrader: TraceGrader = {
     }
 
     if (plan.generatedAssertionHash !== undefined) {
+      // A hash without an assertion is a half write-back: the hash exists to
+      // detect that the assertion it was generated from has changed, and with
+      // no assertion there is nothing it could be checked against. Reporting
+      // it beats hashing the empty string and passing.
+      if (plan.assertion === undefined) {
+        return {
+          findings: [],
+          error:
+            "generated-assertion-hash is present but the eval has no assertion, " +
+            "so the hash cannot be checked against anything; remove the hash or restore the assertion",
+        };
+      }
       const actual = createHash("sha256").update(plan.assertion).digest("hex");
       if (actual !== plan.generatedAssertionHash) {
         return {

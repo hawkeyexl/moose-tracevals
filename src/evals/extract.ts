@@ -1,7 +1,7 @@
 /**
  * Eval extraction: read the `metadata.evals` block from an artifact via docmeta
  * and validate the artifact's whole front matter against
- * `docmeta:artifact-evals:1.0.0-proposal.1`. Invalid blocks are reported as
+ * `docmeta:artifact-evals:1.0.0-proposal.2`. Invalid blocks are reported as
  * errors with source line numbers, never silently ignored (ADR 01002).
  *
  * The vocabulary is docmeta's; this repo implements behavior against it
@@ -16,9 +16,9 @@ import { extractFrontmatter, Validator, type FieldError } from "docmeta";
 import type { ResolvedArtifact } from "../artifacts/types.js";
 import { TracevalsError } from "../types.js";
 
-export const ARTIFACT_EVALS_SCHEMA_ID = "docmeta:artifact-evals:1.0.0-proposal.1";
+export const ARTIFACT_EVALS_SCHEMA_ID = "docmeta:artifact-evals:1.0.0-proposal.2";
 
-const SCHEMA_FILE = "artifact-evals-1.0.0-proposal.1.json";
+const SCHEMA_FILE = "artifact-evals-1.0.0-proposal.2.json";
 
 let schemaPath: string | undefined;
 
@@ -61,7 +61,8 @@ export type EvalType = "capability" | "regression";
 export interface EvalEntry {
   /** Stable identifier. Required by the schema on object entries. */
   id: string;
-  assertion: string;
+  /** Absent on graders whose options say everything. */
+  assertion?: string;
   type: EvalType;
   /** "ai", "human", "command", or a deterministic grader kind. */
   grader: string;
@@ -219,7 +220,12 @@ function normalizeEntry(raw: unknown, index: number): EvalEntry {
   const obj = raw as Record<string, unknown>;
   const entry: EvalEntry = {
     id: obj.id as string,
-    assertion: obj.assertion as string,
+    // Optional since artifact-evals proposal.2: a `tool-usage` criterion says
+    // everything in `options`, and demanding a sentence no grader reads was
+    // the one place this vocabulary disagreed with the page side. The schema
+    // still requires it for `ai`, `human`, and a bare entry (which defaults to
+    // `ai`), so anything that actually needs an assertion still has one.
+    ...(typeof obj.assertion === "string" ? { assertion: obj.assertion } : {}),
     type: (obj.type as EvalType | undefined) ?? "regression",
     grader: typeof obj.grader === "string" ? obj.grader : "ai",
     severity: (obj.severity as Severity | undefined) ?? "error",
