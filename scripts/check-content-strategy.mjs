@@ -222,5 +222,55 @@ for (const f of sources) {
 }
 summarise(`${anchors} anchor link(s) resolve to a real heading`);
 
+// --- 8. Repo path and package-subpath references -----------------------------
+// Sections 3-5 prove that *routes* resolve. Nothing proved that a path or a
+// package specifier quoted in prose still exists, so a file rename left the
+// docs pointing at a deleted schema and an unexported subpath -- both of which
+// read as authoritative and neither of which any gate noticed.
+section("8. Repo paths and package subpaths referenced in docs exist");
+
+/** Top-level directories a backticked repo-relative path can start with. */
+const REPO_DIRS = ["src/", "test/", "docs/", "schemas/", "adrs/", "scripts/", ".github/", ".husky/"];
+/**
+ * Paths that look like repo citations but are deliberately illustrative -- the
+ * file-access suffix-matching passage in reference/graders.mdx needs a
+ * plausible source path, and a real one would confuse rather than help. Keep
+ * this list short; every entry is a place the gate is blind.
+ */
+const PATH_EXAMPLES = new Set(["src/app.ts"]);
+const pkg = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8"));
+const exportKeys = new Set(Object.keys(pkg.exports ?? {}));
+
+let repoPaths = 0;
+let subpaths = 0;
+for (const f of [...docs.map((d) => d.path), ...walk(PAGES).filter((p) => /\.mdx?$/.test(p))]) {
+  for (const m of readFileSync(f, "utf8").matchAll(/`([^`\n]+)`/g)) {
+    const raw = m[1].trim();
+
+    // `moose-tracevals/x` is a package subpath: it must be declared in exports,
+    // or `import` throws ERR_PACKAGE_PATH_NOT_EXPORTED for anyone who copies it.
+    if (raw.startsWith("moose-tracevals/")) {
+      subpaths++;
+      const spec = `.${raw.slice("moose-tracevals".length)}`;
+      if (!exportKeys.has(spec)) {
+        fail(`${relative(ROOT, f)}: "${raw}" is not declared in package.json exports`);
+      }
+      continue;
+    }
+
+    if (!REPO_DIRS.some((d) => raw.startsWith(d))) continue;
+    if (PATH_EXAMPLES.has(raw)) continue;
+    // Globs and <placeholders> describe a shape, not a file on disk.
+    if (/[*<>{}]/.test(raw)) continue;
+    // A `path:42` citation still names a real file.
+    const p = raw.replace(/:\d+(?::\d+)?$/, "");
+    repoPaths++;
+    if (!existsSync(join(ROOT, p))) {
+      fail(`${relative(ROOT, f)}: referenced path does not exist -> ${p}`);
+    }
+  }
+}
+summarise(`${repoPaths} repo path(s) and ${subpaths} package subpath(s) resolve`);
+
 console.log(`\n${failures === 0 ? "PASS" : `FAIL — ${failures} problem(s)`}`);
 process.exit(failures === 0 ? 0 : 1);

@@ -51,6 +51,139 @@ Validation happens twice: at run time, and again when `fill` proposes an eval. T
 why a grader that cannot validate its options can never be proposed — which is exactly how `command`
 is kept out of `fill`.
 
+**Every eval grades the window its artifact governed.** A skill's eval is not a statement about the
+whole session — it is a statement about the turns that ran under that skill. The window is derived
+from the artifact's **type**; there is nothing to declare and no option to set.
+
+| Artifact type | Window |
+|---|---|
+| skill | From that skill's invocation until the next skill or slash command takes over, or to the end of the session |
+| slash command | The same rule: from each `/name` injection until the next injection takes over. A `Skill` tool call can close a command's window but never opens one |
+| agent | Only that `subagent_type`'s own branch, and anything it delegated inside it |
+| project rules | The whole session — `CLAUDE.md` governs everything |
+
+So a `Bash` call that happened *before* a skill was invoked does not count against that skill's
+`expect: not-used`, and an `Edit` the main session made does not count against an agent that only
+read. Nothing outside the window is evidence about the artifact.
+
+`tool-usage`, `file-access`, `skill-invoked`, `regex`, and `turn-count` are windowed, and so is the
+transcript sent to the judge for an `ai` eval — which also makes a judged skill eval markedly
+cheaper than judging the whole session. `cost` and `json-output` are session-level by nature; see
+their sections.
+
+**An empty window is skipped, never passed.** A skill that resolved but was never invoked, or an
+agent that was spawned but recorded no turns, governed nothing — so there is no evidence either way,
+and every eval on it reports `skipped` with the reason spelled out:
+
+```
+  SKIP   doc-writer › doc-writer-wrote-docs
+         agent "doc-writer" was spawned but recorded no subagent turns (no inline
+         sidechain records and no sidecar transcript), so it governed no turns
+```
+
+That applies to judged and `human` evals too: an empty window never reaches the judge, because a
+judge shown the parent session would answer about work the artifact had no part in.
+
+| Skip reason | Cause |
+|---|---|
+| `skill "<name>" was never invoked in this trace, so it governed no turns` | the skill resolved but the session never invoked it |
+| `slash command "/<name>" was never invoked in this trace, so it governed no turns` | the command file resolved but the session never ran it |
+| `agent "<name>" was spawned but recorded no subagent turns (…), so it governed no turns` | the spawn is in the trace but its transcript is not |
+| `agent "<name>" was never spawned in this trace, so it governed no turns` | no spawn for that `subagent_type` |
+
+### Conditional triggers
+
+`when` makes an eval **arm only for the sessions it is about**. That is what lets you check the
+artifact that *should* have been used and wasn't.
+
+**Every windowed grader takes it** — `tool-usage`, `skill-invoked`, `file-access`, `regex`, and
+`turn-count` — because the predicate is evaluated over the artifact's window, and those are the
+graders that have one. `cost` and `json-output` grade the whole session by nature, so they **reject**
+`when` rather than accept an option they could not honour:
+
+```
+  ERROR  CLAUDE.md › budget
+         cost: options.when is not supported by the cost grader, which grades the
+         whole session rather than a window
+```
+
+The structural trick: you cannot hang an eval on a skill that never loaded — nothing resolves it, so
+nothing plans it. But `CLAUDE.md` resolves for **every** session, and `skill-invoked` is allowed
+there. Declare the check on the rules file, and let `when` keep it quiet the rest of the time.
+
+```yaml
+# in CLAUDE.md
+metadata:
+  evals:
+    - id: docs-work-uses-the-writing-skill
+      assertion: A session that edits documentation invokes the writing skill.
+      grader: skill-invoked
+      options:
+        skill: writing-toolkit:technical-writer
+        expect: used
+        when:
+          file-access: "docs/**"
+```
+
+**Three outcomes, and the first one is the point.**
+
+| Trigger | Grader's own answer | Outcome |
+|---|---|---|
+| not matched | — | `skipped`, with the unmet condition named |
+| matched | assertion unmet | `fail` |
+| matched | assertion met | `pass` |
+
+An unmatched trigger is **never a pass**. A check that never armed has not been satisfied, and
+calling it one would manufacture green from an eval that did not run:
+
+```
+  SKIP   CLAUDE.md › docs-work-uses-the-writing-skill
+         trigger not met (whole session): no file matching "docs/**" was accessed
+```
+
+{/* Doc Detective inline test: the skip wording above is produced by running the
+    CLI against this repository's committed fixtures, whose CLAUDE.md declares
+    exactly this eval. A regression that let an unarmed trigger pass fails here. */}
+{/* test {"testId":"unarmed-trigger-skips","description":"An unmatched trigger reports skipped, never pass."} */}
+{/* step {"description":"An unmatched trigger is skipped with its reason.","runShell":{"command":"moose-tracevals run test/fixtures/traces/claude-session.jsonl --project test/fixtures/project --deterministic-only","exitCodes":[1],"stdio":"trigger not met"}} */}
+{/* test end */}
+
+**Conditions**
+
+Every one is a pure trace fact, evaluated over [the artifact's window](#shared-behavior). All listed
+conditions must hold.
+
+| Condition | Type | Matches when |
+|---|---|---|
+| `file-access` | glob | Any file the window touched matches the glob. |
+| `tool-used` | string | That tool was called in the window. |
+| `prompt-matches` | regex | Any user prompt in the window matches. |
+| `turn-count-above` | integer | The window's turn count is **strictly** greater. |
+
+The glob understands `**` (spans directories, and matches the directory itself), `*` (within one
+path segment), and `?` (one character). It anchors at a path-segment boundary, so `docs/**` matches
+`/anywhere/docs/guide.md` but not `/anywhere/docsite/guide.md` — you write the path as it reads in
+the repository, not as it reads on the machine that recorded the trace. It is the same matcher
+[`file-access`](#file-access) uses for its `path`, so a pattern means one thing everywhere.
+
+**An unknown condition is an error, not a typo you get away with.** A silently ignored `file-acess`
+would leave the eval armed on every session, which is the exact failure `when` exists to prevent:
+
+```
+  ERROR  CLAUDE.md › docs-work-uses-the-writing-skill
+         skill-invoked: options.when.file-acess is not a known condition; expected
+         one of: file-access, tool-used, prompt-matches, turn-count-above
+```
+
+A `when: {}` with no conditions is rejected for the same reason — it arms always while reading as a
+scoped check.
+
+<Aside title="An empty window still wins">
+If the artifact governed no turns at all, that reason is reported instead of the trigger's. No
+evidence outranks "the trigger did not fire".
+</Aside>
+
+
 **Only `error` severity fails an eval.** A finding at `warning` or `info` is reported and the eval
 passes. Severity is set per eval; see the
 [evals schema](/moose-tracevals/reference/evals-schema/).
@@ -80,7 +213,8 @@ Whether a tool was used, avoided, or used within count bounds.
 | `expect` | `used` \| `not-used` | `used` | Direction of the assertion. |
 | `min` | integer ≥ 0 | — | Minimum call count. |
 | `max` | integer ≥ 0 | — | Maximum call count. |
-| `includeSidechains` | boolean | `false` | Count tool calls made inside spawned subagents. |
+| `includeSidechains` | boolean | `false` | Count subagent calls that happened *inside* another artifact's window. Not needed on an agent definition. |
+| `when` | object | — | Arm the check only for sessions that match. See [Conditional triggers](#conditional-triggers). |
 
 ```yaml
 - id: forbidden-tool
@@ -89,9 +223,16 @@ Whether a tool was used, avoided, or used within count bounds.
   options: { tool: Bash, expect: not-used }
 ```
 
-**Sidechains.** By default only the main session's tool calls are counted. A subagent's calls are
-sidechain calls, so an eval on an *agent definition* usually wants `includeSidechains: true`.
-`fill` sets it automatically when proposing a `tool-usage` eval on an agent.
+**Sidechains.** Inside a skill's or a project-rules window, only main-chain calls count by default:
+work the session handed to a subagent is that subagent's, not the skill's, and `includeSidechains:
+true` opts into counting it anyway.
+
+**On an agent definition the option does not apply.** An agent's window *is* its branch, and every
+call inside a branch is a sidechain call — so excluding them would empty the window and make the
+eval structurally unable to fail. `{ tool: Edit, expect: not-used }` on
+`.claude/agents/reviewer.md` would have passed however much the reviewer edited. The branch's calls
+are the subject there, and they are counted whatever the option says. `fill` still sets it on agent
+proposals, which is harmless and remains valid.
 
 **Failure messages**
 
@@ -119,6 +260,7 @@ Whether a named skill was invoked. Detects both `Skill` tool calls and `/command
 |---|---|---|---|
 | `skill` | string | **required** | Skill name as it appears in the trace, including any `plugin:skill` prefix. |
 | `expect` | `used` \| `not-used` | `used` | Direction of the assertion. |
+| `when` | object | — | Arm the check only for sessions that match. See [Conditional triggers](#conditional-triggers). |
 
 **Failure messages**
 
@@ -130,7 +272,8 @@ Whether a named skill was invoked. Detects both `Skill` tool calls and `/command
 <Aside title="Not available on skills or agents">
 `fill` never proposes `skill-invoked` on a skill or an agent definition: a skill asserting it was
 itself invoked is permanently green. It is allowed on project rules, where "this workflow must go
-through the review skill" is a real assertion.
+through the review skill" is a real assertion — and project rules are also the one artifact type
+whose window is the whole session, which is what makes the question answerable.
 </Aside>
 
 ---
@@ -141,13 +284,19 @@ Whether a file was read, written, or edited.
 
 | Option | Type | Default | Description |
 |---|---|---|---|
-| `path` | string | **required** | A repository-relative **suffix**, not an absolute path. |
+| `path` | string | **required** | A repository-relative path, matched at a segment boundary. Not an absolute path. |
 | `op` | `read` \| `write` \| `edit` | any op | Restrict to one operation. |
 | `expect` | `accessed` \| `not-accessed` | `accessed` | Direction of the assertion. |
+| `when` | object | — | Arm the check only for sessions that match. See [Conditional triggers](#conditional-triggers). |
 
-**Matching is suffix-based, separator-normalized, and case-insensitive**, so an eval written on
-one platform works on another. `src/app.ts` matches
+**Matching is a trailing match anchored at a path segment, separator-normalized, and
+case-insensitive**, so an eval written on one platform works on another. `src/app.ts` matches
 `C:\work\demo\src\app.ts` and `/home/you/demo/src/app.ts` alike.
+
+**Anchored, not a bare suffix.** `db/migrations` matches `.../db/migrations` and does *not* match
+`.../legacydb/migrations`, which is a different directory. It is exactly the matcher
+[`when`](#conditional-triggers) uses, so `**`, `*`, and `?` work here too — a `path` of `src/**`
+covers the tree.
 
 ```yaml
 - id: touches-migrations
@@ -176,6 +325,7 @@ Whether the conversation stayed within bounds. A turn is a non-sidechain user pr
 |---|---|---|---|
 | `min` | integer ≥ 0 | — | Minimum turns. |
 | `max` | integer ≥ 0 | — | Maximum turns. |
+| `when` | object | — | Arm the check only for sessions that match. See [Conditional triggers](#conditional-triggers). |
 
 At least one of `min` or `max` is required.
 
@@ -186,17 +336,26 @@ At least one of `min` or `max` is required.
 | `<n> turn(s); at most <max> allowed` |
 | `<n> turn(s); at least <min> required` |
 
-<Aside title="A whole-session grader">
-`turn-count`, `cost`, and `json-output` measure the **entire session** rather than one artifact's
-slice of it. A limit declared inside one skill silently constrains everything the session did, which
-is why `fill` never proposes them. Declare them on purpose, and preferably in one place.
+`turn-count` is windowed like the other counting graders, so a bound declared on a skill measures
+the prompts that arrived while that skill was governing, and one declared on an agent measures that
+agent's own brief and follow-ups rather than the nested subagents it spawned.
+
+<Aside title="Still not proposed by fill">
+`fill` proposes none of `turn-count`, `cost`, or `json-output`. For `cost` and `json-output` that is
+inherent: they measure the session as a whole (see their sections). `turn-count` is windowed and no
+longer constrains a whole session from inside one artifact, but widening the `fill` allowlist is a
+separate decision that has not been taken. Declare it by hand.
 </Aside>
 
 ---
 
 ## `cost`
 
-Whether the session stayed within a spending or token budget.
+Whether the session stayed within a spending or token budget. **Session-level by nature, and
+deliberately not windowed:** usage is reported per assistant message for the whole context, so
+charging a slice of it to whichever artifact happened to be governing would be an invented number.
+A `cost` eval therefore grades the session no matter which artifact declared it — including one
+whose window is empty, where a session that blew its budget still fails rather than skipping.
 
 | Option | Type | Default | Description |
 |---|---|---|---|
@@ -236,6 +395,7 @@ Whether a pattern appears in the session's text.
 | `flags` | string | — | Regular expression flags, e.g. `i`, `m`. |
 | `on` | `assistant` \| `user` \| `all` | `assistant` | Which text to search. |
 | `expect` | `match` \| `no-match` | `match` | Direction of the assertion. |
+| `when` | object | — | Arm the check only for sessions that match. See [Conditional triggers](#conditional-triggers). |
 
 **Failure messages**
 
@@ -286,14 +446,17 @@ Whether the session's final assistant message is JSON matching a schema.
 (`options.schema is required and must be a JSON Schema object`), and the schema is compiled at grade
 time. A schema that fails to compile becomes an options error instead of a crash.
 
-Also a whole-session grader: it looks at the last assistant message of the entire session, so a
-eval declared on one of several artifacts still measures the same final output.
+Also session-level, and not windowed: it looks at the last assistant message of the entire session,
+so an eval declared on one of several artifacts still measures the same final output.
 
 ---
 
 ## `ai`
 
 The default. The assertion goes to the ensemble judge, which reads the rendered trace and votes.
+The transcript it reads is the artifact's **window**, not the whole session (see
+[Shared behavior](#shared-behavior)); the digest names the scope it was cut to, and an artifact that
+governed nothing is skipped before any request is made.
 Takes no `options`; it is steered by `assertion`, `evidence`, and `examples` instead. An eval may
 name `provider:` to be judged by a specific configured provider rather than the run's default — a
 provider name the run cannot construct is that eval's own `error`, never a silent fall back to the
@@ -303,7 +466,9 @@ Skipped entirely under `--deterministic-only`.
 
 ## `human`
 
-Queues the eval for a person. It always reports `needs-review`, never `pass` or `fail`.
+Queues the eval for a person. It always reports `needs-review`, never `pass` or `fail` — unless the
+artifact governed no turn in this trace, in which case there is nothing to review and the eval is
+`skipped` with the reason given.
 
 Unlike the page-side vocabulary this shares its shape with, a `human` verdict is **judged per
 session and never cached**: every trace is new, so there is nothing a previous verdict could still
@@ -346,6 +511,8 @@ that repository declares. This is on by default ([ADR 01011](https://github.com/
 Two properties bound it: argv is spawned with **no shell**, so `;`, `&&`, and `$(...)` in an
 artifact reach the process as literal argument text; and `timeout-ms` always has a finite value, so
 a hung check fails its own eval rather than the run.
+
+**To evaluate a trace without running anything it declares**, pass `--no-commands` — see below.
 </Aside>
 
 Four states are an `error` rather than a verdict, because none of them can honestly be called a
@@ -364,6 +531,40 @@ not generate check scripts — it reports the mismatch and leaves the regenerati
 
 `fill` never proposes a command grader. Writing an executable into an artifact is a decision a human
 makes.
+
+### Turning execution off
+
+Pass `--no-commands`, or set the config key, to evaluate a trace without running anything its
+project declares:
+
+```yaml title="moose.config.yaml"
+tracevals:
+  graders:
+    command:
+      enabled: false
+```
+
+The eval reports **`skipped`**, with the reason stated — never `pass`:
+
+```
+  SKIP   fix-bug › no-force-push
+         command execution is disabled (--no-commands / graders.command.enabled: false)
+```
+
+An unrun check has not been satisfied, so it never counts as clean. Nothing else about the run
+changes — the same verdicts, and the same exit code, as a run without the flag.
+
+The default stays **on**: an eval that declares a command is asking for that command to run, and a
+tool that silently refused would make the vocabulary's own worked example look broken. What is new
+is the lever for the person taking the risk
+([ADR 01019](https://github.com/hawkeyexl/moose-tracevals/blob/main/adrs/01019-add-an-opt-out-for-command-execution.md),
+which amends 01011 rather than reversing it).
+
+For a run that both executes nothing *and* sends nothing, combine it with `--deterministic-only`:
+
+```bash
+moose-tracevals run session.jsonl --deterministic-only --no-commands
+```
 
 ## Custom graders
 

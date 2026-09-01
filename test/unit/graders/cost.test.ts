@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { graderFor } from "../../../src/graders/registry.js";
-import { makePlan, makeTrace } from "../../helpers.js";
+import { makeArtifact, makePlan, makeTrace } from "../../helpers.js";
 
 const grader = graderFor("cost")!;
 
@@ -64,5 +64,22 @@ describe("cost grader", () => {
     });
     expect(under.findings).toEqual([]);
     expect(under.skipped).toBeUndefined();
+  });
+  it("stays session-level even for an artifact that governed nothing", async () => {
+    // Cost is a property of the whole session: tokens are not attributable to
+    // the artifact that was governing when they were spent, so `cost` is the
+    // one grader that is deliberately not windowed (ADR 01015).
+    const result = await grader.grade({
+      trace: makeTrace({
+        usage: { inputTokens: 10, outputTokens: 5, totalCostUsd: 0.5 },
+      }),
+      plan: makePlan({
+        artifact: makeArtifact({ name: "ghost-skill", type: "skill" }),
+        grader: "cost",
+        options: { maxUsd: 0.1 },
+      }),
+    });
+    expect(result.skipped).toBeUndefined();
+    expect(result.findings).toHaveLength(1);
   });
 });

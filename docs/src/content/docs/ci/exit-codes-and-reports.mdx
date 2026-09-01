@@ -17,7 +17,7 @@ report structure is in the
 | Code | Meaning | What it tells you |
 |---|---|---|
 | `0` | every eval passed or was skipped | Nothing to do. |
-| `1` | some eval failed, errored, or needs review | **The agent session** did something worth looking at. |
+| `1` | some eval failed, errored, or needs review | **The agent session** did something worth looking at. In a batch, also a corpus the run stopped measuring — see [A batch that ran out of budget](#a-batch-that-ran-out-of-budget). |
 | `2` | moose-tracevals could not run | **The tool** could not do its job — bad usage, an unreadable trace, an unknown format, a nonexistent path. |
 
 The `1` versus `2` distinction is the most useful thing on this page. `1` means the check worked and
@@ -67,6 +67,15 @@ tracevals:
 Now `needs-review` no longer contributes to a non-zero exit. It still appears in the report and in
 the summary counts, so you can surface it without blocking on it.
 
+To decide per invocation instead — a strict pre-merge job and a lenient nightly one sharing a config
+— override it on the command line:
+
+```bash
+npx moose-tracevals run <trace> --no-fail-on-needs-review
+```
+
+`--fail-on-needs-review` forces the opposite. Passing neither leaves the config value in force.
+
 <Aside type="tip" title="Decide this before you meet it">
 Pick a policy when you install the gate. Meeting `needs-review` for the first time as a red build
 nobody can explain is the avoidable version of this.
@@ -76,6 +85,47 @@ nobody can explain is the avoidable version of this.
 exhausted cost budget, a trace with no usage data for a `cost` check, or an artifact that opted out. Each is
 listed with its reason in the report. See
 [Read a failing eval](/moose-tracevals/triage/#why-something-was-skipped).
+
+## A batch that ran out of budget
+
+`--max-cost-usd` (and [`judge.maxCostUsd`](/moose-tracevals/reference/configuration/#judge)) is a
+ceiling on the **whole invocation**, shared across every trace in a batch. That is deliberate: one
+judge, one budget, so fifty traces cannot bill fifty times the configured cap.
+
+The consequence is that a budget can run out *part way through the corpus*. Every remaining judged
+eval is then `skipped` — nothing failed and nothing errored, so scoring the batch on those two
+counts alone would exit `0` after judging four traces out of fifty. **It does not.** A batch cut
+short by its own budget exits `1`, says so beside the headline, and carries a `budget` block:
+
+```
+moose-tracevals — 1 trace(s)
+1 passed · 0 failed · 0 unreadable
+BUDGET EXHAUSTED  1 eval(s) across 1 trace(s) were never judged — judge cost budget exhausted ($0)
+```
+
+In `--format json`:
+
+```json
+"budget": {
+  "skippedEvals": 1,
+  "traces": 1,
+  "reason": "judge cost budget exhausted ($0)"
+},
+"exitCode": 1
+```
+
+Exit `1` rather than `2`, because the report is real: the traces that were judged carry genuine
+verdicts and are worth keeping. It is the same reasoning that makes a selector matching **no** trace
+exit `2` — there is nothing to keep in that case — and neither may quietly exit `0`.
+
+{/* test {"testId":"budget-exhausted-batch","description":"A batch cut short by its own budget is reported and is never green."} */}
+{/* step {"description":"A clean corpus whose budget ran out still exits 1.","runShell":{"command":"moose-tracevals run --all-projects --limit 1 --project test/fixtures/project --provider mock --max-cost-usd 0","exitCodes":[1],"stdio":"BUDGET EXHAUSTED"}} */}
+{/* test end */}
+
+<Aside type="tip" title="Raise the ceiling, or narrow the corpus">
+The warning names both remedies. A gate that keeps hitting this is either budgeted for one trace and
+pointed at fifty, or judging evals a `--deterministic-only` job could have answered for free.
+</Aside>
 
 ## Keep the report
 

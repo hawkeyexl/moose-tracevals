@@ -5,6 +5,8 @@
  */
 import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
+import { copyFile, mkdir, readFile, rm } from "node:fs/promises";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { describe, expect, it } from "vitest";
@@ -18,10 +20,14 @@ const built = existsSync(cli);
 async function runCli(
   args: string[],
   env: Record<string, string> = {},
+  // Defaults to the repo root. A different one is how a test reaches a
+  // `moose.config.yaml` other than the repo's own: `configDir` is the working
+  // directory and no flag overrides it.
+  cwd: string = root,
 ): Promise<{ code: number; stdout: string; stderr: string }> {
   try {
     const { stdout, stderr } = await exec("node", [cli, ...args], {
-      cwd: root,
+      cwd,
       env: { ...process.env, ...env },
     });
     return { code: 0, stdout, stderr };
@@ -152,6 +158,584 @@ describe.skipIf(!built)("built CLI", () => {
     const { code, stderr } = await runCli(["fill", "does-not-exist-here"]);
     expect(code).toBe(2);
     expect(stderr).toContain("no such file or directory");
+  });
+
+  // The plugin path only really exists once it survives bundling: `dist/cli.js`
+  // and `dist/index.js` are separate entries, and a side-effect plugin that
+  // imports `moose-tracevals` is registering into whichever copy of the
+  // registry that specifier resolves to. Only the built CLI can prove it is the
+  // same one (ADR 01017).
+  describe("grader plugins", () => {
+    const pluginRun = (extra: string[]) => [
+      "run",
+      "test/fixtures/traces/claude-session.jsonl",
+      "--project",
+      "test/fixtures/plugin-project",
+      "--deterministic-only",
+      "--format",
+      "json",
+      ...extra,
+    ];
+
+    it("reports an unknown grader kind when no plugin is required", async () => {
+      const { code, stdout } = await runCli(pluginRun([]), {
+        MOOSE_TRACEVALS_HOME: "test/fixtures/plugin-project",
+      });
+      expect(code).toBe(1);
+      const report = JSON.parse(stdout);
+      const result = report.evalResults.find(
+        (x: { evalName: string }) => x.evalName === "stayed-in-the-worktree",
+      );
+      expect(result.outcome).toBe("error");
+      expect(result.error).toContain("unknown grader kind");
+    });
+
+    it("--require registers the kind and the same eval passes", async () => {
+      const { code, stdout } = await runCli(
+        pluginRun(["--require", "./test/fixtures/plugins/stayed-in-scope.mjs"]),
+        { MOOSE_TRACEVALS_HOME: "test/fixtures/plugin-project" },
+      );
+      expect(code).toBe(0);
+      const report = JSON.parse(stdout);
+      const result = report.evalResults.find(
+        (x: { evalName: string }) => x.evalName === "stayed-in-the-worktree",
+      );
+      expect(result.outcome).toBe("pass");
+    });
+
+    it("accepts a plugin that registers by importing the package itself", async () => {
+      // The side-effect form the extend guide documents. It registers a kind
+      // no eval declares, so the assertion is the absence of the
+      // registered-nothing warning: the import reached the CLI's own registry.
+      const { stdout } = await runCli(
+        pluginRun([
+          "--require",
+          "./test/fixtures/plugins/side-effect-grader.mjs",
+        ]),
+        { MOOSE_TRACEVALS_HOME: "test/fixtures/plugin-project" },
+      );
+      const report = JSON.parse(stdout);
+      expect(
+        report.warnings.some((w: string) => /registered no grader kinds/.test(w)),
+      ).toBe(false);
+    });
+
+    it("exits 2 with a message that is not the grader-not-found one", async () => {
+      const { code, stderr } = await runCli(
+        pluginRun(["--require", "./test/fixtures/plugins/does-not-exist.mjs"]),
+        { MOOSE_TRACEVALS_HOME: "test/fixtures/plugin-project" },
+      );
+      expect(code).toBe(2);
+      expect(stderr).toContain("could not load grader plugin");
+      expect(stderr).not.toContain("unknown grader kind");
+    });
+  });
+
+  // ADR 01018. The shape of the report is decided by *how* traces were
+  // selected, not by how many came back, so a script piping `--format json`
+  // gets something stable.
+  describe("batch runs", () => {
+    const home = { MOOSE_TRACEVALS_HOME: "test/fixtures/home" };
+    const both = [
+      "test/fixtures/traces/claude-session.jsonl",
+      "test/fixtures/traces/claude-session-sidecar.jsonl",
+    ];
+
+    it("one named trace still emits a single-trace RunReport", async () => {
+      const { stdout } = await runCli(
+        [
+          "run",
+          both[0]!,
+          "--project",
+          "test/fixtures/project",
+          "--deterministic-only",
+          "--format",
+          "json",
+        ],
+        home,
+      );
+      const report = JSON.parse(stdout);
+      expect(report.trace).toBeDefined();
+      expect(report.evalResults).toBeDefined();
+      expect(report.traces).toBeUndefined();
+    });
+
+    it("two named traces emit an aggregate report and exit 1", async () => {
+      const { code, stdout } = await runCli(
+        [
+          "run",
+          ...both,
+          "--project",
+          "test/fixtures/project",
+          "--deterministic-only",
+          "--format",
+          "json",
+        ],
+        home,
+      );
+      expect(code).toBe(1);
+      const report = JSON.parse(stdout);
+      expect(report.summary.traces).toBe(2);
+      expect(report.summary.tracesFailed).toBe(1);
+      const forbidden = report.evals.find(
+        (e: { evalName: string }) => e.evalName === "forbidden-tool",
+      );
+      expect(forbidden.passRate).toBe(0);
+      expect(forbidden.failingTraces).toHaveLength(1);
+    });
+
+    it("a discovery selector emits an aggregate report even for one trace", async () => {
+      const { code, stdout } = await runCli(
+        [
+          "run",
+          "--all-projects",
+          "--limit",
+          "1",
+          "--project",
+          "test/fixtures/project",
+          "--deterministic-only",
+          "--format",
+          "json",
+        ],
+        home,
+      );
+      expect(code).toBe(0);
+      const report = JSON.parse(stdout);
+      expect(report.summary.traces).toBe(1);
+      expect(Array.isArray(report.evals)).toBe(true);
+    });
+
+    it("exits 2 rather than green when a selector matches nothing", async () => {
+      const { code, stderr } = await runCli(
+        ["run", "--all-projects", "--deterministic-only"],
+        { MOOSE_TRACEVALS_HOME: "test/fixtures/project" },
+      );
+      expect(code).toBe(2);
+      expect(stderr).toMatch(/no traces matched/);
+    });
+
+    it("exits 2 when named traces are mixed with a selector", async () => {
+      const { code, stderr } = await runCli(
+        ["run", both[0]!, "--limit", "1", "--deterministic-only"],
+        home,
+      );
+      expect(code).toBe(2);
+      expect(stderr).toMatch(/not both/);
+    });
+
+    it("rejects a --since that is not a duration", async () => {
+      const { code, stderr } = await runCli(
+        ["run", "--since", "yesterday", "--deterministic-only"],
+        home,
+      );
+      expect(code).toBe(2);
+      expect(stderr).toMatch(/--since must be a duration/);
+    });
+  });
+
+  // ADR 01022. The command surface, the report shape, and the exit-code
+  // contract, through the built binary rather than the library.
+  describe("calibrate", () => {
+    const home = { MOOSE_TRACEVALS_HOME: "test/fixtures/home" };
+    const corpus = [
+      "test/fixtures/traces/claude-session.jsonl",
+      "test/fixtures/traces/claude-session-sidecar.jsonl",
+    ];
+    const base = [
+      "calibrate",
+      ...corpus,
+      "--project",
+      "test/fixtures/project",
+      "--labels",
+      "test/fixtures/project/tracevals/labels.yaml",
+      "--provider",
+      "mock",
+      "--no-cache",
+    ];
+
+    it("measures the corpus and exits 0 despite disagreeing", async () => {
+      const { code, stdout } = await runCli(
+        [...base, "--format", "json"],
+        home,
+      );
+      expect(code).toBe(0);
+      const report = JSON.parse(stdout);
+      expect(report.counts.falsePass).toBe(1);
+      expect(report.counts.falseFail).toBe(1);
+      expect(report.counts.reviewVolume).toBe(1);
+      // A calibration report is its own shape, distinguishable without
+      // inspecting the contents.
+      expect(report.evalResults).toBeUndefined();
+      expect(report.evals).toBeUndefined();
+      expect(report.batch.summary.traces).toBe(2);
+    });
+
+    it("exits 1 only when a threshold is asked for and missed", async () => {
+      const { code, stdout } = await runCli(
+        [...base, "--max-false-pass", "0", "--format", "json"],
+        home,
+      );
+      expect(code).toBe(1);
+      expect(JSON.parse(stdout).gates[0]).toEqual({
+        name: "falsePass",
+        limit: 0,
+        actual: 1,
+        exceeded: true,
+      });
+    });
+
+    it("sweeps every axis and names the setting that removes the false pass", async () => {
+      const { code, stdout } = await runCli(
+        [...base, "--sweep", "--format", "json"],
+        home,
+      );
+      expect(code).toBe(0);
+      const report = JSON.parse(stdout);
+      const strict = report.sweep.find(
+        (c: { axis: string; value: number }) =>
+          c.axis === "zones.autoPass" && c.value === 0.95,
+      );
+      expect(strict.counts.falsePass).toBe(0);
+      // The claim is the conversion, not the count: a stricter auto-pass floor
+      // turns the false pass into a deferral, so review volume rises above the
+      // baseline row. An absolute number here breaks whenever the fixture
+      // corpus gains a judged eval.
+      const baseline = report.sweep.find(
+        (c: { axis: string }) => c.axis === "baseline",
+      );
+      expect(strict.counts.reviewVolume).toBeGreaterThan(
+        baseline.counts.reviewVolume,
+      );
+    });
+
+    it("exits 2 with the corpus listed when a label names a foreign trace", async () => {
+      const { code, stderr } = await runCli(
+        [
+          "calibrate",
+          corpus[0]!,
+          "--project",
+          "test/fixtures/project",
+          "--labels",
+          "test/fixtures/project/tracevals/labels.yaml",
+          "--deterministic-only",
+        ],
+        home,
+      );
+      expect(code).toBe(2);
+      expect(stderr).toMatch(/not in the corpus/);
+      expect(stderr).toMatch(/claude-session-sidecar\.jsonl/);
+    });
+
+    it("exits 2 when the labels file does not exist", async () => {
+      const { code, stderr } = await runCli(
+        [...base, "--labels", "test/fixtures/project/tracevals/nope.yaml"],
+        home,
+      );
+      expect(code).toBe(2);
+      expect(stderr).toMatch(/could not read labels file/);
+    });
+  });
+
+  /**
+   * `capture` end to end (ADR 01024). The hook payload really arrives on
+   * stdin, so this exercises the one path the unit tests inject around.
+   */
+  describe("capture", () => {
+    async function runCliStdin(
+      args: string[],
+      stdin: string,
+      env: Record<string, string> = {},
+    ): Promise<{ code: number; stdout: string; stderr: string }> {
+      const child = execFile("node", [cli, ...args], {
+        cwd: root,
+        env: { ...process.env, ...env },
+      });
+      child.stdin?.end(stdin);
+      return new Promise((settle) => {
+        let stdout = "";
+        let stderr = "";
+        child.stdout?.on("data", (d) => (stdout += String(d)));
+        child.stderr?.on("data", (d) => (stderr += String(d)));
+        child.on("close", (code) => settle({ code: code ?? 0, stdout, stderr }));
+      });
+    }
+
+    it("writes a manifest from a hook payload on stdin, and keeps stdout empty", async () => {
+      const dir = join(".tmp", `cli-capture-${process.pid}`);
+      await mkdir(dir, { recursive: true });
+      const out = join(dir, "s.json");
+      const { code, stdout, stderr } = await runCliStdin(
+        ["capture", "--out", out],
+        JSON.stringify({
+          session_id: "cli-session",
+          hook_event_name: "SessionStart",
+          how: "startup",
+          cwd: "test/fixtures/project",
+        }),
+      );
+      try {
+        expect(code).toBe(0);
+        // A SessionStart hook's stdout becomes the model's context, so it must
+        // stay empty however chatty the command is.
+        expect(stdout).toBe("");
+        expect(stderr).toContain("cli-session");
+        const manifest = JSON.parse(await readFile(join(root, out), "utf-8"));
+        expect(manifest.sessionId).toBe("cli-session");
+        expect(manifest.hookEvent).toBe("SessionStart");
+        expect(manifest.artifacts.length).toBeGreaterThan(0);
+        expect(manifest.git?.sha).toMatch(/^[0-9a-f]{40}$/);
+      } finally {
+        await rm(dir, { recursive: true, force: true });
+      }
+    });
+
+    it("exits 2 rather than guessing when the payload names no session", async () => {
+      const { code, stderr } = await runCliStdin(["capture"], "{}");
+      expect(code).toBe(2);
+      expect(stderr).toMatch(/no session id/);
+    });
+
+    it("makes staleness exact for `run`, and does nothing to the verdicts", async () => {
+      const dir = join(".tmp", `cli-sharpen-${process.pid}`);
+      await mkdir(dir, { recursive: true });
+      const trace = join(dir, "session.jsonl");
+      await copyFile(
+        join(root, "test/fixtures/traces/claude-session.jsonl"),
+        join(root, trace),
+      );
+      const home = { MOOSE_TRACEVALS_HOME: "test/fixtures/home" };
+      const runArgs = [
+        "run",
+        trace,
+        "--project",
+        "test/fixtures/project",
+        "--deterministic-only",
+        "--format",
+        "json",
+      ];
+      try {
+        const before = JSON.parse((await runCli(runArgs, home)).stdout);
+        expect(before.manifest).toBeUndefined();
+
+        await runCliStdin(
+          ["capture", "--out", join(dir, "session.manifest.json")],
+          JSON.stringify({
+            session_id: "11111111-1111-1111-1111-111111111111",
+            cwd: "test/fixtures/project",
+          }),
+        );
+        const after = JSON.parse((await runCli(runArgs, home)).stdout);
+
+        expect(after.manifest?.changed).toBe(0);
+        expect(after.manifest?.matched).toBeGreaterThan(0);
+        // The mtime false positive a checkout manufactures is gone for every
+        // artifact the manifest recorded, and nothing else moved.
+        const staleRefs = (r: { coverage: { ref: string; stale?: boolean }[] }) =>
+          r.coverage.filter((c) => c.stale === true).map((c) => c.ref);
+        expect(staleRefs(before).length).toBeGreaterThan(staleRefs(after).length);
+        expect(after.summary).toEqual(before.summary);
+        expect(after.exitCode).toBe(before.exitCode);
+      } finally {
+        await rm(dir, { recursive: true, force: true });
+      }
+    });
+
+    it("refuses --manifest against a corpus", async () => {
+      const { code, stderr } = await runCli([
+        "run",
+        "test/fixtures/traces/claude-session.jsonl",
+        "test/fixtures/traces/claude-session-sidecar.jsonl",
+        "--manifest",
+        "whatever.json",
+        "--deterministic-only",
+      ]);
+      expect(code).toBe(2);
+      expect(stderr).toMatch(/cannot be used with a corpus/);
+    });
+  });
+
+  /**
+   * ADR 01011's safety opt-out, exercised through the CLI rather than around
+   * it.
+   *
+   * `--no-commands` was declared with no positive twin, so commander defaulted
+   * `opts.commands` to `true`; `prepareRun`'s `options.commands ?? config` then
+   * never saw `undefined`, and `graders.command.enabled: false` in a config was
+   * unreachable from the command line. The unit tests hand `commands` straight
+   * to `runRun`, which is exactly why they never caught it — only the built
+   * binary exercises the flag declaration.
+   */
+  describe("command execution opt-out", () => {
+    // A config directory whose only job is to turn command execution off.
+    const noCommands = join(root, "test/fixtures/no-commands");
+    const home = { MOOSE_TRACEVALS_HOME: join(root, "test/fixtures/home") };
+    const trace = join(root, "test/fixtures/traces/claude-session.jsonl");
+    const project = join(root, "test/fixtures/project");
+    const args = (extra: string[]) => [
+      "run",
+      trace,
+      "--project",
+      project,
+      "--deterministic-only",
+      "--format",
+      "json",
+      ...extra,
+    ];
+    const commandEval = (stdout: string) =>
+      JSON.parse(stdout).evalResults.find(
+        (r: { evalName: string }) => r.evalName === "no-force-push",
+      );
+
+    it("lets the config decide when neither flag is passed", async () => {
+      const { stdout } = await runCli(args([]), home, noCommands);
+      expect(commandEval(stdout)?.outcome).toBe("skipped");
+      expect(commandEval(stdout)?.skipReason).toMatch(
+        /command execution is disabled/,
+      );
+    });
+
+    it("--commands overrides a config that disabled them", async () => {
+      const { stdout } = await runCli(args(["--commands"]), home, noCommands);
+      expect(commandEval(stdout)?.outcome).toBe("pass");
+    });
+
+    it("--no-commands still skips, and still states why", async () => {
+      const { stdout } = await runCli(args(["--no-commands"]), home);
+      expect(commandEval(stdout)?.outcome).toBe("skipped");
+      expect(commandEval(stdout)?.skipReason).toMatch(
+        /command execution is disabled/,
+      );
+    });
+
+    it("runs the command by default against the repo's own config", async () => {
+      const { stdout } = await runCli(args([]), home);
+      expect(commandEval(stdout)?.outcome).toBe("pass");
+    });
+
+    // `calibrate` shares `run`'s flags, so it must share their behaviour. It
+    // hand-copied the mapping and omitted `commands` entirely: the flag parsed,
+    // printed in --help, and did nothing.
+    it("calibrate acts on the flag it accepts", async () => {
+      const { stdout } = await runCli(
+        [
+          "calibrate",
+          trace,
+          join(root, "test/fixtures/traces/claude-session-sidecar.jsonl"),
+          "--project",
+          project,
+          "--labels",
+          join(root, "test/fixtures/project/tracevals/labels.yaml"),
+          "--provider",
+          "mock",
+          "--no-cache",
+          "--no-commands",
+          "--format",
+          "json",
+        ],
+        home,
+      );
+      const row = JSON.parse(stdout).batch.evals.find(
+        (e: { evalName: string }) => e.evalName === "no-force-push",
+      );
+      expect(row?.skipReasons ?? []).toContainEqual(
+        expect.stringMatching(/command execution is disabled/),
+      );
+    });
+  });
+
+  /**
+   * A flag that parses to NaN survives the `??` overlay, because `undefined` is
+   * what defers to the config and NaN is not undefined. `spentUsd >= NaN` is
+   * false forever, so the budget gate never trips while the report still claims
+   * a budget; `--limit=-1` reaches `slice(0, -1)` and quietly evaluates every
+   * trace except the oldest.
+   */
+  describe("numeric flag validation", () => {
+    const home = { MOOSE_TRACEVALS_HOME: "test/fixtures/home" };
+    const trace = "test/fixtures/traces/claude-session.jsonl";
+    const judged = ["--project", "test/fixtures/project", "--provider", "mock"];
+
+    it("rejects a --max-cost-usd that is not a number", async () => {
+      for (const bad of ["abc", ""]) {
+        const { code, stderr } = await runCli(
+          ["run", trace, ...judged, "--max-cost-usd", bad],
+          home,
+        );
+        expect(code).toBe(2);
+        expect(stderr).toMatch(/--max-cost-usd/);
+      }
+    });
+
+    it("rejects a negative --max-cost-usd", async () => {
+      const { code, stderr } = await runCli(
+        ["run", trace, ...judged, "--max-cost-usd=-1"],
+        home,
+      );
+      expect(code).toBe(2);
+      expect(stderr).toMatch(/--max-cost-usd/);
+    });
+
+    it("rejects a --limit that would silently drop the oldest trace", async () => {
+      const { code, stderr } = await runCli(
+        [
+          "run",
+          "--all-projects",
+          "--limit=-1",
+          "--project",
+          "test/fixtures/project",
+          "--deterministic-only",
+        ],
+        home,
+      );
+      expect(code).toBe(2);
+      expect(stderr).toMatch(/--limit/);
+    });
+
+    it("rejects a --runs that is not a whole number above zero", async () => {
+      for (const bad of ["abc", "0", "1.5"]) {
+        const { code, stderr } = await runCli(
+          ["run", trace, ...judged, "--runs", bad],
+          home,
+        );
+        expect(code).toBe(2);
+        expect(stderr).toMatch(/--runs/);
+      }
+    });
+
+    it("guards the same flags on calibrate", async () => {
+      const { code, stderr } = await runCli(
+        ["calibrate", trace, "--project", "test/fixtures/project", "--runs=-1"],
+        home,
+      );
+      expect(code).toBe(2);
+      expect(stderr).toMatch(/--runs/);
+    });
+
+    it("guards `list --limit` too", async () => {
+      const { code, stderr } = await runCli(["list", "--limit=-1"], home);
+      expect(code).toBe(2);
+      expect(stderr).toMatch(/--limit/);
+    });
+
+    it("still accepts the values a user actually passes", async () => {
+      const { code } = await runCli(
+        [
+          "run",
+          trace,
+          ...judged,
+          "--no-cache",
+          "--runs",
+          "1",
+          "--max-cost-usd",
+          "0.5",
+          "--format",
+          "json",
+        ],
+        home,
+      );
+      // 1 because of the engineered deterministic failure, never 2.
+      expect(code).toBe(1);
+    });
   });
 
   it("legacy stream-json traces still parse", async () => {

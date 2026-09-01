@@ -31,6 +31,58 @@ The third is the one people underrate. If you commit a handful of traces, this g
 genuinely useful question on every pull request: *does this edit to `CLAUDE.md` break a check that
 used to pass?*
 
+### A corpus is worth more than a trace
+
+Point `run` at the whole directory's worth of traces and it reports **rates** rather than verdicts:
+
+```bash
+npx moose-tracevals run traces/*.jsonl --deterministic-only
+```
+
+That changes the question from *did this session comply?* to *how often does this check hold?* —
+which is the question a skill's author actually has. One session failing an eval is an anecdote; the
+same eval at `40%` across twenty sessions is a finding, and the report names the traces that pulled
+it down so you can open them.
+
+Everything about a batch is built to keep that number honest:
+
+- **The judge cost budget covers the whole invocation, not each trace.** A fifty-trace batch with
+  `--max-cost-usd 5` spends at most five dollars. Once it is exhausted the remaining evals report
+  `skipped` with the reason, never a pass.
+- **A trace that will not parse becomes a report entry and the batch continues.** One corrupt file
+  does not cost you the other forty-nine.
+- **Skipped evals stay out of the rate.** An artifact the session never invoked reports `—`, not
+  `100%`.
+- **Rows are ordered deterministically**, so two runs over the same corpus are comparable.
+
+Exit `1` if any trace fails, exactly as for a single one. Naming exactly one trace still produces
+the familiar single-session report — see
+[which report you get](/moose-tracevals/reference/cli/#which-report-you-get).
+
+{/* Doc Detective inline tests: a batch really runs offline against the committed
+    fixture corpus, and really reports rates. */}
+{/* test {"testId":"batch-corpus","description":"A multi-trace run reports rates and exits 1 when a trace fails."} */}
+{/* step {"description":"Two traces produce an aggregate report.","runShell":{"command":"moose-tracevals run test/fixtures/traces/claude-session.jsonl test/fixtures/traces/claude-session-sidecar.jsonl --project test/fixtures/project --deterministic-only","exitCodes":[1],"stdio":"2 trace(s)"}} */}
+{/* step {"description":"The report leads with pass rates.","runShell":{"command":"moose-tracevals run test/fixtures/traces/claude-session.jsonl test/fixtures/traces/claude-session-sidecar.jsonl --project test/fixtures/project --deterministic-only","exitCodes":[1],"stdio":"Eval pass rates"}} */}
+{/* step {"description":"Outlier traces are named, not just counted.","runShell":{"command":"moose-tracevals run test/fixtures/traces/claude-session.jsonl test/fixtures/traces/claude-session-sidecar.jsonl --project test/fixtures/project --deterministic-only","exitCodes":[1],"stdio":"failing: claude-session.jsonl"}} */}
+{/* step {"description":"A discovery selector evaluates the session store without naming files.","runShell":{"command":"moose-tracevals run --all-projects --since 520w --limit 5 --project test/fixtures/project --deterministic-only","exitCodes":[0],"stdio":"Eval pass rates"}} */}
+{/* test end */}
+
+### Or let the tool find the sessions
+
+When the agent ran on the same machine, three selectors pull traces out of the session store instead
+of naming files — the same `--all-projects` and `--limit` that
+[`list`](/moose-tracevals/reference/cli/#list) uses, plus a time window:
+
+```bash
+npx moose-tracevals run --since 7d --limit 20 --deterministic-only
+```
+
+A selector always produces the aggregate report, even when it matches one trace, so a script's
+parsing does not depend on how busy the week was. A selector that matches **nothing** exits `2`
+rather than `0`: an empty corpus and a clean corpus look identical downstream, and a gate that
+stopped gating should say so.
+
 ## Stay offline
 
 Two flags cover every offline case:
@@ -132,6 +184,41 @@ and you can discover it instead of naming a file:
 
 `list --json` emits `{ "traces": [...] }` sorted newest-first, so the first entry is the session
 that just finished.
+
+## Carry the manifest with the trace
+
+There is one thing CI gets badly wrong on its own, and it is worth fixing before you trust the
+report: **a checkout rewrites every file's mtime**, so the
+[staleness heuristic](/moose-tracevals/declare/coverage/#staleness) flags every artifact in your
+repository on every run. The warning is technically correct and completely useless.
+
+A [session manifest](/moose-tracevals/reference/cli/#capture) fixes it, because it compares content
+rather than timestamps. The mechanics are the same three patterns above:
+
+| Pattern | Where the manifest is |
+|---|---|
+| **Evaluate in the same job** | `capture` wrote it to `.moose-tracevals/sessions/<id>.json` in the workspace, and `run` finds it there. Nothing to do. |
+| **Upload the trace** | Upload the manifest with it. Name it `<trace>.manifest.json` and `run` picks it up beside the trace with no flag. |
+| **Committed corpus** | `.moose-tracevals/` is gitignored, so copy the manifest next to the trace when you commit it — `traces/refactor-session.manifest.json`. |
+
+```yaml
+      - name: Upload the session and its manifest
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-session
+          path: |
+            session.jsonl
+            session.manifest.json
+```
+
+The evaluating job downloads both into one directory, names the trace, and gets exact staleness for
+free.
+
+<Aside title="Nothing breaks without one">
+An absent manifest is the default and always will be. Every hash check reports `skipped` with the
+reason, the mtime heuristic stands, and no verdict, summary count, or exit code moves either way — a
+manifest is an observation about the artifacts, never an input to a verdict.
+</Aside>
 
 ## Other CI platforms
 

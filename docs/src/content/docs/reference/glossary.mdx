@@ -32,8 +32,9 @@ character with a hyphen. `/work/demo` becomes `-work-demo`.
 
 **Sidechain**
 : A tool call made *inside a spawned subagent* rather than in the main conversation. Excluded from
-counts by default; `tool-usage` opts in with `includeSidechains: true`. `turnCount` counts only
-non-sidechain user prompts.
+counts by default; `tool-usage` opts in with `includeSidechains: true`. The exception is an eval on
+an agent definition, whose window *is* a branch — there the branch's calls are the subject and are
+always counted. `turnCount` counts only non-sidechain user prompts.
 
 **Turn**
 : One non-sidechain user prompt. What `turn-count` measures.
@@ -43,8 +44,13 @@ non-sidechain user prompts.
 ## What gets evaluated
 
 **Artifact**
-: An instruction file a session used: a **skill** (`SKILL.md`), an **agent definition**, or a
-**project-rules** file (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`). The unit that evals attach to.
+: An instruction file a session used: a **skill** (`SKILL.md`), an **agent definition**, a **slash
+command** (`.claude/commands/*.md`), or a **project-rules** file (`CLAUDE.md`, `AGENTS.md`,
+`GEMINI.md`). The unit that evals attach to.
+
+**Slash command**
+: A frontmattered markdown file in `.claude/commands/` whose body Claude Code injects as a prompt
+when someone types `/name`. Graded over the span it governed, exactly like a skill.
 
 **Artifact resolution**
 : Mapping each reference in a trace to a file on disk, deterministically — trace content plus
@@ -57,6 +63,11 @@ every reporter. An unresolved reference is a coverage row plus a warning, never 
 **Built-in agent**
 : An agent that ships with the CLI and has no definition file: `general-purpose`, `claude`,
 `Explore`, `Plan`, `statusline-setup`, `fork`. Always shows as unresolved, by design.
+
+**Built-in slash command**
+: A `/name` that resolved to neither a command file nor a skill file anywhere — Claude Code's own
+`/model`, `/compact`, `/clear`. Inferred from the absence of a file rather than from a list of
+names, which would go stale every release. Shows as unresolved with a note and no warning.
 
 ---
 
@@ -100,10 +111,17 @@ See the [grader reference](/moose-tracevals/reference/graders/).
 : One that decides from the trace alone — no model call, no cost, same answer every time.
 `tool-usage`, `skill-invoked`, `file-access`, `turn-count`, `cost`, `regex`, `json-output`.
 
+**Eval window**
+: The slice of a trace an artifact was actually governing, and the only evidence its evals see.
+Derived from the artifact's type — a skill's invocation up to the next skill's, an agent's own
+branch, the whole session for project rules. An empty window is `skipped` with a reason, never
+passed. See the [grader reference](/moose-tracevals/reference/graders/).
+
 **Whole-session grader**
-: `turn-count`, `cost`, and `json-output`, which measure the entire session rather than one
-artifact's slice of it. Never proposed by `fill`, because a limit declared inside one artifact
-silently constrains everything.
+: `cost` and `json-output`, which measure the entire session rather than one artifact's window:
+tokens are not attributable to whichever artifact was governing, and the final output is the
+session's. Never proposed by `fill`, and neither is `turn-count`, which is windowed but stayed out
+of the allowlist.
 
 **Finding**
 : One problem a deterministic grader reports: an eval name, an artifact, a message, and a severity.

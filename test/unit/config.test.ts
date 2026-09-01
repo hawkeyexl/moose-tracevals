@@ -14,7 +14,18 @@ describe("parseConfig", () => {
     expect(config.render.maxBlockChars).toBe(2000);
     expect(config.render.maxTotalChars).toBe(150000);
     expect(config.history.file).toBe(".moose-tracevals/history.jsonl");
+    expect(config.capture.dir).toBe(".moose-tracevals/sessions");
     expect(config.failOnNeedsReview).toBe(true);
+  });
+
+  it("takes an explicit capture directory and rejects a bad one", () => {
+    expect(parseConfig({ capture: { dir: "artifacts/manifests" } }).capture.dir).toBe(
+      "artifacts/manifests",
+    );
+    expect(() => parseConfig({ capture: { dir: "" } })).toThrow(TracevalsError);
+    expect(() => parseConfig({ capture: { nope: true } })).toThrow(
+      TracevalsError,
+    );
   });
 
   it("keeps explicit values", () => {
@@ -58,6 +69,75 @@ describe("parseConfig", () => {
       TracevalsError,
     );
     expect(() => parseConfig({ unknownKey: true })).toThrow(TracevalsError);
+  });
+
+  describe("plugins", () => {
+    it("defaults to an empty list, so the read site never sees a hole", () => {
+      expect(parseConfig({}).plugins).toEqual([]);
+    });
+
+    it("keeps declared module specifiers in order", () => {
+      // Order is load order, and a later plugin wins a colliding kind — so it
+      // is a value, not incidental.
+      const config = parseConfig({
+        plugins: ["./tracevals/graders.mjs", "@acme/tracevals-graders"],
+      });
+      expect(config.plugins).toEqual([
+        "./tracevals/graders.mjs",
+        "@acme/tracevals-graders",
+      ]);
+    });
+
+    it("rejects a bare string, a non-string entry, and an empty specifier", () => {
+      expect(() => parseConfig({ plugins: "./one.mjs" })).toThrow(TracevalsError);
+      expect(() => parseConfig({ plugins: [1] })).toThrow(TracevalsError);
+      expect(() => parseConfig({ plugins: [""] })).toThrow(TracevalsError);
+    });
+  });
+
+  describe("graders.command.enabled", () => {
+    it("defaults to enabled — ADR 01011 stands, this is only an opt-out", () => {
+      expect(parseConfig({}).graders.command.enabled).toBe(true);
+    });
+
+    it("honours an explicit opt-out", () => {
+      const config = parseConfig({ graders: { command: { enabled: false } } });
+      expect(config.graders.command.enabled).toBe(false);
+    });
+
+    it("rejects unknown keys under graders", () => {
+      expect(() => parseConfig({ graders: { commands: {} } })).toThrow(
+        TracevalsError,
+      );
+      expect(() =>
+        parseConfig({ graders: { command: { enabled: "no" } } }),
+      ).toThrow(TracevalsError);
+    });
+  });
+
+  describe("judge.redact", () => {
+    it("defaults to an empty list — the built-ins are a floor, not a default", () => {
+      expect(parseConfig({}).judge.redact).toEqual([]);
+    });
+
+    it("keeps declared patterns", () => {
+      const config = parseConfig({ judge: { redact: ["ACME-[0-9]{4}"] } });
+      expect(config.judge.redact).toEqual(["ACME-[0-9]{4}"]);
+    });
+
+    it("rejects a pattern that will not compile, at load time", () => {
+      // An unusable pattern must not surface as a crash inside the judge, and
+      // must never be silently dropped — that would be a silent leak.
+      expect(() => parseConfig({ judge: { redact: ["("] } })).toThrow(
+        TracevalsError,
+      );
+      expect(() => parseConfig({ judge: { redact: [""] } })).toThrow(
+        TracevalsError,
+      );
+      expect(() => parseConfig({ judge: { redact: "secret" } })).toThrow(
+        TracevalsError,
+      );
+    });
   });
 
   describe("provider section", () => {
@@ -132,6 +212,62 @@ describe("parseConfig", () => {
       ).toThrow(TracevalsError);
     });
   });
+
+  // Calibration knobs (ADR 01022). The sweep grid is config rather than a
+  // flag because a corpus's useful range is a property of the corpus.
+  describe("calibrate section", () => {
+    it("fills the labels path and the sweep grid", () => {
+      const config = parseConfig({});
+      expect(config.calibrate.labels).toBe("tracevals/labels.yaml");
+      expect(config.calibrate.sweep.ensembleRuns).toEqual([1, 3, 5]);
+      expect(config.calibrate.sweep.autoPass).toEqual([
+        0.5, 0.6, 0.7, 0.8, 0.9, 0.95,
+      ]);
+      expect(config.calibrate.sweep.autoFail).toEqual([
+        0.5, 0.6, 0.7, 0.8, 0.9, 0.95,
+      ]);
+      // No threshold by default: a calibration run is a measurement, and a
+      // measurement that fails by default is one nobody runs.
+      expect(config.calibrate.maxFalsePass).toBeUndefined();
+      expect(config.calibrate.maxFalseFail).toBeUndefined();
+      expect(config.calibrate.maxReview).toBeUndefined();
+    });
+
+    it("keeps explicit values", () => {
+      const config = parseConfig({
+        calibrate: {
+          labels: "eval/ground-truth.yaml",
+          maxFalsePass: 0,
+          maxFalseFail: 2,
+          maxReview: 10,
+          sweep: { ensembleRuns: [1, 2], autoPass: [0.75], autoFail: [0.75] },
+        },
+      });
+      expect(config.calibrate.labels).toBe("eval/ground-truth.yaml");
+      expect(config.calibrate.maxFalsePass).toBe(0);
+      expect(config.calibrate.maxFalseFail).toBe(2);
+      expect(config.calibrate.maxReview).toBe(10);
+      expect(config.calibrate.sweep.ensembleRuns).toEqual([1, 2]);
+    });
+
+    it("rejects unknown keys, empty axes, and out-of-range thresholds", () => {
+      expect(() => parseConfig({ calibrate: { bogus: true } })).toThrow(
+        TracevalsError,
+      );
+      expect(() =>
+        parseConfig({ calibrate: { sweep: { ensembleRuns: [] } } }),
+      ).toThrow(TracevalsError);
+      expect(() =>
+        parseConfig({ calibrate: { sweep: { autoPass: [1.5] } } }),
+      ).toThrow(TracevalsError);
+      expect(() => parseConfig({ calibrate: { maxFalsePass: -1 } })).toThrow(
+        TracevalsError,
+      );
+      expect(() =>
+        parseConfig({ calibrate: { sweep: { ensembleRuns: [0] } } }),
+      ).toThrow(TracevalsError);
+    });
+  });
 });
 
 describe("loadConfig", () => {
@@ -185,6 +321,15 @@ describe("loadConfig", () => {
   it("returns defaults when the file is absent", async () => {
     const config = await loadConfig(dir);
     expect(config.judge.ensembleRuns).toBe(3);
+  });
+
+  it("reads a plugins list out of the section", async () => {
+    await write(
+      "moose.config.yaml",
+      "tracevals:\n  plugins:\n    - ./tracevals/graders.mjs\n",
+    );
+    const config = await loadConfig(dir);
+    expect(config.plugins).toEqual(["./tracevals/graders.mjs"]);
   });
 
   it("returns defaults when the file holds only other tools' sections", async () => {
