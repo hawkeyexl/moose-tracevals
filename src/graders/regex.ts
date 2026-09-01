@@ -9,6 +9,7 @@ import {
   requiredString,
   type Options,
 } from "./util.js";
+import { readTarget } from "../core/target.js";
 
 /** Flags are checked alone first, so the message names the actual culprit. */
 function checkFlags(options: Options): string | undefined {
@@ -51,7 +52,7 @@ function validateOptions(options: Options): string | undefined {
 export const regexGrader: TraceGrader = {
   kind: "regex",
   validateOptions,
-  grade({ trace, plan }) {
+  grade({ trace, plan, projectRoot }) {
     const options = plan.options ?? {};
     const invalid = validateOptions(options);
     if (invalid !== undefined) return optionsError("regex", invalid);
@@ -60,19 +61,40 @@ export const regexGrader: TraceGrader = {
     const on = (options.on as string | undefined) ?? "assistant";
     const expect = (options.expect as string | undefined) ?? "match";
 
-    const corpus =
-      on === "user"
-        ? trace.userMessages
-        : on === "all"
-          ? [...trace.userMessages, ...trace.assistantTexts]
-          : trace.assistantTexts;
+    // Two axes that compose rather than compete. `target` picks the *subject*
+    // — the session, its final answer, the files it wrote, the artifact — and
+    // `on` picks the *speaker* within a transcript. Only the transcript has
+    // speakers, so `on` applies there and nowhere else.
+    const target = plan.target ?? "transcript";
+    let corpus: string[];
+    let where: string;
+    if (target === "transcript") {
+      corpus =
+        on === "user"
+          ? trace.userMessages
+          : on === "all"
+            ? [...trace.userMessages, ...trace.assistantTexts]
+            : trace.assistantTexts;
+      where = `${on} text`;
+    } else {
+      const selected = readTarget(target, {
+        trace,
+        // Never consulted: `transcript` took the branch above.
+        renderedTrace: "",
+        artifactContent: plan.artifact.content,
+        root: projectRoot ?? trace.cwd,
+      });
+      if (!selected.ok) return optionsError("regex", selected.reason);
+      corpus = [selected.text];
+      where = selected.label;
+    }
     const matched = corpus.some((text) => re.test(text));
 
     if (expect === "match" && !matched) {
-      return fail(plan, `pattern /${pattern}/ never matched ${on} text`);
+      return fail(plan, `pattern /${pattern}/ never matched ${where}`);
     }
     if (expect === "no-match" && matched) {
-      return fail(plan, `pattern /${pattern}/ matched ${on} text but must not`);
+      return fail(plan, `pattern /${pattern}/ matched ${where} but must not`);
     }
     return pass;
   },

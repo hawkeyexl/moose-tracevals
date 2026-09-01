@@ -30,6 +30,25 @@ export interface EvalResult {
   error?: string;
   skipReason?: string;
   costUsd?: number;
+  /**
+   * Set when the model that judged this eval also produced what it graded.
+   *
+   * `session` — the judge model is the model that ran the session. This is the
+   * sharpest form of the bias in either moose tool: the judge is not being
+   * asked about a document it happened to draft, it is being asked whether its
+   * own behavior followed the rules. `criterion` — `eval-provenance` records
+   * this model proposing this assertion, so the judge wrote the question.
+   *
+   * Reported, never fatal: bias skews a verdict, it does not stop one forming,
+   * and erroring would punish a single-model setup with no second provider to
+   * reach for.
+   */
+  selfPreference?: { axis: "session" | "criterion"; model: string };
+  /**
+   * The eval's weight in the run's pass rate. Never changes its own outcome —
+   * the binary verdict is what the reporters and exit code consume.
+   */
+  weight?: number;
   durationMs: number;
 }
 
@@ -40,6 +59,19 @@ export interface RunSummary {
   error: number;
   needsReview: number;
   skipped: number;
+  /**
+   * Weighted share of the graded set that passed, 1 when nothing was graded.
+   *
+   * The graded set is pass + fail + error; `needs-review` and `skipped` are in
+   * neither half, so a session awaiting review neither helps nor hurts. Each
+   * eval contributes its `weight` (1 unless it says otherwise), which is what
+   * lets a secondary check report without dominating.
+   *
+   * Reported, never gated: moose-tracevals has no suite targets to compare it
+   * against, and inventing an exit-code rule around a number nobody configured
+   * would be a gate no one asked for.
+   */
+  passRate: number;
 }
 
 export interface RunReport {

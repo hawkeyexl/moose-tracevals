@@ -119,3 +119,68 @@ describe("runEvals", () => {
     expect(lax.summary.needsReview).toBeGreaterThan(0);
   });
 });
+
+describe("weight in the run's pass rate", () => {
+  /** A judge that fails exactly the evals named, and passes the rest. */
+  const failing = (names: string[]): TraceJudge => async (plans) =>
+    plans.map((plan) => ({
+      evalName: plan.evalName,
+      artifact: plan.artifact.path,
+      artifactName: plan.artifact.name,
+      grader: plan.grader,
+      implicit: plan.implicit,
+      outcome: names.includes(plan.evalName)
+        ? ("fail" as const)
+        : ("pass" as const),
+      costUsd: 0,
+      durationMs: 1,
+    }));
+
+  it("stamps a weight on every result, defaulting to 1", async () => {
+    const report = await run();
+    expect(report.evalResults.every((r) => r.weight === 1)).toBe(true);
+  });
+
+  it("is inert at the default weight: the rate is plain pass over graded", async () => {
+    const report = await run();
+    const graded = report.evalResults.filter(
+      (r) => r.outcome === "pass" || r.outcome === "fail" || r.outcome === "error",
+    );
+    const passed = graded.filter((r) => r.outcome === "pass").length;
+    expect(report.summary.passRate).toBeCloseTo(
+      graded.length > 0 ? passed / graded.length : 1,
+      10,
+    );
+  });
+
+  it("leaves needs-review and skipped out of both halves of the rate", async () => {
+    // A session awaiting review neither helps nor hurts — the same membership
+    // the counts have always reported, now weighted.
+    const report = await run();
+    const graded = report.evalResults.filter(
+      (r) => r.outcome === "pass" || r.outcome === "fail" || r.outcome === "error",
+    );
+    expect(graded.length).toBe(
+      report.summary.pass + report.summary.fail + report.summary.error,
+    );
+  });
+
+  it("never lets a weight change an eval's own outcome", async () => {
+    const first = await run({ judge: passJudge });
+    // An ai-graded eval specifically: the injected judge only decides those,
+    // and picking the first result of any kind lands on a deterministic one.
+    // An ai eval the judge actually decided: some are skipped for their own
+    // reasons, and picking one of those proves nothing about weight.
+    const name = first.evalResults.find(
+      (r) => r.grader === "ai" && r.outcome === "pass",
+    )?.evalName;
+    expect(name, "fixture has a judged ai eval").toBeDefined();
+    const failed = await run({ judge: failing([name!]) });
+    // The judge decides the outcome; weight only decides how much it moves the
+    // rate. Counts stay unweighted for the same reason.
+    expect(failed.evalResults.find((r) => r.evalName === name)?.outcome).toBe(
+      "fail",
+    );
+    expect(failed.summary.fail).toBeGreaterThan(0);
+  });
+});

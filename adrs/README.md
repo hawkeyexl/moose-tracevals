@@ -25,3 +25,10 @@ Every **behavior change** in moose-tracevals ships with an ADR here. The ADR rec
 | [01009](01009-share-one-moose-config-file-across-the-family.md) | Read settings from a `tracevals:` section of a shared `moose.config.yaml` | accepted |
 | [01010](01010-adopt-the-docmeta-artifact-evals-vocabulary.md) | Adopt `docmeta:artifact-evals` as the eval vocabulary, and stop publishing our own | accepted |
 | [01011](01011-execute-command-graded-evals.md) | Execute `command`-graded evals, on by default | accepted |
+| [01012](01012-a-tool-order-grader.md) | A `tool-order` grader | accepted |
+| [01013](01013-skill-invoked-is-not-an-adherence-suite.md) | `skill-invoked` alone is not an adherence suite | accepted |
+| [01014](01014-adopt-artifact-evals-proposal-2.md) | Adopt `docmeta:artifact-evals:1.0.0-proposal.2` | accepted |
+| [01015](01015-a-judge-grading-its-own-session.md) | A judge grading its own session is reported | accepted |
+| [01016](01016-target-selects-the-graded-subject.md) | `target` selects the graded subject, alongside graders' own narrowing options | accepted |
+| [01017](01017-weight-feeds-a-reported-pass-rate.md) | `weight` feeds a reported pass rate, not a gate | accepted |
+| [01018](01018-per-eval-runs-and-model.md) | Per-eval `runs`, and the judge context that carries them | accepted |

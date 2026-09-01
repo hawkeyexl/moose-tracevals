@@ -18,10 +18,26 @@ Ground every judgment in the transcript: cite the specific messages, tool calls,
 
 Respond with a single JSON object matching the provided schema. No prose outside the JSON.`;
 
-/** Cap for the artifact excerpt included alongside the assertion. */
-const MAX_ARTIFACT_CHARS = 8_000;
+/**
+ * Cap for the artifact excerpt included alongside the assertion.
+ *
+ * The prompt says when it truncates, so the judge knows it is reading part of
+ * an artifact. What was missing is the *reader* knowing: a verdict formed
+ * without sight of an artifact's second half looked identical in every report
+ * to one formed with it. `artifactWasTruncated` lets the engine say so.
+ */
+export const MAX_ARTIFACT_CHARS = 8_000;
 
-export function buildUserContent(plan: EvalPlan, renderedTrace: string): string {
+/** Whether this artifact will be cut before the judge sees it. */
+export function artifactWasTruncated(content: string): boolean {
+  return content.length > MAX_ARTIFACT_CHARS;
+}
+
+export function buildUserContent(
+  plan: EvalPlan,
+  graded: string,
+  targetLabel = "transcript",
+): string {
   const parts: string[] = [];
   parts.push(`# Assertion\n${plan.assertion}`);
   if (plan.evidence) {
@@ -40,6 +56,13 @@ export function buildUserContent(plan: EvalPlan, renderedTrace: string): string 
   parts.push(
     `# Source ${plan.artifact.type} ("${plan.artifact.name}")\n${artifactBody}`,
   );
-  parts.push(`# Session transcript\n${renderedTrace}`);
+  // Name what the judge is looking at. Told "session transcript" while being
+  // handed a written file or a final assistant message, a judge reasons about
+  // the wrong thing and says so confidently.
+  parts.push(
+    targetLabel === "transcript"
+      ? `# Session transcript\n${graded}`
+      : `# Graded content (${targetLabel})\n${graded}`,
+  );
   return parts.join("\n\n");
 }

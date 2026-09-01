@@ -15,6 +15,7 @@ import { join, dirname } from "node:path";
 import { extractFrontmatter, Validator, type FieldError } from "docmeta";
 import type { ResolvedArtifact } from "../artifacts/types.js";
 import { TracevalsError } from "../types.js";
+import type { TraceTarget } from "../core/target.js";
 
 export const ARTIFACT_EVALS_SCHEMA_ID = "docmeta:artifact-evals:1.0.0-proposal.2";
 
@@ -68,6 +69,14 @@ export interface EvalEntry {
   grader: string;
   /** Overrides the configured judge provider for this eval only. */
   provider?: string;
+  /** Overrides the judge model for this eval only; a CLI --model still wins. */
+  model?: string;
+  /** Ensemble runs for this eval only; a CLI --runs still wins. */
+  runs?: number;
+  /** Which bytes the grader receives. Absent means the whole transcript. */
+  target?: TraceTarget;
+  /** Relative contribution to the run's pass rate. Never changes the outcome. */
+  weight?: number;
   options?: Record<string, unknown>;
   severity: Severity;
   evidence?: string;
@@ -231,6 +240,12 @@ function normalizeEntry(raw: unknown, index: number): EvalEntry {
     severity: (obj.severity as Severity | undefined) ?? "error",
   };
   if (typeof obj.provider === "string") entry.provider = obj.provider;
+  if (typeof obj.model === "string") entry.model = obj.model;
+  if (typeof obj.runs === "number") entry.runs = obj.runs;
+  if (typeof obj.weight === "number") entry.weight = obj.weight;
+  if (typeof obj.target === "string" || (obj.target && typeof obj.target === "object")) {
+    entry.target = obj.target as TraceTarget;
+  }
   if (obj.options && typeof obj.options === "object") {
     entry.options = obj.options as Record<string, unknown>;
   }

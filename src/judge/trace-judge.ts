@@ -24,6 +24,8 @@ import verdictSchemaJson from "./verdict-schema.json" with { type: "json" };
 import type { EvalPlan } from "../core/plan.js";
 import { cacheKey } from "./cache.js";
 import { buildUserContent, JUDGE_SYSTEM_PROMPT } from "./prompt.js";
+import { readTarget, describeTarget } from "../core/target.js";
+import type { Trace } from "../trace/types.js";
 
 /**
  * moose-tracevals' own verdict wording. Structurally identical to the library's
@@ -68,18 +70,36 @@ export interface JudgedEval {
   skipReason?: string;
   /** Set when the eval could not be judged at all. */
   error?: string;
+  /** Set when the judge model also produced what it graded. See EvalResult. */
+  selfPreference?: { axis: "session" | "criterion"; model: string };
   costUsd: number;
   durationMs: number;
+}
+
+/** What the judge needs about the session beyond its rendered form. */
+export interface TraceJudgeContext {
+  /**
+   * The parsed session. Supplies `target` selection and the model that
+   * produced the run — absent means "unknown", which is reported rather than
+   * treated as "not the same model".
+   */
+  trace?: Trace;
+  /** Root a relative `{source: file}` target resolves against. */
+  projectRoot?: string;
 }
 
 export type TraceJudge = (
   plans: EvalPlan[],
   renderedTrace: string,
+  context?: TraceJudgeContext,
 ) => Promise<JudgedEval[]>;
 
 export function makeTraceJudge(options: TraceJudgeOptions): TraceJudge {
   const provider = options.provider;
-  const runsPerEval = options.runs ?? 3;
+  // CLI > eval > default. The flag is an explicit operator act ("run cheap
+  // right now"), so it outranks an eval asking for more agreement; the eval
+  // outranks the run default, which is the point of having it.
+  const runsFor = (plan: EvalPlan): number => options.runs ?? plan.runs ?? 3;
   const temperature = options.temperature ?? 0;
   const zones = options.zones ?? { autoPass: 0.8, autoFail: 0.8 };
   const cache = new JsonCache<JudgeRun[]>(
@@ -89,7 +109,9 @@ export function makeTraceJudge(options: TraceJudgeOptions): TraceJudge {
   );
   const pricing = pricingFor(provider.modelName(), options.pricing);
 
-  return async (plans, renderedTrace) => {
+  return async (plans, renderedTrace, context) => {
+    const trace = context?.trace;
+    const sessionModel = trace?.model;
     let spentUsd = 0;
     const results: JudgedEval[] = [];
 
@@ -150,10 +172,50 @@ export function makeTraceJudge(options: TraceJudgeOptions): TraceJudge {
         continue;
       }
 
+      // What this eval asked to be graded. A target that cannot be served
+      // errors rather than falling back to the transcript: a verdict about the
+      // wrong bytes is worse than no verdict.
+      // Without a parsed trace only the transcript and the artifact can be
+      // served. Saying so beats quietly grading the transcript instead.
+      const selected =
+        trace === undefined
+          ? plan.target === undefined ||
+            plan.target === "transcript" ||
+            plan.target === "artifact"
+            ? ({
+                ok: true as const,
+                text:
+                  plan.target === "artifact"
+                    ? plan.artifact.content
+                    : renderedTrace,
+                label: plan.target === "artifact" ? "artifact" : "transcript",
+              })
+            : ({
+                ok: false as const,
+                reason: `target "${describeTarget(plan.target)}" needs the parsed session, which this run did not supply`,
+              })
+          : readTarget(plan.target, {
+              trace,
+              renderedTrace,
+              artifactContent: plan.artifact.content,
+              root: context?.projectRoot ?? trace.cwd,
+            });
+      if (!selected.ok) {
+        results.push({
+          ...base,
+          outcome: "error",
+          error: selected.reason,
+          costUsd: 0,
+          durationMs: Date.now() - start,
+        });
+        continue;
+      }
+
+      const runsPerEval = runsFor(plan);
       const runs = await runEnsemble({
         provider: evalProvider,
         system: JUDGE_SYSTEM_PROMPT,
-        user: buildUserContent(plan, renderedTrace),
+        user: buildUserContent(plan, selected.text, selected.label),
         runs: runsPerEval,
         temperature,
         schema: verdictSchema,
@@ -163,7 +225,9 @@ export function makeTraceJudge(options: TraceJudgeOptions): TraceJudge {
           evalProvider.modelName(),
           runsPerEval,
           temperature,
-          renderedTrace,
+          // The selected bytes, not always the transcript: two targets on one
+          // session are two different questions and must not share a verdict.
+          selected.text,
           plan,
         ),
         label: "moose-tracevals",
@@ -175,6 +239,15 @@ export function makeTraceJudge(options: TraceJudgeOptions): TraceJudge {
       const costUsd = costOfRuns(runs, evalPricing);
       spentUsd += costUsd;
 
+      // Compared against the model that actually judged this eval, not the
+      // run's default: an eval that names its own model is exactly the case a
+      // run-wide check would miss.
+      const judgeModel = evalProvider.modelName();
+      const selfPreference =
+        sessionModel !== undefined && sessionModel === judgeModel
+          ? ({ axis: "session", model: judgeModel } as const)
+          : undefined;
+
       results.push({
         ...base,
         outcome:
@@ -185,6 +258,7 @@ export function makeTraceJudge(options: TraceJudgeOptions): TraceJudge {
               : "needs-review",
         consensus,
         costUsd,
+        ...(selfPreference ? { selfPreference } : {}),
         durationMs: Date.now() - start,
       });
     }
