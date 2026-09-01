@@ -71,8 +71,86 @@ jobs:
             };
             // The fixture skill declares a tool-usage eval the trace violates.
             check("SKILL.md forbidden-tool", find("SKILL.md", "forbidden-tool")?.outcome, "fail");
+            // Scoped grading (ADR 01015): the trace runs Bash twice, once
+            // before the skill was ever invoked. Only the in-window call may
+            // count, so the *count* — not just the verdict — is the assertion.
+            const forbiddenMsg = find("SKILL.md", "forbidden-tool")?.findings?.[0]?.message ?? "";
+            if (!/used 1 time\(s\)/.test(forbiddenMsg)) {
+              console.error(`forbidden-tool must count only the in-window Bash, got: ${forbiddenMsg}`);
+              process.exitCode = 1;
+            }
             // And one it satisfies.
             check("SKILL.md used-read", find("SKILL.md", "used-read")?.outcome, "pass");
+            // An agent is graded against its own branch: the parent session ran
+            // Edit, the reviewer branch only read. Unwindowed, this is a fail.
+            check("reviewer.md read-only", find("reviewer.md", "reviewer-is-read-only")?.outcome, "pass");
+            check("reviewer.md read-something", find("reviewer.md", "reviewer-read-something")?.outcome, "pass");
+            // And an agent that spawned no branch governed nothing: every eval
+            // on it must say so. `doc-writer-wrote-docs` would otherwise pass
+            // on a file the *parent* wrote — the exact false pass windowing
+            // exists to prevent, so a silent `pass` here is the regression.
+            for (const name of ["doc-writer-wrote-docs", "doc-writer-followed-its-brief"]) {
+              const empty = find("doc-writer.md", name);
+              check(`doc-writer.md ${name}`, empty?.outcome, "skipped");
+              if (!/no subagent turns/.test(empty?.skipReason ?? "")) {
+                console.error(`${name}: expected an empty-window reason, got ${empty?.skipReason}`);
+                process.exitCode = 1;
+              }
+            }
+            // Conditional triggers (ADR 01016). The session edited src/app.ts
+            // and invoked fix-bug, so this one armed and passed.
+            check("CLAUDE.md armed trigger", find("CLAUDE.md", "source-edits-use-the-fix-bug-skill")?.outcome, "pass");
+            // And the one armed on docs/** never fired. It must be `skipped`
+            // with the reason stated — a `pass` here is the regression that
+            // would silently gut the feature, since a check that never armed
+            // has not been satisfied.
+            const unarmed = find("CLAUDE.md", "docs-work-uses-the-writing-skill");
+            check("CLAUDE.md unarmed trigger", unarmed?.outcome, "skipped");
+            if (!/trigger not met/.test(unarmed?.skipReason ?? "")) {
+              console.error(`unarmed trigger: expected a trigger-not-met reason, got ${unarmed?.skipReason}`);
+              process.exitCode = 1;
+            }
+            // The three coverage states, never collapsed. `doc-writer` is
+            // spawned and resolves on disk but was never on the roster: a
+            // configuration bug, not an adherence failure.
+            const availabilityOf = (ref) => r.coverage.find((c) => c.ref === ref)?.availability;
+            check("fix-bug availability", availabilityOf("fix-bug"), "offered-and-used");
+            check("doc-writer availability", availabilityOf("doc-writer"), "not-offered");
+            // The three things a `<command-name>` injection can be, told apart
+            // by the filesystem rather than by a list that goes stale
+            // (ADR 01023). This closes the limitation ADR 01016 recorded.
+            const kindOf = (ref) => r.coverage.find((c) => c.ref === ref)?.kind;
+            check("project command kind", kindOf("ship-it"), "slash-command");
+            check("skill under its slash form", kindOf("writing-toolkit:identify-ai-tells"), "skill");
+            check("built-in command kind", kindOf("model"), "slash-command");
+            // A built-in is reported as one, never as a skill that went
+            // missing: no warning, and no roster claim, because the transcript
+            // records no roster of commands to have missed it from.
+            const builtin = r.coverage.find((c) => c.ref === "model");
+            check("built-in command resolved", builtin?.resolved, false);
+            check("built-in command availability", builtin?.availability, undefined);
+            if (!/built-in slash command/.test(builtin?.note ?? "")) {
+              console.error(`expected a built-in note, got: ${builtin?.note}`);
+              process.exitCode = 1;
+            }
+            if (r.warnings.some((w) => /"model"/.test(w))) {
+              console.error("a built-in slash command must not warn:", JSON.stringify(r.warnings));
+              process.exitCode = 1;
+            }
+            // A slash command is windowed like a skill: the session ran Bash
+            // twice, both before /ship-it was invoked, so an unwindowed run
+            // would fail this. And the roster counts are untouched by any of it.
+            check("ship-it no-shell", find("ship-it.md", "no-shell-during-release")?.outcome, "pass");
+            check("ship-it wrote-note", find("ship-it.md", "wrote-the-release-note")?.outcome, "pass");
+            // Offered-but-unused is counted, not listed, unless asked for.
+            check("roster recorded", r.availability?.recorded, true);
+            check("skills offered", r.availability?.skills?.offered, 5);
+            check("skills unused", r.availability?.skills?.unused, 3);
+            check("roster listed", r.availability?.listed, false);
+            if (r.coverage.some((c) => c.availability === "offered-not-used")) {
+              console.error("offered-but-unused artifacts must be summarised, not listed, by default");
+              process.exitCode = 1;
+            }
             // A command-graded eval really spawns its check script over {trace}.
             check("SKILL.md no-force-push", find("SKILL.md", "no-force-push")?.outcome, "pass");
             check("SKILL.md no-force-push grader", find("SKILL.md", "no-force-push")?.grader, "command");
@@ -98,6 +176,427 @@ jobs:
               console.error("unexpected errored evals:", JSON.stringify(errored, null, 2));
               process.exitCode = 1;
             }
+            // Artifact staleness (ADR 01021). A checkout rewrites every mtime,
+            // so on this corpus every resolved artifact is newer than the
+            // fixture trace by construction — which makes the flag and the
+            // warning assertable, and makes it worth pinning that neither one
+            // reaches an outcome. The exit-1 check above is that guarantee.
+            const resolved = r.coverage.filter((c) => c.resolved);
+            if (resolved.length === 0) { console.error("expected resolved coverage entries"); process.exitCode = 1; }
+            for (const c of resolved) {
+              if (c.stale !== true || typeof c.modifiedAt !== "string") {
+                console.error("expected a staleness flag on a freshly checked-out artifact:", JSON.stringify(c));
+                process.exitCode = 1;
+              }
+            }
+            if (!r.warnings.some((w) => /modified after the session ended/.test(w))) {
+              console.error("expected a staleness warning:", JSON.stringify(r.warnings, null, 2));
+              process.exitCode = 1;
+            }
+          '
+
+      # ADR 01019: the opt-out ADR 01011 never provided. The corpus declares a
+      # real command eval that spawns a script and passes; with the flag it must
+      # report `skipped` — never `pass`, because an unrun check has not been
+      # satisfied — and nothing else about the run may move.
+      - name: Dogfood run (command opt-out)
+        shell: bash
+        env:
+          MOOSE_TRACEVALS_HOME: test/fixtures/home
+        run: |
+          set +e
+          node dist/cli.js run test/fixtures/traces/claude-session.jsonl --project test/fixtures/project --deterministic-only --no-commands --format json > moose-tracevals-nocmd.json
+          code=$?
+          set -e
+          if [ "$code" -ne 1 ]; then
+            echo "Expected exit 1 with --no-commands (the deterministic failure is unrelated to it), got $code"
+            cat moose-tracevals-nocmd.json
+            exit 1
+          fi
+          node -e '
+            const fs = require("fs");
+            const read = (f) => {
+              let raw = fs.readFileSync(f, "utf8");
+              if (raw.charCodeAt(0) === 0xfeff) raw = raw.slice(1);
+              return JSON.parse(raw);
+            };
+            const on = read("moose-tracevals-run.json");
+            const off = read("moose-tracevals-nocmd.json");
+            const find = (r) => r.evalResults.find((x) => x.evalName === "no-force-push");
+            if (find(on)?.outcome !== "pass") {
+              console.error("baseline: the command eval should pass by default, got", find(on)?.outcome);
+              process.exitCode = 1;
+            }
+            const skipped = find(off);
+            if (skipped?.outcome !== "skipped") {
+              console.error("--no-commands must skip the command eval, got", JSON.stringify(skipped));
+              process.exitCode = 1;
+            }
+            if (!/command execution is disabled/.test(skipped?.skipReason ?? "")) {
+              console.error("expected a stated reason for the skip, got", skipped?.skipReason);
+              process.exitCode = 1;
+            }
+            // The flag must be surgical: every other verdict, and the exit
+            // code, identical to the default run.
+            const others = (r) => JSON.stringify(
+              r.evalResults
+                .filter((x) => x.evalName !== "no-force-push")
+                .map((x) => [x.artifactName, x.evalName, x.outcome])
+                .sort()
+            );
+            if (others(on) !== others(off)) {
+              console.error("--no-commands changed an unrelated verdict:");
+              console.error(others(on));
+              console.error(others(off));
+              process.exitCode = 1;
+            }
+            if (on.exitCode !== off.exitCode) {
+              console.error("--no-commands changed the exit code:", on.exitCode, off.exitCode);
+              process.exitCode = 1;
+            }
+          '
+
+          # The flag has to be a *pair*. Declared alone, `--no-commands` makes
+          # commander default `opts.commands` to true, and the `??` overlay in
+          # prepareRun then never sees undefined -- which makes
+          # `graders.command.enabled: false` unreachable from the CLI and
+          # leaves ADR 01011's opt-out dead. Only a run whose config disables
+          # commands, with no flag passed, can catch that.
+          mkdir -p .tmp
+          # Both runs exit 1 on the engineered deterministic failure, which is
+          # unrelated to the flag under test, so `set -e` must not read it as
+          # the step failing.
+          set +e
+          ( cd test/fixtures/no-commands \
+            && MOOSE_TRACEVALS_HOME=../home node ../../../dist/cli.js run \
+                 ../../../test/fixtures/traces/claude-session.jsonl \
+                 --project ../../../test/fixtures/project \
+                 --deterministic-only --format json \
+                 > ../../../.tmp/nocmd-config.json )
+          ( cd test/fixtures/no-commands \
+            && MOOSE_TRACEVALS_HOME=../home node ../../../dist/cli.js run \
+                 ../../../test/fixtures/traces/claude-session.jsonl \
+                 --project ../../../test/fixtures/project \
+                 --deterministic-only --commands --format json \
+                 > ../../../.tmp/nocmd-forced.json )
+          set -e
+          node -e '
+            const fs = require("fs");
+            const read = (f) => {
+              let raw = fs.readFileSync(f, "utf8");
+              if (raw.charCodeAt(0) === 0xfeff) raw = raw.slice(1);
+              return JSON.parse(raw);
+            };
+            const find = (r) => r.evalResults.find((x) => x.evalName === "no-force-push");
+            const fromConfig = find(read(".tmp/nocmd-config.json"));
+            if (fromConfig?.outcome !== "skipped") {
+              console.error("graders.command.enabled: false must reach a flagless run, got", JSON.stringify(fromConfig));
+              process.exitCode = 1;
+            }
+            const forced = find(read(".tmp/nocmd-forced.json"));
+            if (forced?.outcome !== "pass") {
+              console.error("--commands must override a config that disabled them, got", JSON.stringify(forced));
+              process.exitCode = 1;
+            }
+          '
+          rm -f .tmp/nocmd-config.json .tmp/nocmd-forced.json
+
+      # A flag that fails to parse must be an operational error, never a
+      # silently-disabled limit: NaN is not undefined, so it survives the `??`
+      # overlay and reaches the runtime as a ceiling that can never be hit.
+      - name: Dogfood flag validation (a bad limit is loud)
+        shell: bash
+        env:
+          MOOSE_TRACEVALS_HOME: test/fixtures/home
+        run: |
+          trace=test/fixtures/traces/claude-session.jsonl
+          bad() {
+            set +e
+            node dist/cli.js "$@" > /dev/null 2> .tmp/flag-error.txt
+            code=$?
+            set -e
+            if [ "$code" -ne 2 ]; then
+              echo "Expected exit 2 for: $*"
+              echo "got $code"; cat .tmp/flag-error.txt; exit 1
+            fi
+            grep -q "must be a" .tmp/flag-error.txt || {
+              echo "no explanation for: $*"; cat .tmp/flag-error.txt; exit 1
+            }
+          }
+          mkdir -p .tmp
+          # An unparseable budget is the expensive one: `spentUsd >= NaN` is
+          # false forever, so a batch bills with no ceiling while the report
+          # still claims one.
+          bad run "$trace" --project test/fixtures/project --provider mock --max-cost-usd abc
+          bad run "$trace" --project test/fixtures/project --provider mock --max-cost-usd=-1
+          # `slice(0, -1)` evaluates every trace except the oldest.
+          bad run --all-projects --limit=-1 --project test/fixtures/project --deterministic-only
+          bad run "$trace" --project test/fixtures/project --provider mock --runs 0
+          bad list --limit=-1
+          # calibrate shares the flags, so it shares the guard.
+          bad calibrate "$trace" --project test/fixtures/project --runs=-1
+          rm -f .tmp/flag-error.txt
+          # And the values a user actually passes still work.
+          set +e
+          node dist/cli.js run "$trace" --project test/fixtures/project --provider mock \
+            --no-cache --runs 1 --max-cost-usd 0.5 --format json > /dev/null
+          code=$?
+          set -e
+          if [ "$code" -eq 2 ]; then
+            echo "valid numeric flags must not be rejected"; exit 1
+          fi
+
+      # `--report-unused-artifacts` is the opt-in half of the same observation:
+      # the full roster is what a 274-skill session would drown the report with,
+      # so it must stay behind the flag — and must never move the exit code.
+      - name: Dogfood run (offered-but-unused artifacts)
+        shell: bash
+        env:
+          MOOSE_TRACEVALS_HOME: test/fixtures/home
+        run: |
+          set +e
+          node dist/cli.js run test/fixtures/traces/claude-session.jsonl --project test/fixtures/project --deterministic-only --report-unused-artifacts --format json > moose-tracevals-unused.json
+          code=$?
+          set -e
+          if [ "$code" -ne 1 ]; then
+            echo "Expected exit 1 (unchanged by an observation), got $code"
+            cat moose-tracevals-unused.json
+            exit 1
+          fi
+          node -e '
+            let raw = require("fs").readFileSync("moose-tracevals-unused.json", "utf8");
+            if (raw.charCodeAt(0) === 0xfeff) raw = raw.slice(1);
+            const r = JSON.parse(raw);
+            if (r.availability?.listed !== true) { console.error("expected listed: true"); process.exitCode = 1; }
+            const unused = r.coverage.filter((c) => c.availability === "offered-not-used");
+            const want = ["deep-research", "bare-listing", "tdd-coverage", "researcher"];
+            if (JSON.stringify(unused.map((c) => c.ref)) !== JSON.stringify(want)) {
+              console.error("unexpected offered-but-unused list:", JSON.stringify(unused, null, 2));
+              process.exitCode = 1;
+            }
+            // The description is the point: it is the criterion Claude Code
+            // itself uses to decide whether to invoke.
+            if (!/Fan-out web searches/.test(unused[0]?.note ?? "")) {
+              console.error(`expected the roster description in the note, got ${unused[0]?.note}`);
+              process.exitCode = 1;
+            }
+            // Nothing was looked for on disk, so an unused row claims nothing
+            // about resolution.
+            if (unused.some((c) => c.tried.length > 0)) {
+              console.error("an offered-but-unused row must not claim a filesystem search");
+              process.exitCode = 1;
+            }
+            // A truncated listing names a skill with no description at all.
+            const bare = unused.find((c) => c.ref === "bare-listing");
+            if (bare?.note !== "offered, never used") {
+              console.error(`expected a bare note for a description-less skill, got ${bare?.note}`);
+              process.exitCode = 1;
+            }
+          '
+
+      # ADR 01024: `capture` reads a Claude Code hook envelope on stdin. The
+      # payload really arrives on a pipe here, which is what catches a broken
+      # bin entry or a stdin path that only works under vitest.
+      - name: Dogfood capture (session manifest)
+        shell: bash
+        run: |
+          mkdir -p .tmp
+          echo '{"session_id":"11111111-1111-1111-1111-111111111111","hook_event_name":"SessionStart","how":"startup","cwd":"test/fixtures/project"}' \
+            | node dist/cli.js capture --out .tmp/ci-capture.json > .tmp/ci-capture-stdout.txt 2> .tmp/ci-capture-stderr.txt
+          # A SessionStart hook's stdout becomes the model's context, so it must
+          # stay empty however chatty the command is.
+          if [ -s .tmp/ci-capture-stdout.txt ]; then
+            echo "capture must write nothing to stdout in hook mode:"
+            cat .tmp/ci-capture-stdout.txt
+            exit 1
+          fi
+          grep -q "11111111-1111-1111-1111-111111111111" .tmp/ci-capture-stderr.txt
+          node -e '
+            const m = JSON.parse(require("fs").readFileSync(".tmp/ci-capture.json", "utf8"));
+            const fail = (msg) => { console.error(msg); process.exitCode = 1; };
+            if (m.sessionId !== "11111111-1111-1111-1111-111111111111") fail(`sessionId: ${m.sessionId}`);
+            if (m.hookEvent !== "SessionStart") fail(`hookEvent: ${m.hookEvent}`);
+            // The reason is recorded but never depended on; the docs spell it
+            // `how`, `why`, `source` and `reason` across versions.
+            if (m.reason !== "startup") fail(`reason: ${m.reason}`);
+            if (!/^[0-9a-f]{40}$/.test(m.git?.sha ?? "")) fail(`git sha: ${m.git?.sha}`);
+            if (!/^[0-9a-f]{16}$/.test(m.device?.id ?? "")) fail(`device id: ${m.device?.id}`);
+            // Project-relative and POSIX, so the manifest still joins after a
+            // checkout somewhere else — the whole point of not storing abspaths.
+            const paths = m.artifacts.map((a) => a.path).sort();
+            const want = [
+              ".claude/agents/doc-writer.md", ".claude/agents/reviewer.md",
+              ".claude/commands/ship-it.md", ".claude/skills/fix-bug/SKILL.md",
+              "AGENTS.md", "CLAUDE.md",
+            ];
+            if (JSON.stringify(paths) !== JSON.stringify(want)) {
+              fail(`artifact paths: ${JSON.stringify(paths)}`);
+            }
+            for (const a of m.artifacts) {
+              if (!/^[0-9a-f]{64}$/.test(a.sha256)) fail(`sha256 for ${a.path}: ${a.sha256}`);
+            }
+          '
+
+      # ADR 01024: a manifest makes staleness exact. Three runs over one trace —
+      # none, a matching one, and one invalidated by an edit — and the assertion
+      # that matters most is the last: no verdict, no summary count and no exit
+      # code moves across any of them.
+      - name: Dogfood run (a manifest sharpens staleness)
+        shell: bash
+        env:
+          MOOSE_TRACEVALS_HOME: test/fixtures/home
+        run: |
+          set +e
+          rm -rf .tmp/manifest-ci
+          mkdir -p .tmp/manifest-ci
+          cp -r test/fixtures/project .tmp/manifest-ci/project
+          # Without one: the mtime heuristic of ADR 01021, untouched.
+          node dist/cli.js run test/fixtures/traces/claude-session.jsonl --project .tmp/manifest-ci/project --deterministic-only --format json > .tmp/manifest-ci/none.json
+          none=$?
+          echo '{"session_id":"11111111-1111-1111-1111-111111111111","cwd":".tmp/manifest-ci/project"}' \
+            | node dist/cli.js capture --out .tmp/manifest-ci/m.json > /dev/null 2>&1
+          node dist/cli.js run test/fixtures/traces/claude-session.jsonl --project .tmp/manifest-ci/project --manifest .tmp/manifest-ci/m.json --deterministic-only --format json > .tmp/manifest-ci/fresh.json
+          fresh=$?
+          printf '\n<!-- edited after capture -->\n' >> .tmp/manifest-ci/project/.claude/skills/fix-bug/SKILL.md
+          node dist/cli.js run test/fixtures/traces/claude-session.jsonl --project .tmp/manifest-ci/project --manifest .tmp/manifest-ci/m.json --deterministic-only --format json > .tmp/manifest-ci/edited.json
+          edited=$?
+          set -e
+          if [ "$none" -ne 1 ] || [ "$fresh" -ne 1 ] || [ "$edited" -ne 1 ]; then
+            echo "Expected exit 1 from all three runs, got $none / $fresh / $edited"
+            exit 1
+          fi
+          node -e '
+            const read = (f) => {
+              let raw = require("fs").readFileSync(`.tmp/manifest-ci/${f}.json`, "utf8");
+              if (raw.charCodeAt(0) === 0xfeff) raw = raw.slice(1);
+              return JSON.parse(raw);
+            };
+            const [none, fresh, edited] = ["none", "fresh", "edited"].map(read);
+            const fail = (msg) => { console.error(msg); process.exitCode = 1; };
+            const row = (r, ref) => r.coverage.find((c) => c.ref === ref);
+            const check = (label, actual, expected) => {
+              if (actual !== expected) fail(`${label}: expected ${expected}, got ${actual}`);
+            };
+
+            // No manifest degrades, never fails: the check reports `skipped`
+            // with a reason and the mtime guess stands. A checkout rewrote every
+            // mtime, so on this corpus that means everything is flagged.
+            check("none: manifest", none.manifest, undefined);
+            check("none: fix-bug check", row(none, "fix-bug")?.contentCheck?.status, "skipped");
+            if (!/manifest/i.test(row(none, "fix-bug")?.contentCheck?.reason ?? "")) {
+              fail(`none: expected a manifest reason, got ${row(none, "fix-bug")?.contentCheck?.reason}`);
+            }
+            check("none: fix-bug stale", row(none, "fix-bug")?.stale, true);
+            if (!none.warnings.some((w) => /mtime is a heuristic/.test(w))) {
+              fail("none: expected the mtime warning");
+            }
+
+            // A match is exact and answers mtime own question, so the checkout
+            // false positive disappears for every artifact in the project.
+            check("fresh: fix-bug check", row(fresh, "fix-bug")?.contentCheck?.status, "match");
+            check("fresh: fix-bug stale", row(fresh, "fix-bug")?.stale, false);
+            check("fresh: changed count", fresh.manifest?.changed, 0);
+            if (!(fresh.manifest?.matched > 0)) fail("fresh: expected matched artifacts");
+            // The observation itself is never hidden — only the conclusion.
+            if (typeof row(fresh, "fix-bug")?.modifiedAt !== "string") {
+              fail("fresh: modifiedAt must still be reported");
+            }
+            // The plugin skill lives outside the project, and capture is
+            // project-scoped, so it keeps the guess and says why.
+            const outside = row(fresh, "writing-toolkit:identify-ai-tells");
+            check("fresh: outside check", outside?.contentCheck?.status, "skipped");
+            if (!/outside the project root/.test(outside?.contentCheck?.reason ?? "")) {
+              fail(`fresh: expected an out-of-project reason, got ${outside?.contentCheck?.reason}`);
+            }
+            check("fresh: outside stale", outside?.stale, true);
+
+            // A mismatch is exact in the other direction.
+            check("edited: fix-bug check", row(edited, "fix-bug")?.contentCheck?.status, "mismatch");
+            check("edited: fix-bug stale", row(edited, "fix-bug")?.stale, true);
+            check("edited: changed count", edited.manifest?.changed, 1);
+            if (!edited.warnings.some((w) => /changed since the session started/.test(w))) {
+              fail(`edited: expected a manifest warning, got ${JSON.stringify(edited.warnings)}`);
+            }
+            // Untouched artifacts stay clean, so the signal points at one file.
+            check("edited: reviewer check", row(edited, "reviewer")?.contentCheck?.status, "match");
+
+            // The invariant that matters: a manifest is an observation. It may
+            // never move a verdict, a summary count, or the exit code.
+            const outcomes = (r) => JSON.stringify(r.evalResults.map((e) => [e.artifactName, e.evalName, e.outcome]).sort());
+            for (const [label, r] of [["fresh", fresh], ["edited", edited]]) {
+              if (outcomes(r) !== outcomes(none)) fail(`${label}: eval outcomes moved`);
+              if (JSON.stringify(r.summary) !== JSON.stringify(none.summary)) fail(`${label}: summary moved`);
+              if (r.exitCode !== none.exitCode) fail(`${label}: exit code moved`);
+            }
+          '
+
+      - name: Dogfood run (an unverifiable manifest is refused)
+        shell: bash
+        env:
+          MOOSE_TRACEVALS_HOME: test/fixtures/home
+        run: |
+          set +e
+          rm -rf .tmp/unverifiable
+          mkdir -p .tmp/unverifiable
+          # A stream-json trace whose `system`/`init` record has lost its
+          # session id. It still parses — every other record keeps an id, which
+          # is what the format sniffer reads — and it records nothing a manifest
+          # can be joined to, which is the case the guard exists for.
+          node -e '
+            const fs = require("fs");
+            const lines = fs.readFileSync("test/fixtures/traces/claude-stream.jsonl", "utf8").split("\n").filter((l) => l.trim());
+            const out = lines.map((l) => {
+              const r = JSON.parse(l);
+              if (r.type === "system") delete r.session_id;
+              return JSON.stringify(r);
+            });
+            fs.writeFileSync(".tmp/unverifiable/stream.jsonl", out.join("\n") + "\n");
+          '
+          node dist/cli.js capture --session-id anybody --project test/fixtures/project --out .tmp/unverifiable/stream.manifest.json > /dev/null 2>&1
+          # Beside the trace, so discovery finds it — and must refuse it.
+          node dist/cli.js run .tmp/unverifiable/stream.jsonl --project test/fixtures/project --deterministic-only --format json > .tmp/unverifiable/discovered.json
+          discovered=$?
+          node dist/cli.js run .tmp/unverifiable/stream.jsonl --project test/fixtures/project --manifest .tmp/unverifiable/stream.manifest.json --deterministic-only --format json > .tmp/unverifiable/named.json
+          named=$?
+          set -e
+          if [ "$discovered" -ne 0 ] || [ "$named" -ne 0 ]; then
+            echo "Expected exit 0 from both runs, got $discovered / $named"
+            cat .tmp/unverifiable/discovered.json
+            exit 1
+          fi
+          node -e '
+            const read = (f) => {
+              let raw = require("fs").readFileSync(`.tmp/unverifiable/${f}.json`, "utf8");
+              if (raw.charCodeAt(0) === 0xfeff) raw = raw.slice(1);
+              return JSON.parse(raw);
+            };
+            const fail = (msg) => { console.error(msg); process.exitCode = 1; };
+            const [discovered, named] = ["discovered", "named"].map(read);
+
+            // The trace really does record no id, or this proves nothing.
+            if (discovered.trace.sessionId !== undefined) {
+              fail(`expected no session id, got ${discovered.trace.sessionId}`);
+            }
+            // Convention is not provenance: a sibling manifest that cannot be
+            // checked against the trace could describe any session at all.
+            if (discovered.manifest !== undefined) {
+              fail(`an unverifiable manifest was used: ${JSON.stringify(discovered.manifest)}`);
+            }
+            // Refused out loud — a silent fall back to the mtime guess is
+            // indistinguishable from never having captured anything.
+            if (!discovered.warnings.some((w) => /ignoring the session manifest at/.test(w))) {
+              fail(`expected a refusal warning, got ${JSON.stringify(discovered.warnings)}`);
+            }
+            // Naming the file is the caller assertion of provenance, and the
+            // only one available for a trace that records no id.
+            if (named.manifest?.sessionId !== "anybody") {
+              fail(`--manifest should still be honoured, got ${JSON.stringify(named.manifest)}`);
+            }
+            // A refusal is an observation, never a verdict.
+            if (named.exitCode !== discovered.exitCode) fail("exit code moved");
+            if (JSON.stringify(named.summary) !== JSON.stringify(discovered.summary)) {
+              fail("summary moved");
+            }
           '
 
       - name: Dogfood run (mock judge)
@@ -120,6 +619,14 @@ jobs:
             const r = JSON.parse(raw);
             const judged = r.evalResults.filter((x) => x.consensus);
             if (judged.length === 0) { console.error("expected judged evals with consensus objects"); process.exitCode = 1; }
+            // An ai eval whose artifact governed no turn never reaches the
+            // judge: no consensus object, a skip with a stated reason. A judge
+            // handed an empty window would answer about the parent session.
+            const empty = r.evalResults.find((x) => x.evalName === "doc-writer-followed-its-brief");
+            if (empty?.outcome !== "skipped" || empty?.consensus !== undefined) {
+              console.error("an empty window must be skipped before the judge, got:", JSON.stringify(empty));
+              process.exitCode = 1;
+            }
           '
 
       # `fill` is the only command that writes, so the gate proves two things:
@@ -147,7 +654,7 @@ jobs:
             if (raw.charCodeAt(0) === 0xfeff) raw = raw.slice(1);
             const r = JSON.parse(raw);
             const paths = r.results.map((x) => x.artifact.replace(/\\/g, "/"));
-            const want = ["fix-bug/SKILL.md", "doc-writer.md", "CLAUDE.md", "AGENTS.md"];
+            const want = ["fix-bug/SKILL.md", "doc-writer.md", "CLAUDE.md", "AGENTS.md", "commands/ship-it.md"];
             for (const suffix of want) {
               if (!paths.some((p) => p.endsWith(suffix))) {
                 console.error(`expected to discover ${suffix}`);
@@ -164,6 +671,14 @@ jobs:
             const rules = r.results.filter((x) => x.type === "project-rules");
             if (rules.length === 0 || !rules.every((x) => x.status === "propose-only")) {
               console.error("project rules must be propose-only");
+              process.exitCode = 1;
+            }
+            // A slash command is not. Its frontmatter is consumed by the
+            // harness rather than injected, so an eval block there cannot leak
+            // the rubric into the session under test (ADR 01023).
+            const commands = r.results.filter((x) => x.type === "slash-command");
+            if (commands.length === 0 || commands.some((x) => x.status === "propose-only")) {
+              console.error("slash commands must be writable, not propose-only");
               process.exitCode = 1;
             }
             // Proves the gate ran instead of rubber-stamping the proposal.
@@ -204,6 +719,10 @@ jobs:
             const r = JSON.parse(raw);
             const filled = r.results.filter((x) => x.status === "filled");
             if (filled.length === 0) { console.error("expected at least one filled artifact"); process.exitCode = 1; }
+            if (!filled.some((x) => x.type === "slash-command")) {
+              console.error("expected the slash command to be written on the real path");
+              process.exitCode = 1;
+            }
             // Project rules must stay propose-only even on the write path.
             if (r.results.some((x) => x.type === "project-rules" && x.status === "filled")) {
               console.error("project rules must never be written");
@@ -251,6 +770,536 @@ jobs:
           if [ -n "$dirty" ]; then
             echo "the write-path gate leaked into the real corpus:"; echo "$dirty"; exit 1
           fi
+
+      # Modern Claude Code writes subagent turns to a sidecar directory rather
+      # than inline in the session file, so this asserts the merge really runs
+      # through the built CLI: a branch spawned from *inside* another sidecar
+      # must reach artifact resolution, and a malformed sidecar must degrade to
+      # a warning instead of failing the run (ADR 01014).
+      - name: Dogfood run (subagent sidecar transcripts)
+        shell: bash
+        env:
+          MOOSE_TRACEVALS_HOME: test/fixtures/home
+        run: |
+          set +e
+          node dist/cli.js run test/fixtures/traces/claude-session-sidecar.jsonl --project test/fixtures/project --deterministic-only --format json > moose-tracevals-sidecar.json
+          code=$?
+          set -e
+          if [ "$code" -ne 0 ]; then
+            echo "Expected exit 0 from the sidecar fixture, got $code"
+            cat moose-tracevals-sidecar.json
+            exit 1
+          fi
+          node -e '
+            let raw = require("fs").readFileSync("moose-tracevals-sidecar.json", "utf8");
+            if (raw.charCodeAt(0) === 0xfeff) raw = raw.slice(1);
+            const r = JSON.parse(raw);
+            // A depth-2 agent whose Agent call exists only inside the depth-1
+            // sidecar. Seeing it here proves the merge fed artifact resolution.
+            if (!r.coverage.some((c) => c.kind === "agent" && c.ref === "general-purpose")) {
+              console.error("expected the nested subagent to reach artifact coverage");
+              console.error(JSON.stringify(r.coverage, null, 2));
+              process.exitCode = 1;
+            }
+            // Both degradation shapes must warn, not throw and not pass silently.
+            const warned = (needle) => r.warnings.some((w) => w.includes(needle));
+            for (const needle of ["is unreadable or not an object", "which is not in this trace"]) {
+              if (!warned(needle)) {
+                console.error(`expected a degradation warning containing: ${needle}`);
+                console.error(JSON.stringify(r.warnings, null, 2));
+                process.exitCode = 1;
+              }
+            }
+          '
+
+      # `registerGrader` is exported and documented, but until ADR 01017 there
+      # was no way to reach it from the CLI — so a repo could write a custom
+      # grader and still not use it in CI. This proves both halves through the
+      # built binary: the same corpus errors without the plugin and passes with
+      # it, from the flag and from the config alike.
+      - name: Dogfood run (grader plugins)
+        shell: bash
+        env:
+          MOOSE_TRACEVALS_HOME: test/fixtures/plugin-project
+        run: |
+          trace=test/fixtures/traces/claude-session.jsonl
+          # 1. The gap. A declared custom kind with nothing loading it is an
+          #    errored eval — never a silent pass.
+          set +e
+          node dist/cli.js run "$trace" --project test/fixtures/plugin-project --deterministic-only --format json > moose-tracevals-plugin-off.json
+          code=$?
+          set -e
+          if [ "$code" -ne 1 ]; then
+            echo "Expected exit 1 without the plugin, got $code"; cat moose-tracevals-plugin-off.json; exit 1
+          fi
+
+          # 2. --require closes it, and nothing else about the corpus changed.
+          node dist/cli.js run "$trace" --project test/fixtures/plugin-project --deterministic-only --require ./test/fixtures/plugins/stayed-in-scope.mjs --format json > moose-tracevals-plugin-on.json
+
+          # 3. The same plugin named by the config instead, run from the
+          #    project directory: `../plugins/…` only resolves if specifiers
+          #    are taken relative to the config file, not the working
+          #    directory. Run from the repo root it would resolve to nothing.
+          ( cd test/fixtures/plugin-project && MOOSE_TRACEVALS_HOME=. node ../../../dist/cli.js run ../traces/claude-session.jsonl --project . --deterministic-only --format json ) > moose-tracevals-plugin-config.json
+
+          node -e '
+            const fs = require("fs");
+            const read = (f) => {
+              let raw = fs.readFileSync(f, "utf8");
+              if (raw.charCodeAt(0) === 0xfeff) raw = raw.slice(1);
+              return JSON.parse(raw);
+            };
+            const evalOf = (r) => r.evalResults.find((x) => x.evalName === "stayed-in-the-worktree");
+            const check = (label, actual, expected) => {
+              if (actual !== expected) {
+                console.error(`${label}: expected ${expected}, got ${actual}`);
+                process.exitCode = 1;
+              }
+            };
+            const off = evalOf(read("moose-tracevals-plugin-off.json"));
+            check("no plugin outcome", off?.outcome, "error");
+            if (!/unknown grader kind/.test(off?.error ?? "")) {
+              console.error(`no plugin: expected the registry error, got: ${off?.error}`);
+              process.exitCode = 1;
+            }
+            for (const file of ["moose-tracevals-plugin-on.json", "moose-tracevals-plugin-config.json"]) {
+              const r = read(file);
+              check(`${file} outcome`, evalOf(r)?.outcome, "pass");
+              check(`${file} exit`, r.exitCode, 0);
+              // A plugin that loaded but registered nothing would still pass
+              // the check above by accident on a corpus with no custom eval;
+              // here it would surface as this warning.
+              if (r.warnings.some((w) => /registered no grader kinds/.test(w))) {
+                console.error(`${file}: the plugin registered nothing`);
+                process.exitCode = 1;
+              }
+            }
+          '
+
+          # 4. A plugin that will not load is operational (exit 2), and says so
+          #    in words that cannot be mistaken for a typo'd grader kind — the
+          #    two are neighbours, and conflating them sends the reader to the
+          #    wrong file.
+          set +e
+          node dist/cli.js run "$trace" --project test/fixtures/plugin-project --deterministic-only --require ./test/fixtures/plugins/not-here.mjs > /dev/null 2> moose-tracevals-plugin-err.txt
+          code=$?
+          set -e
+          if [ "$code" -ne 2 ]; then
+            echo "Expected exit 2 from an unloadable plugin, got $code"; cat moose-tracevals-plugin-err.txt; exit 1
+          fi
+          grep -q "could not load grader plugin" moose-tracevals-plugin-err.txt || {
+            echo "missing the plugin-load error:"; cat moose-tracevals-plugin-err.txt; exit 1
+          }
+          if grep -q "unknown grader kind" moose-tracevals-plugin-err.txt; then
+            echo "a load failure must not read as a grader-not-found error:"
+            cat moose-tracevals-plugin-err.txt
+            exit 1
+          fi
+
+      # Adherence is a rate, not a verdict (ADR 01018). This proves the batch
+      # path through the built binary: the aggregate shape, a rate computed
+      # over a corpus engineered to fail on one trace and pass on the other, a
+      # single-trace run that did *not* change shape, an unreadable file
+      # degrading beside good ones, and the judge budget reaching the shared
+      # judge instead of being rebuilt per trace.
+      - name: Dogfood run (batch over many traces)
+        shell: bash
+        env:
+          MOOSE_TRACEVALS_HOME: test/fixtures/home
+        run: |
+          a=test/fixtures/traces/claude-session.jsonl
+          b=test/fixtures/traces/claude-session-sidecar.jsonl
+
+          # 1. Two named traces: exit 1 because one of them fails, and the
+          #    report is the aggregate shape.
+          set +e
+          node dist/cli.js run "$a" "$b" --project test/fixtures/project --deterministic-only --format json > moose-tracevals-batch.json
+          code=$?
+          set -e
+          if [ "$code" -ne 1 ]; then
+            echo "Expected exit 1 from a batch containing the failing fixture, got $code"
+            cat moose-tracevals-batch.json
+            exit 1
+          fi
+
+          # 2. One named trace must still be the single-trace report. Many
+          #    assertions above and every documented example depend on it.
+          node dist/cli.js run "$b" --project test/fixtures/project --deterministic-only --format json > moose-tracevals-batch-single.json
+
+          # 3. A file that is not a trace at all, batched with two that are.
+          mkdir -p .tmp && printf 'not a trace\n' > .tmp/bad-trace.jsonl
+          set +e
+          node dist/cli.js run .tmp/bad-trace.jsonl "$a" "$b" --project test/fixtures/project --deterministic-only --format json > moose-tracevals-batch-degraded.json
+          code=$?
+          set -e
+          if [ "$code" -ne 1 ]; then
+            echo "Expected exit 1 from a batch with an unreadable trace, got $code"; exit 1
+          fi
+
+          # 4. The judge budget must reach the one shared judge. Zero is the
+          #    only budget a mock provider can exhaust, but it still proves the
+          #    flag is plumbed through the batch rather than dropped.
+          set +e
+          node dist/cli.js run "$a" "$b" --project test/fixtures/project --provider mock --max-cost-usd 0 --format json > moose-tracevals-batch-budget.json
+          set -e
+
+          node -e '
+            const fs = require("fs");
+            const read = (f) => {
+              let raw = fs.readFileSync(f, "utf8");
+              if (raw.charCodeAt(0) === 0xfeff) raw = raw.slice(1);
+              return JSON.parse(raw);
+            };
+            const check = (label, actual, expected) => {
+              if (actual !== expected) {
+                console.error(`${label}: expected ${expected}, got ${actual}`);
+                process.exitCode = 1;
+              }
+            };
+
+            const batch = read("moose-tracevals-batch.json");
+            check("batch traces", batch.summary.traces, 2);
+            check("batch tracesFailed", batch.summary.tracesFailed, 1);
+            check("batch tracesPassed", batch.summary.tracesPassed, 1);
+            // The rate is the point. `forbidden-tool` fails on the one trace
+            // that resolved the skill, and the failing trace is named — a rate
+            // with no route back to a session is unactionable.
+            const forbidden = batch.evals.find((e) => e.evalName === "forbidden-tool");
+            check("forbidden-tool passRate", forbidden?.passRate, 0);
+            check("forbidden-tool outliers", forbidden?.failingTraces?.length, 1);
+            // Skipped results stay out of the denominator: an artifact nobody
+            // invoked must not report a perfect score.
+            const empty = batch.evals.find((e) => e.evalName === "doc-writer-wrote-docs");
+            check("all-skipped passRate", empty?.passRate, null);
+            if (!(empty?.skipReasons ?? []).some((r) => /no subagent turns/.test(r))) {
+              console.error("an all-skipped row must keep its reason:", JSON.stringify(empty));
+              process.exitCode = 1;
+            }
+            // Rows are sorted by key on both OS legs, so two runs compare.
+            const keys = batch.evals.map((e) => e.key);
+            if (JSON.stringify(keys) !== JSON.stringify([...keys].sort())) {
+              console.error("aggregate rows are not deterministically ordered");
+              process.exitCode = 1;
+            }
+
+            // One named trace keeps the single-trace shape.
+            const single = read("moose-tracevals-batch-single.json");
+            if (single.traces !== undefined || single.trace === undefined) {
+              console.error("one named trace must still emit a RunReport");
+              process.exitCode = 1;
+            }
+
+            // An unreadable trace is an entry, never an abort.
+            const degraded = read("moose-tracevals-batch-degraded.json");
+            check("degraded traces", degraded.summary.traces, 3);
+            check("degraded tracesErrored", degraded.summary.tracesErrored, 1);
+            const bad = degraded.traces.find((t) => /bad-trace/.test(t.file));
+            if (!bad?.error) {
+              console.error("the unreadable trace must carry its error:", JSON.stringify(bad));
+              process.exitCode = 1;
+            }
+            if (!degraded.evals.some((e) => e.evalName === "forbidden-tool")) {
+              console.error("one bad trace must not cost the others their verdicts");
+              process.exitCode = 1;
+            }
+
+            // The budget reached the judge, and the exhaustion is *reported*
+            // rather than being an absent row.
+            const budget = read("moose-tracevals-batch-budget.json");
+            const skipped = budget.evals.filter((e) =>
+              (e.skipReasons ?? []).some((r) => /budget exhausted/.test(r)));
+            if (skipped.length === 0) {
+              console.error("expected budget-exhausted skips across the batch");
+              process.exitCode = 1;
+            }
+            if (budget.evals.some((e) => e.counts.pass > 0 && (e.graders ?? []).includes("ai"))) {
+              console.error("an exhausted budget must never produce a judged pass");
+              process.exitCode = 1;
+            }
+          '
+          rm -f .tmp/bad-trace.jsonl
+
+          # 4b. And an exhausted budget is never green. The corpus above also
+          #     contains the engineered deterministic failure, so it would exit
+          #     1 either way; this one is a corpus where *nothing failed* and
+          #     the only thing wrong is that the run stopped judging. Exit 0
+          #     here would certify 46 unjudged traces out of 50 as clean.
+          set +e
+          node dist/cli.js run --all-projects --limit 1 --project test/fixtures/project \
+            --provider mock --max-cost-usd 0 --format json > moose-tracevals-batch-cut.json
+          code=$?
+          set -e
+          if [ "$code" -ne 1 ]; then
+            echo "Expected exit 1 from a batch cut short by its own budget, got $code"
+            cat moose-tracevals-batch-cut.json
+            exit 1
+          fi
+          node -e '
+            const fs = require("fs");
+            let raw = fs.readFileSync("moose-tracevals-batch-cut.json", "utf8");
+            if (raw.charCodeAt(0) === 0xfeff) raw = raw.slice(1);
+            const r = JSON.parse(raw);
+            // The old exit-code inputs are both zero; only the budget is wrong.
+            if (r.summary.tracesFailed !== 0 || r.summary.tracesErrored !== 0) {
+              console.error("this case is only meaningful with no failed or errored trace:", JSON.stringify(r.summary));
+              process.exitCode = 1;
+            }
+            if (r.exitCode !== 1) {
+              console.error("a budget-exhausted batch must not exit 0");
+              process.exitCode = 1;
+            }
+            if (!r.budget || r.budget.skippedEvals < 1 || r.budget.traces < 1) {
+              console.error("the report must say how much went unjudged:", JSON.stringify(r.budget));
+              process.exitCode = 1;
+            }
+            if (!r.warnings.some((w) => /never judged/.test(w))) {
+              console.error("and say so in the warnings:", JSON.stringify(r.warnings));
+              process.exitCode = 1;
+            }
+          '
+          # The human report leads with it, rather than burying it at the foot.
+          set +e
+          node dist/cli.js run --all-projects --limit 1 --project test/fixtures/project \
+            --provider mock --max-cost-usd 0 > moose-tracevals-batch-cut.txt
+          set -e
+          grep -q "BUDGET EXHAUSTED" moose-tracevals-batch-cut.txt || {
+            echo "the human batch report must flag an exhausted budget:"
+            cat moose-tracevals-batch-cut.txt; exit 1
+          }
+
+          # 5. Discovery selectors. A wide --since matches the fixture store
+          #    regardless of checkout time; an empty store must be loud.
+          node dist/cli.js run --all-projects --since 520w --limit 5 --project test/fixtures/project --deterministic-only --format json > moose-tracevals-batch-since.json
+          node -e '
+            let raw = require("fs").readFileSync("moose-tracevals-batch-since.json", "utf8");
+            if (raw.charCodeAt(0) === 0xfeff) raw = raw.slice(1);
+            const r = JSON.parse(raw);
+            if (r.summary.traces !== 2) {
+              console.error(`expected 2 discovered traces, got ${r.summary.traces}`);
+              process.exitCode = 1;
+            }
+            // A selector always yields the aggregate shape, even for one trace.
+            if (!Array.isArray(r.evals)) {
+              console.error("a discovery selector must emit a BatchReport");
+              process.exitCode = 1;
+            }
+          '
+          # A selector that matched nothing is operational, never a green gate.
+          set +e
+          MOOSE_TRACEVALS_HOME=test/fixtures/project node dist/cli.js run --all-projects --deterministic-only > /dev/null 2> moose-tracevals-batch-empty.txt
+          code=$?
+          set -e
+          if [ "$code" -ne 2 ]; then
+            echo "Expected exit 2 when a selector matches no traces, got $code"
+            cat moose-tracevals-batch-empty.txt
+            exit 1
+          fi
+          grep -q "no traces matched" moose-tracevals-batch-empty.txt || {
+            echo "missing the empty-selection message:"; cat moose-tracevals-batch-empty.txt; exit 1
+          }
+
+
+      # Calibration (ADR 01022). The fixture labels are engineered to carry one
+      # false pass, one false fail, one missed review, and two labels whose
+      # evals never armed — so the gate proves the join distinguishes them
+      # rather than proving the command exits.
+      - name: Dogfood calibrate (labels, sweep, thresholds)
+        shell: bash
+        env:
+          MOOSE_TRACEVALS_HOME: test/fixtures/home
+        run: |
+          a=test/fixtures/traces/claude-session.jsonl
+          b=test/fixtures/traces/claude-session-sidecar.jsonl
+          labels=test/fixtures/project/tracevals/labels.yaml
+          common="--project test/fixtures/project --labels $labels --provider mock"
+
+          # 1. Disagreement is a finding, not a failure: exit 0.
+          set +e
+          node dist/cli.js calibrate "$a" "$b" $common --no-cache --format json > moose-tracevals-cal.json
+          code=$?
+          set -e
+          if [ "$code" -ne 0 ]; then
+            echo "A calibration run is a measurement; expected exit 0, got $code"
+            cat moose-tracevals-cal.json
+            exit 1
+          fi
+
+          # 2. The same corpus with a threshold asked for.
+          set +e
+          node dist/cli.js calibrate "$a" "$b" $common --max-false-pass 0 --format json > moose-tracevals-cal-gate.json
+          code=$?
+          set -e
+          if [ "$code" -ne 1 ]; then
+            echo "Expected exit 1 when --max-false-pass 0 is exceeded, got $code"; exit 1
+          fi
+
+          # 3. The sweep, re-scored from the verdicts run 2 already cached.
+          node dist/cli.js calibrate "$a" "$b" $common --sweep --format json > moose-tracevals-cal-sweep.json
+
+          node -e '
+            const fs = require("fs");
+            const read = (f) => {
+              let raw = fs.readFileSync(f, "utf8");
+              if (raw.charCodeAt(0) === 0xfeff) raw = raw.slice(1);
+              return JSON.parse(raw);
+            };
+            const check = (label, actual, expected) => {
+              if (actual !== expected) {
+                console.error(`${label}: expected ${expected}, got ${actual}`);
+                process.exitCode = 1;
+              }
+            };
+
+            const cal = read("moose-tracevals-cal.json");
+            // The three numbers the manual procedure asked people to count.
+            check("false passes", cal.counts.falsePass, 1);
+            check("false fails", cal.counts.falseFail, 1);
+            check("review volume", cal.counts.reviewVolume, 1);
+            // A labelled eval that never armed is not evidence, so it stays
+            // out of the denominator. Counting it would let a corpus nobody
+            // exercised report perfect agreement.
+            check("labels", cal.counts.labels, 10);
+            check("scored", cal.counts.scored, 8);
+            check("skipped", cal.counts.skipped, 2);
+            check("agreement", cal.counts.agreement, 0.625);
+            // Which eval disagreed, not just how many — and the note, which is
+            // the only thing that makes a disagreement actionable.
+            const fp = cal.disagreements.find((d) => d.kind === "false-pass");
+            check("false pass artifact", fp?.artifactName, "AGENTS.md");
+            check("false pass eval", fp?.evalName, "eval-1");
+            if (!/four packages/.test(fp?.note ?? "")) {
+              console.error("a disagreement must carry its note:", JSON.stringify(fp));
+              process.exitCode = 1;
+            }
+            // A deterministic grader is calibrated too: a blunt option produces
+            // a false fail exactly as a hesitant judge does.
+            const ff = cal.disagreements.find((d) => d.kind === "false-fail");
+            check("false fail grader", ff?.grader, "tool-usage");
+            // The calibration report is its own shape, tellable apart from a
+            // verdict report without inspecting the contents.
+            if (cal.evalResults !== undefined || cal.evals !== undefined) {
+              console.error("a calibration report must not masquerade as a run report");
+              process.exitCode = 1;
+            }
+            check("embedded batch traces", cal.batch.summary.traces, 2);
+
+            // A threshold is the only thing that turns a measurement red.
+            const gated = read("moose-tracevals-cal-gate.json");
+            check("gate exitCode", gated.exitCode, 1);
+            check("gate name", gated.gates[0]?.name, "falsePass");
+            check("gate exceeded", gated.gates[0]?.exceeded, true);
+
+            const sweep = read("moose-tracevals-cal-sweep.json").sweep;
+            check("sweep leads with the baseline", sweep[0]?.axis, "baseline");
+            // Raising the auto-pass floor above the model confidence converts
+            // the false pass into a deferral. This row is the whole reason a
+            // sweep exists, and it costs no inference to produce.
+            const strict = sweep.find((c) => c.axis === "zones.autoPass" && c.value === 0.95);
+            check("strict false passes", strict?.counts.falsePass, 0);
+            // Relational, not a count: the claim is the conversion, so review
+            // volume must rise above the baseline row. A hard-coded number
+            // here goes stale the moment the fixture corpus gains a judged
+            // eval, which is exactly how this assertion broke once already.
+            if (!(strict?.counts.reviewVolume > sweep[0]?.counts.reviewVolume)) {
+              console.error(
+                `strict review volume: expected a rise above the baseline ` +
+                `${sweep[0]?.counts.reviewVolume}, got ${strict?.counts.reviewVolume}`,
+              );
+              process.exitCode = 1;
+            }
+            // Nothing was scored against an ensemble the cache could not
+            // supply: a silently under-sampled cell is a wrong number.
+            if (sweep.some((c) => c.counts.insufficient !== 0)) {
+              console.error("a sweep cell must never score from too few cached runs");
+              process.exitCode = 1;
+            }
+            // Every cell states its denominator. Without it a reader tuning
+            // thresholds cannot tell "zero false passes" from "nothing scored".
+            if (sweep.some((c) => typeof c.counts.scored !== "number")) {
+              console.error("every sweep cell must carry the count it scored over");
+              process.exitCode = 1;
+            }
+          '
+          # The sweep table prints both, not just the JSON.
+          node dist/cli.js calibrate "$a" "$b" $common --sweep > moose-tracevals-cal-sweep.txt
+          for column in scored insuff; do
+            grep -q "$column" moose-tracevals-cal-sweep.txt || {
+              echo "the sweep table must name the $column column:"
+              cat moose-tracevals-cal-sweep.txt; exit 1
+            }
+          done
+
+          # 3b. A measurement that measured nothing must not report a pass.
+          #     Every label here names an ai-graded eval, so
+          #     `--deterministic-only` skips all of them: `scored` is 0,
+          #     agreement is null, and each --max-* threshold reads "0 of at
+          #     most N, not exceeded". Exit 0 would certify an unmeasured
+          #     corpus, which is the empty-selector failure by another route.
+          set +e
+          node dist/cli.js calibrate "$a" "$b" --project test/fixtures/project \
+            --labels test/fixtures/project/tracevals/ai-only.labels.yaml \
+            --deterministic-only --max-false-pass 0 \
+            --format json > moose-tracevals-cal-vacuous.json
+          code=$?
+          set -e
+          if [ "$code" -ne 1 ]; then
+            echo "Expected exit 1 when nothing was scored, got $code"
+            cat moose-tracevals-cal-vacuous.json
+            exit 1
+          fi
+          node -e '
+            const fs = require("fs");
+            let raw = fs.readFileSync("moose-tracevals-cal-vacuous.json", "utf8");
+            if (raw.charCodeAt(0) === 0xfeff) raw = raw.slice(1);
+            const r = JSON.parse(raw);
+            if (r.counts.scored !== 0 || r.counts.agreement !== null) {
+              console.error("this case is only meaningful with an empty denominator:", JSON.stringify(r.counts));
+              process.exitCode = 1;
+            }
+            // The gate itself is honest: 0 false passes is not an exceeded
+            // threshold. What is wrong is the denominator behind it.
+            if (r.gates[0]?.exceeded !== false) {
+              console.error("the threshold must not be reported as exceeded:", JSON.stringify(r.gates));
+              process.exitCode = 1;
+            }
+            if (!r.warnings.some((w) => /no labelled eval produced evidence/.test(w))) {
+              console.error("and the report must say why it is red:", JSON.stringify(r.warnings));
+              process.exitCode = 1;
+            }
+          '
+
+          # 4. A label naming a trace outside the corpus is operational, and is
+          #    caught before the corpus is judged.
+          set +e
+          node dist/cli.js calibrate "$a" $common --deterministic-only > /dev/null 2> moose-tracevals-cal-corpus.txt
+          code=$?
+          set -e
+          if [ "$code" -ne 2 ]; then
+            echo "Expected exit 2 for a label off the corpus, got $code"
+            cat moose-tracevals-cal-corpus.txt
+            exit 1
+          fi
+          grep -q "not in the corpus" moose-tracevals-cal-corpus.txt || {
+            echo "missing the off-corpus message:"; cat moose-tracevals-cal-corpus.txt; exit 1
+          }
+
+          # 5. A label that matched no eval result is exit 2 too — never a
+          #    quietly smaller report.
+          mkdir -p .tmp
+          printf 'version: 1\nlabels:\n  - trace: ../../traces/claude-session.jsonl\n    artifact: fix-bug\n    eval: forbiden-tool\n    expected: fail\n' > test/fixtures/project/tracevals/.typo-labels.yaml
+          set +e
+          node dist/cli.js calibrate "$a" --project test/fixtures/project --labels test/fixtures/project/tracevals/.typo-labels.yaml --deterministic-only > /dev/null 2> moose-tracevals-cal-typo.txt
+          code=$?
+          set -e
+          rm -f test/fixtures/project/tracevals/.typo-labels.yaml
+          if [ "$code" -ne 2 ]; then
+            echo "Expected exit 2 for a label matching no eval, got $code"
+            cat moose-tracevals-cal-typo.txt
+            exit 1
+          fi
+          grep -q "forbiden-tool" moose-tracevals-cal-typo.txt || {
+            echo "the message must name the label that matched nothing:"; cat moose-tracevals-cal-typo.txt; exit 1
+          }
 
       - name: Dogfood list (fixture session store)
         shell: bash

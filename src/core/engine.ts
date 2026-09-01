@@ -1,12 +1,17 @@
 /**
- * Orchestration: parse trace â†’ resolve artifacts â†’ plan evals â†’ deterministic
- * graders â†’ AI judge â†’ aggregate. The judge is injectable so the engine
+ * Orchestration: parse trace → resolve artifacts → plan evals → deterministic
+ * graders → AI judge → aggregate. The judge is injectable so the engine
  * tests fully offline.
  */
 import { parseTraceFile } from "../trace/claude.js";
 import { resolveArtifacts } from "../artifacts/resolve.js";
+import { findManifest, type FoundManifest } from "../capture/manifest.js";
+import { TracevalsError } from "../types.js";
+import type { CoverageEntry } from "../artifacts/types.js";
+import type { ManifestReport } from "../capture/types.js";
 import { planEvals, type EvalPlan } from "./plan.js";
 import { graderFor, listGraderKinds } from "../graders/registry.js";
+import { windowFor } from "../graders/util.js";
 import { renderTrace } from "../judge/render.js";
 import type { TraceJudge } from "../judge/trace-judge.js";
 import type { TracevalsConfig } from "./config.js";
@@ -21,6 +26,18 @@ export interface EngineOptions {
   /** Injected judge; required unless deterministicOnly. */
   judge?: TraceJudge;
   deterministicOnly?: boolean;
+  /**
+   * An explicitly named session manifest (ADR 01024). Without it the engine
+   * looks in the conventional places and degrades silently when there is none;
+   * with it, a manifest that cannot be used is an error rather than a shrug.
+   */
+  manifest?: string;
+  /**
+   * Warnings raised before the engine ran — grader-plugin loading is the one
+   * source today. They belong in the report because they change how a verdict
+   * should be read, and they happened first, so they lead the list.
+   */
+  warnings?: string[];
 }
 
 export async function runEvals(options: EngineOptions): Promise<RunReport> {
@@ -28,11 +45,46 @@ export async function runEvals(options: EngineOptions): Promise<RunReport> {
   const { config } = options;
 
   const trace = await parseTraceFile(options.tracePath);
+
+  // Read-only, and optional. A manifest sharpens staleness for the artifacts it
+  // recorded (ADR 01024); an absent one leaves the mtime heuristic exactly as
+  // ADR 01021 shipped it, and every hash check reports `skipped` with a reason.
+  const refusals: { path: string; reason: string }[] = [];
+  const found = await findManifest({
+    tracePath: options.tracePath,
+    ...(trace.sessionId !== undefined ? { sessionId: trace.sessionId } : {}),
+    projectDir: options.projectDir ?? trace.cwd,
+    captureDir: config.capture.dir,
+    ...(options.manifest !== undefined ? { explicit: options.manifest } : {}),
+    onRefused: (path, reason) => refusals.push({ path, reason }),
+  });
+  if (found === null && options.manifest !== undefined) {
+    // An explicitly named manifest that is not there is a mistake, not a
+    // degradation: the caller asked for exactness and did not get it.
+    throw new TracevalsError(
+      `no usable session manifest at ${options.manifest} — ${
+        refusals[0]?.reason ??
+        "it is missing, unreadable, or was recorded for a different session"
+      }`,
+    );
+  }
+  // A manifest that was found and then refused is a different situation from
+  // no manifest at all, and an unexplained fallback to the mtime guess gives a
+  // reader no way to tell them apart. Name the file, and say why.
+  const manifestWarnings =
+    found === null
+      ? refusals.map(
+          (r) => `ignoring the session manifest at ${r.path} — ${r.reason}`,
+        )
+      : [];
+
   const resolved = await resolveArtifacts(trace, {
     ...(options.projectDir !== undefined
       ? { projectDir: options.projectDir, projectRoot: options.projectDir }
       : {}),
     ...(options.env !== undefined ? { env: options.env } : {}),
+    reportUnusedArtifacts: config.reportUnusedArtifacts,
+    ...(found !== null ? { manifest: found.manifest } : {}),
   });
   const plans = await planEvals(resolved.artifacts);
 
@@ -62,13 +114,30 @@ export async function runEvals(options: EngineOptions): Promise<RunReport> {
       });
       continue;
     }
+    // An artifact that governed no turn in this trace grades nothing. Saying
+    // so is the only honest outcome: a judge handed an empty window would
+    // answer about the parent session's work, and a `human` reviewer would be
+    // queued to review nothing (ADR 01015). Deterministic graders make the
+    // same call for themselves, since only they know whether they are windowed.
+    if (plan.grader === "ai" || plan.grader === "human") {
+      const window = windowFor(trace, plan);
+      if (window.empty) {
+        results.push({
+          ...base,
+          outcome: "skipped",
+          skipReason: window.reason ?? "the artifact governed no turns",
+          durationMs: 0,
+        });
+        continue;
+      }
+    }
     if (plan.grader === "ai") {
       aiPlans.push(plan);
       continue;
     }
     // `human` is judged per session: every trace is new, so unlike the page
     // side there is no verdict to cache and nothing to defer to a later run.
-    // It reports in deterministic-only runs too â€” a review queue is not an
+    // It reports in deterministic-only runs too — a review queue is not an
     // inference call.
     if (plan.grader === "human") {
       results.push({
@@ -80,11 +149,26 @@ export async function runEvals(options: EngineOptions): Promise<RunReport> {
       continue;
     }
 
+    // The one grader that executes something. ADR 01011 keeps it on by
+    // default; ADR 01019 gives the person taking that risk a lever. A disabled
+    // check is `skipped` with a reason, never `pass`: an unrun check has not
+    // been satisfied.
+    if (plan.grader === "command" && !config.graders.command.enabled) {
+      results.push({
+        ...base,
+        outcome: "skipped",
+        skipReason:
+          "command execution is disabled (--no-commands / graders.command.enabled: false)",
+        durationMs: 0,
+      });
+      continue;
+    }
+
     const grader = graderFor(plan.grader);
     if (!grader) {
       // The grader vocabulary is an open enum: any kebab name validates, and
       // the registry is the authority that rejects it. This is where a stale
-      // `llm` â€” the pre-1.0 spelling of `ai` â€” surfaces.
+      // `llm` — the pre-1.0 spelling of `ai` — surfaces.
       results.push({
         ...base,
         outcome: "error",
@@ -162,8 +246,16 @@ export async function runEvals(options: EngineOptions): Promise<RunReport> {
         });
       }
     } else {
-      const rendered = renderTrace(trace, config.render);
-      const judged = await options.judge(aiPlans, rendered);
+      // `judge.redact` rides along with the render caps: the digest is the one
+      // thing that leaves the machine, so its size limits and its redaction
+      // list are decided in the same place (ADR 01020).
+      const judged = await options.judge(aiPlans, (plan) =>
+        renderTrace(
+          trace,
+          { ...config.render, redact: config.judge.redact },
+          plan,
+        ),
+      );
       judged.forEach((j, i) => {
         const plan = aiPlans[i];
         results.push({
@@ -207,11 +299,19 @@ export async function runEvals(options: EngineOptions): Promise<RunReport> {
       turnCount: trace.turnCount,
     },
     warnings: [
+      ...(options.warnings ?? []),
       ...trace.warnings,
+      ...manifestWarnings,
       ...resolved.warnings,
       ...vanityMetricWarnings(plans),
     ],
     coverage: resolved.coverage,
+    // An observation about the session's configuration, never a verdict: it is
+    // deliberately not part of `summary` and never moves `exitCode`.
+    availability: resolved.availability,
+    ...(found !== null
+      ? { manifest: summariseManifest(found, resolved.coverage) }
+      : {}),
     evalResults: results,
     summary,
     exitCode: failing ? 1 : 0,
@@ -252,4 +352,30 @@ function vanityMetricWarnings(plans: EvalPlan[]): string[] {
     }
   }
   return warnings;
+}
+
+/**
+ * What the manifest was able to say, counted over the coverage rows it was
+ * compared against. Three numbers rather than two, because "the manifest had
+ * nothing to say about this artifact" is not a shade of "unchanged" — those
+ * rows still rest on the mtime guess and a reader has to be able to see how
+ * many.
+ */
+function summariseManifest(
+  found: FoundManifest,
+  coverage: CoverageEntry[],
+): ManifestReport {
+  const checked = coverage.filter((c) => c.contentCheck !== undefined);
+  return {
+    path: found.path,
+    sessionId: found.manifest.sessionId,
+    capturedAt: found.manifest.capturedAt,
+    ...(found.manifest.git !== undefined
+      ? { gitSha: found.manifest.git.sha }
+      : {}),
+    matched: checked.filter((c) => c.contentCheck?.status === "match").length,
+    changed: checked.filter((c) => c.contentCheck?.status === "mismatch").length,
+    unrecorded: checked.filter((c) => c.contentCheck?.status === "skipped")
+      .length,
+  };
 }

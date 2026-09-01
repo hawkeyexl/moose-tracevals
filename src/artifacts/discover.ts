@@ -22,7 +22,7 @@ import {
 import { stat } from "node:fs/promises";
 import { extractEvals } from "../evals/extract.js";
 import { TracevalsError } from "../types.js";
-import { listInTree, safeRead } from "./fs.js";
+import { listInTree, safeRead, segments } from "./fs.js";
 import { PROJECT_RULES_FILENAMES } from "./resolve.js";
 import type { ArtifactType, ResolvedArtifact } from "./types.js";
 
@@ -64,18 +64,17 @@ const AGENT_DIRS = [join(".claude", "agents"), "agents"];
 const RULES_NAMES = new Set<string>(PROJECT_RULES_FILENAMES);
 
 /** Path segments, separator-normalized, for convention matching. */
-function segments(path: string): string[] {
-  return path.split(sep).join("/").split("/");
-}
-
 /** Which artifact type a path represents by convention, if any. */
 function classify(path: string): ArtifactType | undefined {
   const name = basename(path);
   if (RULES_NAMES.has(name)) return "project-rules";
   if (name === "SKILL.md") return "skill";
   if (!name.endsWith(".md")) return undefined;
-  // Candidate only — `isRecognizedAgent` decides whether this particular
-  // `agents/` directory is one the resolver would ever look in.
+  // Candidates only — `isRecognizedSlashCommand` and `isRecognizedAgent`
+  // decide whether this particular directory is one the resolver would ever
+  // look in. Commands nest (an organizing subdirectory does not rename the
+  // command), so any `commands` ancestor is a candidate; agents do not.
+  if (segments(dirname(path)).includes("commands")) return "slash-command";
   if (segments(dirname(path)).at(-1) === "agents") return "agent";
   return undefined;
 }
@@ -97,8 +96,37 @@ function relativeSegments(anchor: string, path: string): string[] | null {
  */
 function nameFor(type: ArtifactType, path: string): string {
   if (type === "skill") return segments(dirname(path)).at(-1) ?? basename(path);
-  if (type === "agent") return basename(path).replace(/\.md$/, "");
+  // A slash command is referenced by its filename stem with the leading slash
+  // stripped, and an organizing subdirectory does not enter the name — so
+  // `commands/release/tag.md` is `tag`, the same string the trace records.
+  if (type === "agent" || type === "slash-command") {
+    return basename(path).replace(/\.md$/, "");
+  }
   return basename(path);
+}
+
+/**
+ * Slash commands live in `.claude/commands/` at any depth — the only place
+ * `resolveArtifacts` looks for a project command, so discovery and resolution
+ * agree on the same population.
+ *
+ * Deliberately narrow, for the reason `isRecognizedAgent` is: `fill` writes by
+ * default, and matching any directory named `commands` would classify a docs
+ * page about a CLI as an instruction artifact and edit it.
+ */
+function isRecognizedSlashCommand(path: string, anchor: string): boolean {
+  const parts = relativeSegments(anchor, path);
+  if (parts === null) return false;
+  // Any `.claude/commands/` pair, not the first segment that happens to be
+  // named "commands": a project with a top-level `commands/` directory would
+  // otherwise fail the `at >= 1` test and have its real command files rejected.
+  return parts.some(
+    (part, at) =>
+      part === "commands" &&
+      at >= 1 &&
+      parts[at - 1] === ".claude" &&
+      at < parts.length - 1,
+  );
 }
 
 /** A skill file must sit as `<skillsDir>/<skillName>/SKILL.md`. */
@@ -212,6 +240,9 @@ export async function discoverArtifacts(
       if (type === undefined) return false;
       if (type === "skill") return isRecognizedSkill(path, target);
       if (type === "agent") return isRecognizedAgent(path, target);
+      if (type === "slash-command") {
+        return isRecognizedSlashCommand(path, target);
+      }
       return true;
     });
     for (const path of found) {

@@ -43,6 +43,14 @@ Neither tool appearing is a **pass**: an ordering claim with nothing to bite on 
 violated. A suite that wants the calls to happen at all says so with `tool-usage`, which is the
 grader for that question.
 
+Order is read from **`ToolCall.index`**, the ordinal in `trace.events` that ADR 01013 made
+first-class, and never from position in `trace.toolCalls`. The two agree on a plain single-file
+trace and stop agreeing as soon as anything reorders the list: `includeSidechains: false` filters
+it, and ADR 01014 splices sidecar subagent branches in as contiguous runs whose ordinals
+interleave with the main chain. Position would then report a violation that never happened. The
+absent case is `undefined` rather than `-1`, because ordinal `0` is the session's first event and
+a sentinel that collides with a real position is how an off-by-one becomes a wrong verdict.
+
 ### Consequences
 
 - Good, because the most common shape of adherence claim becomes expressible.
@@ -57,4 +65,5 @@ grader for that question.
 
 `test/unit/graders/tool-order.test.ts` covers ordered, reversed, each half missing, neither
 present, input-narrowed, the repeated-`after` case, sidechain scoping, and the uncompilable
-pattern.
+pattern — plus the two the ordinal rule turns on: a trace whose array order contradicts its
+event order, and a `before` at ordinal `0`.

@@ -46,4 +46,30 @@ describe("json-output grader", () => {
     expect(result.findings).toHaveLength(1);
     expect(result.findings[0]?.message).toContain("JSON");
   });
+
+  it("grades the same $id-bearing schema across a batch of traces", async () => {
+    // The module-level Ajv kept every schema it compiled, so a schema
+    // declaring `$id` compiled on trace 1 and threw
+    // `schema with key or id "…" already exists` on traces 2..N — erroring
+    // every trace after the first in a batch run or a `calibrate` sweep.
+    const schema = () => ({
+      $id: "https://example.test/report.json",
+      type: "object",
+      required: ["status"],
+      properties: { status: { type: "string" } },
+    });
+    const gradeOnce = () =>
+      grader.grade({
+        trace: makeTrace({ assistantTexts: ['{"status":"ok"}'] }),
+        plan: makePlan({ grader: "json-output", options: { schema: schema() } }),
+      });
+
+    const first = await gradeOnce();
+    expect(first.error).toBeUndefined();
+    const second = await gradeOnce();
+    expect(second.error, "the second trace in the batch errored").toBeUndefined();
+    expect(second.findings).toEqual([]);
+    const third = await gradeOnce();
+    expect(third.error).toBeUndefined();
+  });
 });

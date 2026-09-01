@@ -21,9 +21,11 @@ describe("discoverArtifacts", () => {
 
     expect(ids(result.artifacts)).toEqual([
       "agent:doc-writer.md",
+      "agent:reviewer.md",
       "project-rules:AGENTS.md",
       "project-rules:CLAUDE.md",
       "skill:SKILL.md",
+      "slash-command:ship-it.md",
     ]);
     // packages/api/README.md is a doc, not an instruction artifact.
     expect(
@@ -44,7 +46,11 @@ describe("discoverArtifacts", () => {
       a.artifact.path.endsWith("CLAUDE.md"),
     );
     expect(rules?.status).toBe("ok");
-    expect(rules?.existingNames).toEqual([]);
+    // CLAUDE.md declares the two conditionally-triggered evals (ADR 01016).
+    expect(rules?.existingNames).toEqual([
+      "source-edits-use-the-fix-bug-skill",
+      "docs-work-uses-the-writing-skill",
+    ]);
   });
 
   describe("in a scratch tree", () => {
@@ -129,6 +135,43 @@ describe("discoverArtifacts", () => {
       expect(paths.some((p) => p.endsWith("agents/helper.md"))).toBe(true);
     });
 
+    // `.claude/commands/` is the only place the resolver ever looks, and
+    // organizing subdirectories there are still one flat command namespace
+    // (ADR 01023).
+    it("recognizes .claude/commands at any depth, and nothing else named commands", async () => {
+      await mkdir(join(dir, ".claude", "commands", "release"), {
+        recursive: true,
+      });
+      await mkdir(join(dir, "docs", "commands"), { recursive: true });
+      await writeFile(
+        join(dir, ".claude", "commands", "ship.md"),
+        "---\ndescription: ship\n---\nbody\n",
+      );
+      await writeFile(
+        join(dir, ".claude", "commands", "release", "tag.md"),
+        "---\ndescription: tag\n---\nbody\n",
+      );
+      await writeFile(
+        join(dir, "docs", "commands", "cli-reference.md"),
+        "# CLI reference\n\nProse about commands.\n",
+      );
+
+      const result = await discoverArtifacts({ root: dir });
+      expect(ids(result.artifacts)).toContain("slash-command:ship.md");
+      // A nested command is still invoked by its bare name.
+      const nested = result.artifacts.find((a) =>
+        a.artifact.path.endsWith("tag.md"),
+      );
+      expect(nested?.artifact.type).toBe("slash-command");
+      expect(nested?.artifact.name).toBe("tag");
+      // fill writes by default, so prose under docs/commands/ must stay out.
+      expect(
+        result.artifacts.some((a) =>
+          a.artifact.path.replace(/\\/g, "/").includes("docs/commands"),
+        ),
+      ).toBe(false);
+    });
+
     it("anchors convention at the scanned directory, not only the root", async () => {
       // `fill packages/api` should treat that package as its own project
       // rather than silently finding nothing.
@@ -149,5 +192,37 @@ describe("discoverArtifacts", () => {
       expect(result.artifacts).toHaveLength(1);
       expect(result.artifacts[0]?.artifact.type).toBe("skill");
     });
+  });
+});
+
+/**
+ * `isRecognizedSlashCommand` used to take the *first* segment named "commands",
+ * so a project holding a top-level `commands/` directory failed its own
+ * `at >= 1` check and had every real `.claude/commands/` file rejected. The
+ * pair has to be found wherever it sits, not where it first looks like it does.
+ */
+describe("discoverArtifacts under a directory already named commands", () => {
+  let dir: string;
+
+  beforeAll(async () => {
+    await mkdir(".tmp", { recursive: true });
+    dir = await mkdtemp(join(".tmp", "discover-commands-"));
+    await mkdir(join(dir, "commands", ".claude", "commands"), {
+      recursive: true,
+    });
+    await writeFile(
+      join(dir, "commands", ".claude", "commands", "ship.md"),
+      "---\ndescription: Ship it.\n---\n\n# Ship\n",
+      "utf-8",
+    );
+  });
+
+  afterAll(async () => {
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  it("recognises the command file despite the earlier commands/ segment", async () => {
+    const result = await discoverArtifacts({ root: dir });
+    expect(ids(result.artifacts)).toEqual(["slash-command:ship.md"]);
   });
 });

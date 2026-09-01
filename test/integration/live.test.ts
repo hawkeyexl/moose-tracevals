@@ -25,7 +25,8 @@ describe.skipIf(!live)("live judge (claude-cli)", () => {
     });
     const [result] = await judge(
       [plan],
-      "# Session\n## Timeline\n[user] hello\n[assistant] Hello! How can I help you today?",
+      () =>
+        "# Session\n## Timeline\n[user] hello\n[assistant] Hello! How can I help you today?",
     );
     expect(result).toBeDefined();
     expect(["pass", "needs-review"]).toContain(result!.outcome);

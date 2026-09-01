@@ -29,6 +29,7 @@ reachable but is there to serve the CLI.
 | Find traces on disk | `discoverTraces(options)` → `TraceListing[]` |
 | Resolve which artifacts a trace used | `resolveArtifacts(trace, options)` |
 | Add a check the built-ins do not cover | `registerGrader(grader)` |
+| Import grader plugins the way the CLI does | `loadGraderPlugins({ plugins, configDir })` |
 | Render a report | `render(report, format)` |
 | Load configuration | `loadConfig()` / `parseConfig(raw)` |
 
@@ -56,6 +57,12 @@ console.log(report.summary, report.exitCode);
 Omit both and judged evals have nothing to run them.
 </Aside>
 
+<Aside title="`runEvals` does not load plugins; `runRun` does">
+`config.plugins` is imported by the `run` and `fill` commands, which know the directory the config
+came from. Calling `runEvals` directly you are already holding `registerGrader` — call it yourself,
+or call `loadGraderPlugins({ plugins, configDir })` if you want the CLI's resolution and warnings.
+</Aside>
+
 ## Injection seams
 
 Every place moose-tracevals reaches outside the process is injectable, so anything you build on top can
@@ -69,6 +76,7 @@ keep its own suite hermetic — the same seams this project's tests use.
 | `DiscoverOptions.env` | `discoverTraces` | The session store root. |
 | `promptFn` | `pickTrace(options, promptFn)` | The interactive prompt, so the picker is testable without a TTY. |
 | `--provider mock` / `makeJudgeProvider` | judge construction | A real provider that returns a canned verdict with no network call. |
+| `RunCommandOptions.require` / `FillOptions.require` | `runRun`, `runFill` | Grader plugins, appended to `config.plugins`. Point it at a fixture module instead of an installed package. |
 
 A `TraceJudge` is just a function, so a stub is one line:
 

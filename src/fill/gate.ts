@@ -64,11 +64,17 @@ export interface GateResult {
  * `cost`, `turn-count`, and `json-output` are whole-session graders: a budget
  * declared inside one skill silently constrains the entire session and
  * double-counts when several artifacts declare it. `skill-invoked` is excluded
- * from skills and agents because an eval asserting its own artifact was
- * used can only be graded in sessions that used it — permanently green.
+ * from skills, slash commands, and agents because an eval asserting its own
+ * artifact was used can only be graded in sessions that used it — permanently
+ * green.
+ *
+ * A slash command carries the skill list unchanged: both are an injected
+ * procedure graded over the span they governed (ADR 01023), so the same
+ * graders make sense and the same whole-session ones do not.
  */
 export const ALLOWED_GRADERS: Record<ArtifactType, readonly string[]> = {
   skill: ["ai", "tool-usage", "file-access", "regex"],
+  "slash-command": ["ai", "tool-usage", "file-access", "regex"],
   agent: ["ai", "tool-usage", "file-access"],
   "project-rules": ["ai", "skill-invoked", "tool-usage"],
 };

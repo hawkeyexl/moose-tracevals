@@ -1,5 +1,6 @@
 /** tool-usage: assert a tool was used / not used / used within count bounds. */
 import type { TraceGrader } from "./types.js";
+import { evaluateWhen, skippedTrigger, validateWhen } from "./when.js";
 import {
   fail,
   firstError,
@@ -10,6 +11,8 @@ import {
   orderedBounds,
   pass,
   requiredString,
+  skippedWindow,
+  windowFor,
   type Options,
 } from "./util.js";
 
@@ -39,6 +42,7 @@ function validateOptions(options: Options): string | undefined {
     orderedBounds(options, "min", "max"),
     checkContradiction(options),
     optionalBoolean(options, "includeSidechains"),
+    validateWhen(options),
   );
 }
 
@@ -53,8 +57,28 @@ export const toolUsageGrader: TraceGrader = {
     const expect = (options.expect as string | undefined) ?? "used";
     const includeSidechains = options.includeSidechains === true;
 
-    const count = trace.toolCalls.filter(
-      (c) => c.name === tool && (includeSidechains || !c.sidechain),
+    // Count only the calls the artifact was governing (ADR 01015).
+    const window = windowFor(trace, plan);
+    if (window.empty) return skippedWindow(window);
+    const trigger = evaluateWhen(options, window);
+    if (!trigger.armed) return skippedTrigger(trigger);
+
+    // `includeSidechains` asks whether calls from *somebody else's* branch
+    // count toward this artifact. Inside an agent's own window there is no
+    // such thing: every call in a branch is `sidechain: true`, so honouring
+    // the default there emptied the window and made an agent-artifact eval
+    // structurally unable to fail — `{tool: Edit, expect: not-used}` on
+    // `.claude/agents/reviewer.md` passed however much the reviewer edited.
+    // The window *is* the branch, so the branch's calls are the subject.
+    // Agent only, deliberately. An agent window *is* a branch, so its calls
+    // are the subject. A skill or slash-command window sits on the chain that
+    // invoked it, so sidechain calls inside it belong to subagents it spawned
+    // — someone else's work, excluded unless asked for. A slash command reached
+    // from inside a branch would count nothing by default; that needs a user to
+    // type one there, which is not a path the harness offers.
+    const branchScoped = window.scope === "agent";
+    const count = window.toolCalls.filter(
+      (c) => c.name === tool && (branchScoped || includeSidechains || !c.sidechain),
     ).length;
 
     if (expect === "not-used" && count > 0) {

@@ -12,6 +12,9 @@ import { join } from "node:path";
 import { Ajv2020 } from "ajv/dist/2020.js";
 import { parse as parseYaml } from "yaml";
 import configSchemaJson from "./config-schema.json" with { type: "json" };
+import { compileRedactPatterns } from "../judge/redact.js";
+import { DEFAULT_CAPTURE_DIR } from "../capture/types.js";
+import { DEFAULT_LABELS_FILE } from "../calibrate/labels.js";
 import { TracevalsError } from "../types.js";
 
 const configSchema = configSchemaJson as Record<string, unknown>;
@@ -63,13 +66,39 @@ export interface TracevalsConfig {
     zones: { autoPass: number; autoFail: number };
     cacheDir: string;
     maxCostUsd?: number;
+    /**
+     * Extra patterns scrubbed from the session digest before it reaches a
+     * provider, applied *on top of* the built-in secret shapes (ADR 01020).
+     * Always a list; validated for compilability at load time.
+     */
+    redact: string[];
   };
   render: {
     maxBlockChars: number;
     maxTotalChars: number;
   };
+  /**
+   * Per-grader settings, for the graders that have a knob outside the eval
+   * entry that names them.
+   */
+  graders: {
+    /**
+     * `command` runs by default — ADR 01011's reasoning is unchanged. This is
+     * the opt-out that decision never provided, for the person evaluating a
+     * trace whose project they do not trust (ADR 01019).
+     */
+    command: { enabled: boolean };
+  };
   history: {
     file: string;
+  };
+  /**
+   * Session manifests (ADR 01024). `capture` writes one here; `run` looks here
+   * for the trace's own, and reports a `skipped` hash check when there is none.
+   */
+  capture: {
+    /** Resolved against the project root, not the working directory. */
+    dir: string;
   };
   fill: {
     /** Minimum self-reported confidence a proposal needs to be written. */
@@ -79,7 +108,34 @@ export interface TracevalsConfig {
     cacheDir: string;
     maxCostUsd?: number;
   };
+  /**
+   * `calibrate` — measuring the judge against a human's answers (ADR 01022).
+   * The sweep grid lives here rather than behind flags because the useful
+   * range is a property of a corpus, and a corpus outlives an invocation.
+   */
+  calibrate: {
+    /** Labels sidecar, resolved against the config file's directory. */
+    labels: string;
+    /** Thresholds. Unset means the run measures without gating. */
+    maxFalsePass?: number;
+    maxFalseFail?: number;
+    maxReview?: number;
+    sweep: {
+      ensembleRuns: number[];
+      autoPass: number[];
+      autoFail: number[];
+    };
+  };
   failOnNeedsReview: boolean;
+  /**
+   * Module specifiers imported before evals are planned, so a `registerGrader`
+   * call from outside this package lands in time (ADR 01017). Resolved against
+   * the config file's directory, in order — a later entry wins a colliding
+   * kind. `--require` appends to this list rather than replacing it.
+   */
+  plugins: string[];
+  /** List offered-but-unused artifacts in coverage, not just count them. */
+  reportUnusedArtifacts: boolean;
 }
 
 const ajv = new Ajv2020({ allErrors: true });
@@ -126,13 +182,25 @@ export function parseConfig(raw: unknown): TracevalsConfig {
         autoFail: r.judge?.zones?.autoFail ?? 0.8,
       },
       cacheDir: r.judge?.cacheDir ?? ".moose-tracevals/cache",
+      // Always a list: the render site concatenates nothing onto it, but a
+      // hole here would be a special case in every consumer.
+      redact: [...(r.judge?.redact ?? [])],
     },
     render: {
       maxBlockChars: r.render?.maxBlockChars ?? 2000,
       maxTotalChars: r.render?.maxTotalChars ?? 150000,
     },
+    graders: {
+      command: { enabled: r.graders?.command?.enabled ?? true },
+    },
     history: {
       file: r.history?.file ?? ".moose-tracevals/history.jsonl",
+    },
+    capture: {
+      // Beside the judge cache, under the state directory that already travels
+      // with the project — which is what puts a manifest next to its trace in
+      // the CI patterns the docs describe.
+      dir: r.capture?.dir ?? DEFAULT_CAPTURE_DIR,
     },
     fill: {
       // 0.7 matches the manuscript's calibration bar for judged agreement.
@@ -142,13 +210,45 @@ export function parseConfig(raw: unknown): TracevalsConfig {
       // Separate from the judge cache: different key scheme and value shape.
       cacheDir: r.fill?.cacheDir ?? ".moose-tracevals/cache/fill",
     },
+    calibrate: {
+      labels: r.calibrate?.labels ?? DEFAULT_LABELS_FILE,
+      sweep: {
+        // Spans the range rather than filling it: the first sweep judges the
+        // corpus at the largest value here, so a wide grid is the one part of
+        // calibration that does cost money.
+        ensembleRuns: [...(r.calibrate?.sweep?.ensembleRuns ?? [1, 3, 5])],
+        autoPass: [
+          ...(r.calibrate?.sweep?.autoPass ?? [0.5, 0.6, 0.7, 0.8, 0.9, 0.95]),
+        ],
+        autoFail: [
+          ...(r.calibrate?.sweep?.autoFail ?? [0.5, 0.6, 0.7, 0.8, 0.9, 0.95]),
+        ],
+      },
+    },
     failOnNeedsReview: r.failOnNeedsReview ?? true,
+    // Always a list, never undefined: the read site concatenates `--require`
+    // onto it, and a hole there would be a special case in every caller.
+    plugins: [...(r.plugins ?? [])],
+    // An observation, not a gate: listing it is opt-in because a real roster
+    // runs to hundreds of skills (ADR 01016).
+    reportUnusedArtifacts: r.reportUnusedArtifacts ?? false,
   };
+  // Compilability is not expressible in JSON Schema, and a pattern that cannot
+  // compile must fail here rather than at the moment a digest is about to be
+  // sent — a dropped redaction pattern is a silent leak.
+  compileRedactPatterns(config.judge.redact);
   if (typeof r.judge?.maxCostUsd === "number") {
     config.judge.maxCostUsd = r.judge.maxCostUsd;
   }
   if (typeof r.fill?.maxCostUsd === "number") {
     config.fill.maxCostUsd = r.fill.maxCostUsd;
+  }
+  // Left absent rather than defaulted to a number: `0` is a meaningful limit
+  // ("no false pass at all"), so it cannot double as "unset".
+  for (const key of ["maxFalsePass", "maxFalseFail", "maxReview"] as const) {
+    if (typeof r.calibrate?.[key] === "number") {
+      config.calibrate[key] = r.calibrate[key];
+    }
   }
   return config;
 }

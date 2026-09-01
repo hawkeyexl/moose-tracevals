@@ -77,19 +77,35 @@ tracevals:
       autoPass: 0.8
       autoFail: 0.8
     cacheDir: .moose-tracevals/cache
+    redact: []                   # extra patterns scrubbed from the digest
     # maxCostUsd has no default; set it to impose a ceiling
+  graders:
+    command:
+      enabled: true              # false, or --no-commands, skips them instead
+                                # (--commands forces them back on)
   render:
     maxBlockChars: 2000
     maxTotalChars: 150000
   history:
     file: .moose-tracevals/history.jsonl
+  capture:
+    dir: .moose-tracevals/sessions   # where session manifests are written and read
   fill:
     confidenceThreshold: 0.7
     maxEvalsPerArtifact: 8
     temperature: 0
     cacheDir: .moose-tracevals/cache/fill
     # maxCostUsd has no default
+  calibrate:
+    labels: tracevals/labels.yaml
+    # maxFalsePass / maxFalseFail / maxReview have no default
+    sweep:
+      ensembleRuns: [1, 3, 5]
+      autoPass: [0.5, 0.6, 0.7, 0.8, 0.9, 0.95]
+      autoFail: [0.5, 0.6, 0.7, 0.8, 0.9, 0.95]
   failOnNeedsReview: true
+  plugins: []                  # grader modules to import before evals are planned
+  reportUnusedArtifacts: false
 ```
 
 ## `provider`
@@ -174,6 +190,7 @@ Cost is computed from a built-in per-model table. A model the table does not rec
 | `zones.autoPass` | number 0–1 | `0.8` | — |
 | `zones.autoFail` | number 0–1 | `0.8` | — |
 | `cacheDir` | string | `.moose-tracevals/cache` | `--no-cache` disables |
+| `redact` | array of strings | `[]` | — |
 | `maxCostUsd` | number ≥ 0 | *(unset)* | `--max-cost-usd` |
 
 - **`ensembleRuns`**: more runs cost proportionally more and make an auto-resolved verdict harder
@@ -185,8 +202,67 @@ Cost is computed from a built-in per-model table. A model the table does not rec
   reviews into passes.
 - **`maxCostUsd`**: checked before each judged eval. Once exhausted, remaining evals are reported
   as `skipped` with the budget named.
+- **`redact`**: extra regular expressions scrubbed from the session digest before it is sent.
 
 See [How the judge decides](/moose-tracevals/judge/) for what these do to an outcome.
+
+### `judge.redact`
+
+Patterns applied to the transcript before it leaves the machine. Each source is compiled with the
+`g` flag; a match becomes `[redacted]`.
+
+```yaml
+tracevals:
+  judge:
+    redact:
+      - "ACME-[0-9]{4}"           # an internal ticket id
+      - "https://internal\\.example\\.com/[^\\s\"]+"
+```
+
+Three things to know:
+
+- **These add to the built-in shapes; they never replace them.** Vendor API-key prefixes, bearer
+  tokens, private-key blocks, `AWS_*`, and secret-named assignments are always redacted, with the
+  list empty or not.
+- **A pattern that will not compile is an error at load**, not a silent skip — a dropped pattern
+  would be a silent leak.
+- **It is best-effort, not a guarantee.** `--deterministic-only` is the only setting under which
+  nothing leaves the machine at all.
+
+See [What leaves the machine](/moose-tracevals/judge/#what-leaves-the-machine) for the full list of
+what a judged run sends, redacted or not.
+
+## `graders`
+
+Per-grader settings. Only graders with a knob outside the eval that names them appear here.
+
+| Key | Type | Default | CLI |
+|---|---|---|---|
+| `graders.command.enabled` | boolean | `true` | `--commands` / `--no-commands` |
+
+`command`-graded evals run a program named in an artifact, and artifacts come from the **trace's**
+project — so evaluating someone else's trace can execute that repository's code. That is the
+documented default and it is not changing; this is the switch for when you do not want to take it.
+
+```yaml
+tracevals:
+  graders:
+    command:
+      enabled: false
+```
+
+Disabled, a command eval reports **`skipped`** with the reason stated — never `pass`. An unrun check
+has not been satisfied, so the report says so rather than quietly counting it as clean. Nothing else
+about the run changes, including the exit code. See
+[the `command` grader](/moose-tracevals/reference/graders/#command).
+
+```
+command execution is disabled (--no-commands / graders.command.enabled: false)
+```
+
+The flag is a **pair**, and both `run` and `calibrate` honour it. Pass neither and this setting
+decides; `--no-commands` turns execution off for one invocation; `--commands` turns it back on
+against a config that disabled it.
 
 ## `render`
 
@@ -210,6 +286,21 @@ at the cost of a larger prompt.
 Where `--history` appends. See
 [Reports & exit codes](/moose-tracevals/reference/report-and-exit-codes/#history).
 
+## `capture`
+
+| Key | Type | Default | CLI |
+|---|---|---|---|
+| `dir` | string | `.moose-tracevals/sessions` | `capture --out` writes elsewhere; `run --manifest` reads elsewhere |
+
+Where [`capture`](/moose-tracevals/reference/cli/#capture) writes a session manifest and where `run`
+looks for one, resolved against the **project root** rather than the working directory. Inside
+`.moose-tracevals/` on purpose: that directory is already where the judge cache lives, it is already
+gitignored, and being inside the project is what makes a manifest travel with its trace in the
+[CI patterns](/moose-tracevals/ci/#carry-the-manifest-with-the-trace).
+
+Changing it changes both ends, so a project that relocates manifests keeps `capture` and `run`
+agreeing without a flag on either.
+
 ## `fill`
 
 | Key | Type | Default | CLI |
@@ -224,19 +315,115 @@ Where `--history` appends. See
 new ones. The fill cache is separate from the judge cache: different key scheme, different value
 shape.
 
+## `calibrate`
+
+Settings for [`calibrate`](/moose-tracevals/judge/calibrate/), which measures verdicts against a
+labels sidecar.
+
+| Key | Type | Default | CLI |
+|---|---|---|---|
+| `labels` | string | `tracevals/labels.yaml` | `--labels` |
+| `maxFalsePass` | integer ≥ 0 | *(unset)* | `--max-false-pass` |
+| `maxFalseFail` | integer ≥ 0 | *(unset)* | `--max-false-fail` |
+| `maxReview` | integer ≥ 0 | *(unset)* | `--max-review` |
+| `sweep.ensembleRuns` | array of integers ≥ 1 | `[1, 3, 5]` | — |
+| `sweep.autoPass` | array of numbers 0–1 | `[0.5, 0.6, 0.7, 0.8, 0.9, 0.95]` | — |
+| `sweep.autoFail` | array of numbers 0–1 | `[0.5, 0.6, 0.7, 0.8, 0.9, 0.95]` | — |
+
+`labels` resolves against **this config file's directory**, exactly as `plugins` does. An explicit
+`--labels` is a working-directory path, like every other path argument on the CLI.
+
+The three `max*` keys are unset by default and a calibration run is a measurement, not a gate — set
+one and disagreement above it becomes exit `1`. They are integers rather than rates because `0` has
+to be expressible: "no false pass at all" is the most common setting anyone wants, and it cannot
+double as "unset".
+
+`sweep` is the grid [`--sweep`](/moose-tracevals/judge/calibrate/#sweep-the-knobs-for-free) tries,
+**one axis at a time** with the other knobs held at their configured value. It lives here rather
+than behind flags because the useful range is a property of a corpus, and a corpus outlives an
+invocation. Widening `sweep.ensembleRuns` is the one calibration setting that costs money: the
+corpus is judged once at the largest value in it.
+
 ## `failOnNeedsReview`
 
 | Key | Type | Default | CLI |
 |---|---|---|---|
-| `failOnNeedsReview` | boolean | `true` | — |
+| `failOnNeedsReview` | boolean | `true` | `--fail-on-needs-review` / `--no-fail-on-needs-review` |
 
 Whether a `needs-review` outcome contributes to a non-zero exit code. Set it to `false` to surface
 ambiguous verdicts in the report without blocking on them.
+
+## `plugins`
+
+| Key | Type | Default | CLI |
+|---|---|---|---|
+| `plugins` | array of strings | `[]` | `--require` **appends** |
+
+Modules imported before evals are planned, so one calling `registerGrader()` can add a grader kind
+the built-ins do not cover. Honoured by both `run` and `fill`. See
+[Write a custom grader](/moose-tracevals/extend/custom-graders/#loading-it-from-the-cli).
+
+```yaml
+tracevals:
+  plugins:
+    - ./tracevals/graders.mjs      # relative to *this file*, not the cwd
+    - /opt/shared/graders.mjs      # absolute, as written
+    - "@acme/tracevals-graders"    # resolved from this file's directory
+```
+
+Four things to know, in the order they will bite:
+
+- **Specifiers resolve against this file's directory**, never the working directory. That is what
+  lets a committed relative path survive a CI step that runs the CLI from the repository root.
+- **Load order is significant.** Entries load in order, config before `--require`, and a later one
+  wins a kind an earlier one already claimed.
+- **`--require` adds; it does not replace.** A one-off flag would otherwise unregister every grader
+  the config names, and each eval declaring one would report `unknown grader kind` — pointing at an
+  artifact that is not the problem.
+- **A specifier that will not import exits `2`.** Skipping it would leave a run that looks like it
+  ran. A module that imports but registers nothing warns instead, and one that takes over a built-in
+  kind is allowed and reported.
+
+<Aside type="caution" title="This imports code named in your config">
+A plugin runs with the CLI's full privileges; there is no sandbox. The list is empty unless you
+write one, and it lives in the repository doing the evaluating — unlike the
+[`command` grader](/moose-tracevals/reference/graders/), which runs a program named by the artifacts
+of the project being evaluated. Evaluating someone else's trace cannot introduce a plugin.
+</Aside>
+## `reportUnusedArtifacts`
+
+| Key | Type | Default | CLI |
+|---|---|---|---|
+| `reportUnusedArtifacts` | boolean | `false` | `--report-unused-artifacts` |
+
+Whether the coverage table lists every skill and agent the session was
+[offered and never used](/moose-tracevals/declare/coverage/#offered-used-and-never-on-the-menu), or
+only counts them. Off by default because a real roster runs to a couple of hundred skills and would
+bury the evals above it.
+
+This is an observation, not a gate. Turning it on changes what the report *shows* and nothing about
+what it *decides* — the summary counts and the exit code are identical either way.
 
 ## Keys with no CLI flag
 
 Worth knowing, because they can only be changed in the config file:
 
 `judge.temperature` · `judge.zones.autoPass` · `judge.zones.autoFail` · `judge.cacheDir` ·
-`render.maxBlockChars` · `render.maxTotalChars` · `history.file` · `fill.temperature` ·
-`fill.cacheDir` · `failOnNeedsReview` · every `provider.*` key except `model`
+`judge.redact` · `render.maxBlockChars` · `render.maxTotalChars` · `history.file` ·
+`capture.dir` ·
+`fill.temperature` · `fill.cacheDir` · `calibrate.sweep.ensembleRuns` ·
+`calibrate.sweep.autoPass` · `calibrate.sweep.autoFail` · every `provider.*` key except
+`model`
+
+## Behavior with no key at all
+
+**Artifact staleness** has no knob. Every resolved artifact is stat'd and compared with the
+session's end time; one that is newer is flagged in the coverage table and named in a warning. It is
+always on because it costs one `stat` and can only ever add information — it never becomes an eval
+outcome and never changes the exit code. See
+[Artifact coverage](/moose-tracevals/declare/coverage/#staleness).
+
+**Reading a session manifest** has no knob either, beyond where to look. If one exists for the
+trace, `run` uses it; if not, every hash check reports `skipped` with the reason and the mtime
+heuristic above stands unchanged. There is nothing to turn on, because there is nothing to turn on
+*for* until someone runs [`capture`](/moose-tracevals/reference/cli/#capture).

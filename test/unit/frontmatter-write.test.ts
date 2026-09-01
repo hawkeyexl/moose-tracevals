@@ -271,4 +271,32 @@ describe("appendArtifactEvals", () => {
       }),
     ).toThrow(TracevalsError);
   });
+
+  it("omits the assertion key entirely for a deterministic eval that has none", () => {
+    // proposal.2 made `assertion` optional, and a deterministic grader says
+    // everything in `options`. Serializing the absent field anyway writes
+    // `assertion: null`, which the schema rejects on `type: string` — so the
+    // page we just wrote would fail to validate on the next read.
+    const body = "# Rules\n";
+    const result = appendArtifactEvals(body, "CLAUDE.md", [
+      {
+        id: "read-before-write",
+        grader: "tool-usage",
+        options: { tool: "Read", expect: "used" },
+      },
+    ]);
+
+    expect(result).not.toContain("assertion");
+    const entry = (
+      (frontmatterOf(result).metadata as Record<string, unknown>)
+        .evals as Record<string, unknown>[]
+    )[0]!;
+    expect("assertion" in entry).toBe(false);
+    // And it survives the round trip the schema ladder validates.
+    expect(entry).toEqual({
+      id: "read-before-write",
+      grader: "tool-usage",
+      options: { tool: "Read", expect: "used" },
+    });
+  });
 });
