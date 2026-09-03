@@ -20,3 +20,6 @@ dist/
 # which dirtied the tree for anyone who ran those steps locally.
 /moose-tracevals-*.json
 /moose-tracevals-*.txt
+
+# Vale styles are fetched by `vale sync`, not committed
+.vale/styles/
