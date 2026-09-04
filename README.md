@@ -1,6 +1,6 @@
 # moose-tracevals
 
-Adherence evals for AI agent session traces. Point moose-tracevals at a [Claude Code](https://docs.anthropic.com/en/docs/claude-code) session, It looks up every skill, agent definition, and project-rules file that session used. Then it evaluates whether the session **adhered to the instructions in those artifacts**. Deterministic graders answer what they can, and an ensemble LLM judge answers the rest.
+Adherence evals for AI agent session traces. Point moose-tracevals at a [Claude Code](https://docs.anthropic.com/en/docs/claude-code) session. It looks up every skill, agent definition, and project-rules file that session used. Then it evaluates whether the session **adhered to the instructions in those artifacts**. Deterministic graders answer what they can, and an ensemble LLM judge answers the rest.
 
 Built on two sibling libraries: [@hawkeyexl/inference](https://github.com/hawkeyexl/inference) (providers, ensemble consensus, confidence zones, response caching) and [docmeta](https://github.com/hawkeyexl/docmeta) (frontmatter extraction, JSON-Schema validation).
 

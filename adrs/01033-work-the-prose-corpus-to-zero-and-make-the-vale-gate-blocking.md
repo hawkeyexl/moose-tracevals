@@ -15,7 +15,7 @@ shipped with `filter_mode: added` and `fail_on_error: false`, and its own commen
 condition for changing that. Flip it once the existing corpus is worked down.
 
 The corpus was the reason. Measured against `origin/main` with the config as it now stands, the
-repository carried **1,755 alerts across 89 of the 126 files Vale reads**. A blocking gate over a
+repository carried **1,755 alerts across 89 of the 126 files Vale read there**. A blocking gate over a
 corpus that size fails every pull request on prose nobody in that pull request wrote. So the check
 annotated and moved on, which means it changed nothing anyone had to answer for.
 
@@ -142,7 +142,10 @@ costs nothing today. It matters the first time a colon genuinely reads better th
 
 ### Confirmation
 
-- `vale .` at the repository root reports `0 errors, 0 warnings and 0 suggestions in 126 files`.
+- `vale .` at the repository root reports `0 errors, 0 warnings and 0 suggestions in 127 files`.
+  The count is one higher than the 126 measured on `main`, because this ADR is itself a file Vale
+  reads. Run it on a clean tree, because Vale does not read `.gitignore`. A stray `.tmp/` left by an
+  earlier test run inflates the total, even though the exclusions keep it at zero alerts.
 - [vale.yml](../.github/workflows/vale.yml) is the gate. It runs on every pull request, reads the
   whole tree, and fails the check on any error.
 - The remediation is a commit per area, so a reviewer can read the docs rewrite apart from the ADR
