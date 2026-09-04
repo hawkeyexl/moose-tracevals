@@ -44,8 +44,9 @@ Everything on this page runs **offline**, with no API key.
 
    <Aside type="tip" title="One name, both paths">
    The package and the `bin` it installs are both called `moose-tracevals`, and `npx` resolves by
-   package name — so `npx moose-tracevals` reaches this CLI whether or not it is installed. With a
-   local dependency npm prefers `node_modules/.bin`; without one it fetches the package.
+   package name. `npx moose-tracevals` therefore reaches this CLI whether or not it is
+   installed. With a local dependency npm prefers `node_modules/.bin`; without one it fetches the
+   package.
    </Aside>
 
    {/* test {"testId":"get-started-install","description":"The CLI runs and reports a version."} */}
@@ -88,9 +89,9 @@ Everything on this page runs **offline**, with no API key.
    npx moose-tracevals run <trace-file> --deterministic-only
    ```
 
-   `--deterministic-only` runs every check that needs no inference call — the seven
+   `--deterministic-only` runs every check that needs no inference call. That is the seven
    [deterministic graders](/moose-tracevals/reference/graders/) decidable from the trace alone, plus
-   `command` evals and the `human` review queue — and **skips** AI-judged evals instead of failing
+   `command` evals and the `human` review queue. It **skips** AI-judged evals instead of failing
    them.
 
    To exercise the whole pipeline, including the judge, without a network call:
@@ -152,12 +153,12 @@ Everything on this page runs **offline**, with no API key.
      skill.
    - An **eval** is one named check declared on an artifact. `used-read` and `forbidden-tool`
      were declared in `fix-bug`'s frontmatter.
-   - **The grader decides how a check is answered.** `used-read` reads the trace directly;
-     `no-force-push` runs a script over it; `refactor-preserved-intent` is `REVIEW` because it asks
-     for a human; the `SKIP`s are AI-judged evals, which `--deterministic-only` does not run.
+   - **The grader decides how a check is answered.** `used-read` reads the trace directly, and
+     `no-force-push` runs a script over it. `refactor-preserved-intent` is `REVIEW` because it asks
+     for a human, and the `SKIP`s are AI-judged evals, which `--deterministic-only` does not run.
    - **`adheres-to-artifact (implicit)`** is what you get for free. An artifact that declares no
-     evals still gets one judged eval asking whether the session followed its instructions, so
-     a first run says something before you have authored anything.
+     evals still gets one judged eval asking whether the session followed its instructions. A first
+     run therefore says something before you have authored anything.
    - **Artifact coverage** is the honest answer to *what did you not check?* A `✓` resolved to a
      real file; a `○` did not. `Explore` is a built-in agent with no definition file anywhere, which
      is expected, and fine.
@@ -176,7 +177,7 @@ Everything on this page runs **offline**, with no API key.
    |---|---|
    | `0` | every eval passed or was skipped |
    | `1` | something failed, errored, or needs review |
-   | `2` | moose-tracevals itself could not run — bad usage, unreadable trace, unknown format |
+   | `2` | moose-tracevals itself could not run: bad usage, unreadable trace, unknown format |
 
    The distinction between `1` and `2` is the one to hold on to: `1` means the agent did something,
    `2` means the tool did. Full detail in

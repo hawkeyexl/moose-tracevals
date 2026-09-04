@@ -11,13 +11,13 @@ import { Aside } from '@astrojs/starlight/components';
 `src/core/config.ts`.
 
 Configuration lives under the **`tracevals:`** key of **`moose.config.yaml`** in the working
-directory. One file serves the whole moose family — sibling tools read their own top-level keys out
-of it — so everything documented on this page is nested one level deep:
+directory. One file serves the whole moose family, and sibling tools read their own top-level keys
+out of it. Everything documented on this page is therefore nested one level deep:
 
 ```yaml title="moose.config.yaml"
 docmeta:            # another tool's section; never validated here
   schemas: […]
-tracevals:          # ours — every key on this page lives under here
+tracevals:          # ours; every key on this page lives under here
   judge:
     ensembleRuns: 3
 ```
@@ -35,7 +35,7 @@ Three properties follow from this, and you can rely on all three:
 
 - **CLI flags override the config; they do not bypass it.** The resolved config is fully populated
   before anything reads it, so a flag replaces a known value instead of filling a hole.
-- **Unknown keys are hard errors — inside the section.** The schema forbids additional properties at
+- **Unknown keys are hard errors, inside the section.** The schema forbids additional properties at
   every level below `tracevals:`, so a misspelled key fails loudly:
 
   ```
@@ -45,7 +45,7 @@ Three properties follow from this, and you can rely on all three:
   Top-level keys *beside* `tracevals:` are another tool's business and are never validated here.
   An unparseable file fails the same way: `moose-tracevals: could not parse moose.config.yaml: …`
 - **A section left un-nested or miscased is an error, not a shrug.** Writing `judge:` at the top
-  level — or spelling the wrapper `Tracevals:` — would otherwise discard your whole config
+  level, or spelling the wrapper `Tracevals:`, would otherwise discard your whole config
   silently, so it is reported instead:
 
   ```
@@ -125,17 +125,17 @@ fresh checkout can judge without anyone provisioning an API key.
 | Key | Type | Default | CLI |
 |---|---|---|---|
 | `model` | string | `claude-sonnet-4-5` | `--model` |
-| `apiKeyEnv` | string | `ANTHROPIC_API_KEY` | — |
-| `pricing` | [pricing](#pricing) | — | — |
+| `apiKeyEnv` | string | `ANTHROPIC_API_KEY` | none |
+| `pricing` | [pricing](#pricing) | none | none |
 
 ### `provider.openai`
 
 | Key | Type | Default | CLI |
 |---|---|---|---|
-| `baseUrl` | string | `https://api.openai.com/v1` | — |
+| `baseUrl` | string | `https://api.openai.com/v1` | none |
 | `model` | string | `gpt-4o-mini` | `--model` |
-| `apiKeyEnv` | string | `OPENAI_API_KEY` | — |
-| `pricing` | [pricing](#pricing) | — | — |
+| `apiKeyEnv` | string | `OPENAI_API_KEY` | none |
+| `pricing` | [pricing](#pricing) | none | none |
 
 `baseUrl` accepts any `/chat/completions`-compatible server: OpenAI, Azure, Ollama, Groq, Together.
 
@@ -144,7 +144,7 @@ fresh checkout can judge without anyone provisioning an API key.
 | Key | Type | Default | CLI |
 |---|---|---|---|
 | `model` | string | `claude-sonnet-4-5` | `--model` |
-| `command` | string | `claude` | — |
+| `command` | string | `claude` | none |
 
 ### `provider.mock`
 
@@ -186,11 +186,11 @@ Cost is computed from a built-in per-model table. A model the table does not rec
 | Key | Type | Default | CLI |
 |---|---|---|---|
 | `ensembleRuns` | integer ≥ 1 | `3` | `--runs` |
-| `temperature` | number 0–2 | `0` | — |
-| `zones.autoPass` | number 0–1 | `0.8` | — |
-| `zones.autoFail` | number 0–1 | `0.8` | — |
+| `temperature` | number 0–2 | `0` | none |
+| `zones.autoPass` | number 0–1 | `0.8` | none |
+| `zones.autoFail` | number 0–1 | `0.8` | none |
 | `cacheDir` | string | `.moose-tracevals/cache` | `--no-cache` disables |
-| `redact` | array of strings | `[]` | — |
+| `redact` | array of strings | `[]` | none |
 | `maxCostUsd` | number ≥ 0 | *(unset)* | `--max-cost-usd` |
 
 - **`ensembleRuns`**: more runs cost proportionally more and make an auto-resolved verdict harder
@@ -224,7 +224,7 @@ Three things to know:
 - **These add to the built-in shapes; they never replace them.** Vendor API-key prefixes, bearer
   tokens, private-key blocks, `AWS_*`, and secret-named assignments are always redacted, with the
   list empty or not.
-- **A pattern that will not compile is an error at load**, not a silent skip — a dropped pattern
+- **A pattern that will not compile is an error at load**, not a silent skip. A dropped pattern
   would be a silent leak.
 - **It is best-effort, not a guarantee.** `--deterministic-only` is the only setting under which
   nothing leaves the machine at all.
@@ -241,7 +241,7 @@ Per-grader settings. Only graders with a knob outside the eval that names them a
 | `graders.command.enabled` | boolean | `true` | `--commands` / `--no-commands` |
 
 `command`-graded evals run a program named in an artifact, and artifacts come from the **trace's**
-project — so evaluating someone else's trace can execute that repository's code. That is the
+project. Evaluating someone else's trace can therefore execute that repository's code. That is the
 documented default and it is not changing; this is the switch for when you do not want to take it.
 
 ```yaml
@@ -251,7 +251,7 @@ tracevals:
       enabled: false
 ```
 
-Disabled, a command eval reports **`skipped`** with the reason stated — never `pass`. An unrun check
+Disabled, a command eval reports **`skipped`** with the reason stated, never `pass`. An unrun check
 has not been satisfied, so the report says so rather than quietly counting it as clean. Nothing else
 about the run changes, including the exit code. See
 [the `command` grader](/moose-tracevals/reference/graders/#command).
@@ -270,8 +270,8 @@ Controls how much of the session transcript is given to the judge.
 
 | Key | Type | Default | CLI |
 |---|---|---|---|
-| `maxBlockChars` | integer ≥ 100 | `2000` | — |
-| `maxTotalChars` | integer ≥ 1000 | `150000` | — |
+| `maxBlockChars` | integer ≥ 100 | `2000` | none |
+| `maxTotalChars` | integer ≥ 1000 | `150000` | none |
 
 When a transcript exceeds `maxTotalChars`, a head-and-tail window is kept and the middle is replaced
 with a truncation marker. Raise it for long sessions where the relevant behavior sits in the middle,
@@ -281,7 +281,7 @@ at the cost of a larger prompt.
 
 | Key | Type | Default | CLI |
 |---|---|---|---|
-| `file` | string | `.moose-tracevals/history.jsonl` | — |
+| `file` | string | `.moose-tracevals/history.jsonl` | none |
 
 Where `--history` appends. See
 [Reports & exit codes](/moose-tracevals/reference/report-and-exit-codes/#history).
@@ -293,10 +293,10 @@ Where `--history` appends. See
 | `dir` | string | `.moose-tracevals/sessions` | `capture --out` writes elsewhere; `run --manifest` reads elsewhere |
 
 Where [`capture`](/moose-tracevals/reference/cli/#capture) writes a session manifest and where `run`
-looks for one, resolved against the **project root** rather than the working directory. Inside
-`.moose-tracevals/` on purpose: that directory is already where the judge cache lives, it is already
-gitignored, and being inside the project is what makes a manifest travel with its trace in the
-[CI patterns](/moose-tracevals/ci/#carry-the-manifest-with-the-trace).
+looks for one, resolved against the **project root** rather than the working directory. It sits
+inside `.moose-tracevals/` on purpose. That directory is already where the judge cache lives, and it
+is already gitignored. Being inside the project is what makes a manifest travel with its trace in
+the [CI patterns](/moose-tracevals/ci/#carry-the-manifest-with-the-trace).
 
 Changing it changes both ends, so a project that relocates manifests keeps `capture` and `run`
 agreeing without a flag on either.
@@ -307,7 +307,7 @@ agreeing without a flag on either.
 |---|---|---|---|
 | `confidenceThreshold` | number 0–1 | `0.7` | `--confidence` |
 | `maxEvalsPerArtifact` | integer ≥ 1 | `8` | `--max-evals` |
-| `temperature` | number 0–2 | `0` | — |
+| `temperature` | number 0–2 | `0` | none |
 | `cacheDir` | string | `.moose-tracevals/cache/fill` | `--no-cache` disables |
 | `maxCostUsd` | number ≥ 0 | *(unset)* | `--max-cost-usd` |
 
@@ -326,17 +326,17 @@ labels sidecar.
 | `maxFalsePass` | integer ≥ 0 | *(unset)* | `--max-false-pass` |
 | `maxFalseFail` | integer ≥ 0 | *(unset)* | `--max-false-fail` |
 | `maxReview` | integer ≥ 0 | *(unset)* | `--max-review` |
-| `sweep.ensembleRuns` | array of integers ≥ 1 | `[1, 3, 5]` | — |
-| `sweep.autoPass` | array of numbers 0–1 | `[0.5, 0.6, 0.7, 0.8, 0.9, 0.95]` | — |
-| `sweep.autoFail` | array of numbers 0–1 | `[0.5, 0.6, 0.7, 0.8, 0.9, 0.95]` | — |
+| `sweep.ensembleRuns` | array of integers ≥ 1 | `[1, 3, 5]` | none |
+| `sweep.autoPass` | array of numbers 0–1 | `[0.5, 0.6, 0.7, 0.8, 0.9, 0.95]` | none |
+| `sweep.autoFail` | array of numbers 0–1 | `[0.5, 0.6, 0.7, 0.8, 0.9, 0.95]` | none |
 
 `labels` resolves against **this config file's directory**, exactly as `plugins` does. An explicit
 `--labels` is a working-directory path, like every other path argument on the CLI.
 
-The three `max*` keys are unset by default and a calibration run is a measurement, not a gate — set
-one and disagreement above it becomes exit `1`. They are integers rather than rates because `0` has
-to be expressible: "no false pass at all" is the most common setting anyone wants, and it cannot
-double as "unset".
+The three `max*` keys are unset by default, and a calibration run is a measurement rather than a
+gate. Set one and disagreement above it becomes exit `1`. They are integers rather than rates
+because `0` has to be expressible. "No false pass at all" is the most common setting anyone wants,
+and it cannot double as "unset".
 
 `sweep` is the grid [`--sweep`](/moose-tracevals/judge/calibrate/#sweep-the-knobs-for-free) tries,
 **one axis at a time** with the other knobs held at their configured value. It lives here rather
@@ -378,17 +378,17 @@ Four things to know, in the order they will bite:
 - **Load order is significant.** Entries load in order, config before `--require`, and a later one
   wins a kind an earlier one already claimed.
 - **`--require` adds; it does not replace.** A one-off flag would otherwise unregister every grader
-  the config names, and each eval declaring one would report `unknown grader kind` — pointing at an
-  artifact that is not the problem.
+  the config names, and each eval declaring one would report `unknown grader kind`. That points at
+  an artifact that is not the problem.
 - **A specifier that will not import exits `2`.** Skipping it would leave a run that looks like it
   ran. A module that imports but registers nothing warns instead, and one that takes over a built-in
   kind is allowed and reported.
 
 <Aside type="caution" title="This imports code named in your config">
 A plugin runs with the CLI's full privileges; there is no sandbox. The list is empty unless you
-write one, and it lives in the repository doing the evaluating — unlike the
-[`command` grader](/moose-tracevals/reference/graders/), which runs a program named by the artifacts
-of the project being evaluated. Evaluating someone else's trace cannot introduce a plugin.
+write one, and it lives in the repository doing the evaluating. The
+[`command` grader](/moose-tracevals/reference/graders/) differs, because it runs a program named by
+the artifacts of the project being evaluated. Evaluating someone else's trace cannot introduce a plugin.
 </Aside>
 ## `reportUnusedArtifacts`
 
@@ -402,7 +402,7 @@ only counts them. Off by default because a real roster runs to a couple of hundr
 bury the evals above it.
 
 This is an observation, not a gate. Turning it on changes what the report *shows* and nothing about
-what it *decides* — the summary counts and the exit code are identical either way.
+what it *decides*. The summary counts and the exit code are identical either way.
 
 ## Keys with no CLI flag
 
@@ -418,8 +418,8 @@ Worth knowing, because they can only be changed in the config file:
 ## Behavior with no key at all
 
 **Artifact staleness** has no knob. Every resolved artifact is stat'd and compared with the
-session's end time; one that is newer is flagged in the coverage table and named in a warning. It is
-always on because it costs one `stat` and can only ever add information — it never becomes an eval
+session's end time. One that is newer is flagged in the coverage table and named in a warning. It is
+always on because it costs one `stat` and can only ever add information. It never becomes an eval
 outcome and never changes the exit code. See
 [Artifact coverage](/moose-tracevals/declare/coverage/#staleness).
 

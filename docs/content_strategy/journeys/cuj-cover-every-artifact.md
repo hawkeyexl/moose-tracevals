@@ -5,7 +5,7 @@ title: Get coverage over every artifact a session used
 personas: [persona-artifact-author]
 trigger: "A report shows fewer evals than expected, or an artifact the reader knows was used does not appear at all."
 entry_point: /moose-tracevals/declare/coverage/
-success_criteria: "The reader can account for every artifact the session touched — evaluated, unresolved, or deliberately skipped — and knows how to close the gap for each."
+success_criteria: "The reader can account for every artifact the session touched, whether evaluated, unresolved, or deliberately skipped, and knows how to close the gap for each."
 steps:
   - { stage: "Read the artifact coverage table", doc: /moose-tracevals/declare/coverage/, exists: true }
   - { stage: "Understand how artifacts are resolved from a trace", doc: /moose-tracevals/reference/traces/, exists: true }
@@ -25,9 +25,9 @@ resolved artifact is [`cuj-declare-evals`](cuj-declare-evals.md).
 session invoked does not appear anywhere in the output.
 
 **Narrative.** This journey exists because of a design choice that stays invisible until it confuses
-someone: **an artifact that cannot be resolved degrades to a warning and a coverage-table row, never
+someone. **An artifact that cannot be resolved degrades to a warning and a coverage-table row, never
 a crash and never a failing eval.** That is right, since a missing plugin skill is no kind of
-adherence violation, but it leaves the coverage table as load-bearing output that no current
+adherence violation. It leaves the coverage table as load-bearing output that no current
 documentation explains.
 
 The reader needs to be able to close a small, closed set of loops:
@@ -36,8 +36,8 @@ The reader needs to be able to close a small, closed set of loops:
 - **Resolved, no declared evals.** Still evaluated, via the implicit whole-artifact eval. Nothing
   to fix, but knowing it stops an author reading silence as absence.
 - **Unresolved.** The reference was found in the trace but no file was. The coverage entry records
-  every location that was tried, which is usually enough to diagnose it — a project-relative path,
-  a user-level directory, or a plugin store.
+  every location that was tried, which is usually enough to diagnose it. Those are a
+  project-relative path, a user-level directory, or a plugin store.
 - **Never resolvable by design.** Built-in agents have no definition file. It looks like a defect
   and it is not, so say it once, plainly.
 - **Deliberately skipped.** An artifact can opt out via the `skip` flag and is then reported as
@@ -46,6 +46,6 @@ The reader needs to be able to close a small, closed set of loops:
 The framing that makes this journey coherent: **coverage is the honest answer to "what did you not
 check?"** Surfacing it is a feature.
 
-**Coverage.** No gaps. `declare/coverage/` carries the six states a coverage row can be in, the
-full resolution order for skills, agents, slash commands, and project rules, and how to diagnose an
-unresolved reference from the `tried` list. `reference/traces/` carries the discovery side.
+**Coverage.** No gaps. `declare/coverage/` carries the six states a coverage row can be in, and the
+full resolution order for skills, agents, slash commands, and project rules. It also carries how to
+diagnose an unresolved reference from the `tried` list. `reference/traces/` carries the discovery side.

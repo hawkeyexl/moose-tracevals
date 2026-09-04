@@ -1,7 +1,7 @@
 ---
 id: persona-platform-engineer
 type: persona
-name: "Devin — AI platform engineer"
+name: "Devin, AI platform engineer"
 audience: aud-platform-ci
 role: Platform engineer who owns CI across many repositories
 proficiency: [ci-configuration, exit-codes, json-processing, containers, secrets-management]
@@ -27,17 +27,17 @@ journeys:
   - cuj-first-eval
 ---
 
-# Persona: Devin — AI platform engineer
+# Persona: Devin, AI platform engineer
 
 **Scope:** the operator persona for [`aud-platform-ci`](../audiences/platform-ci.md). He installs
 and plumbs the gate; he does not author the artifacts it checks.
 
 Devin owns CI across a few dozen repositories. Agent-assisted work stopped being an experiment
-some months ago, and he is now the person asked whether any of it can be verified before merge. He
+some months ago. He is now the person asked whether any of it can be verified before merge. He
 did not write a single one of the skills he is being asked to check, and he does not intend to.
 
-**Goal:** add one check that answers a mechanical question — *did this session follow the
-instructions it was given?* — and route the answer into the reporting the organization already has.
+**Goal:** add one check that answers a mechanical question. *Did this session follow the
+instructions it was given?* Then route the answer into the reporting the organization already has.
 
 **Pains:**
 
@@ -56,11 +56,11 @@ instructions it was given?* — and route the answer into the reporting the orga
 only, keyed off the exit code. If it stays quiet he never thinks about it again. Later, if someone
 asks for trend data, he starts piping the JSON report and the history file somewhere.
 
-**What success looks like for him:** the gate runs in seconds, makes no network call, and fails
-loudly and specifically the first time a session violates a rule — with an exit code he can branch
-on and JSON he can forward.
+**What success looks like for him:** the gate runs in seconds and makes no network call. It fails
+loudly and specifically the first time a session violates a rule. It gives him an exit code he can
+branch on, and JSON he can forward.
 
 **Careful with:** Devin's journey must never require understanding evals authoring or judge
 calibration. He needs *trace*, *artifact*, and *outcome* only to the depth required to read a
-result. Introduce `needs-review` and `failOnNeedsReview` in the same breath — the first is a trap
+result. Introduce `needs-review` and `failOnNeedsReview` in the same breath. The first is a trap
 for him without the second.

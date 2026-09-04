@@ -17,25 +17,25 @@ steps:
 
 # CUJ: Feed results into your own tooling
 
-**Scope:** everything downstream of a run — structured output, history, and regression detection.
+**Scope:** everything downstream of a run, meaning structured output, history, and regression detection.
 Getting the gate installed in the first place is [`cuj-gate-ci`](cuj-gate-ci.md).
 
-**Trigger.** The gate has been quiet for a few weeks and someone asks the obvious follow-up: is
-adherence getting better or worse, and can we be told when it regresses?
+**Trigger.** The gate has been quiet for a few weeks, and someone asks the obvious follow-up.
+Is adherence getting better or worse, and can we be told when it regresses?
 
 **Narrative.** This is the journey where moose-tracevals stops being a pass/fail gate and becomes a
-source of data, and it is currently the largest undocumented surface in the product relative to how
+source of data. It is currently the largest undocumented surface in the product, relative to how
 finished the underlying features are. Three capabilities exist and are described nowhere:
 
-- **A structured report.** Every run can emit its full result — trace metadata, per-eval outcomes
-  with findings and consensus, artifact coverage, warnings, summary counts, cost, duration — as
-  JSON. Anyone building on it needs the shape documented well enough that they never open the
+- **A structured report.** Every run can emit its full result as JSON. That is trace metadata,
+  per-eval outcomes with findings and consensus, artifact coverage, warnings, summary counts, cost,
+  and duration. Anyone building on it needs the shape documented well enough that they never open the
   source to parse it.
 - **History.** Runs can be appended to a local log and each run compared against the previous one
   for the same session. This is what turns "did it pass?" into "did it get worse?", which is the
   question a platform team actually wants answered.
-- **A regression is a specific, defined event**: a check that passed before and does not now — and
-  that definition is what makes an alert trustworthy rather than noisy.
+- **A regression is a specific, defined event.** It is a check that passed before and does not now.
+  That definition is what makes an alert trustworthy rather than noisy.
 
 Two personas share this journey and want different endings. Devin wants a file he can forward.
 Rin wants to skip the CLI and call the library. The content should serve Devin's path in full and
@@ -43,5 +43,5 @@ hand off to [`cuj-extend`](cuj-extend.md) rather than trying to serve both to th
 
 **Coverage.** No gaps. `ci/consume-results/` carries the JSON report in use, `--output`, the history
 file, and the regression definition, with worked `jq` for each. One caveat is stated there rather
-than hidden: history is a local file, so an ephemeral CI runner starts empty every time and has
+than hidden. History is a local file, so an ephemeral CI runner starts empty every time. It has
 nothing to compare against unless the file is persisted.

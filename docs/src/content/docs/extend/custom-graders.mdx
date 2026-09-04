@@ -8,7 +8,7 @@ sidebar:
 import { Aside, LinkCard, CardGrid } from '@astrojs/starlight/components';
 
 **Scope:** adding a deterministic grader kind. The seven deterministic built-ins and their options are in the
-[grader reference](/moose-tracevals/reference/graders/) — read one of those first, since they are the
+[grader reference](/moose-tracevals/reference/graders/). Read one of those first, since they are the
 reference implementations.
 
 ## The contract has two halves
@@ -25,14 +25,14 @@ interface TraceGrader {
 consequence that is invisible in the type signature.
 
 <Aside type="caution" title="A grader without `validateOptions` can never be proposed by `fill`">
-`validateOptions` is optional so that consumer-registered graders stay source-compatible — but
+`validateOptions` is optional so that consumer-registered graders stay source-compatible. Even so,
 `fill` refuses to propose an eval it cannot ground-check. A grader missing it works fine when a
 human writes the eval by hand and is silently invisible to the authoring path.
 
 If you want `fill` to be able to suggest your grader, implement both.
 </Aside>
 
-It is called twice: by `grade()` before grading, and by `fill` before proposing. Return `undefined`
+It is called twice, by `grade()` before grading and by `fill` before proposing. Return `undefined`
 when the options are usable, or a message describing what is wrong.
 
 ## A worked example
@@ -91,10 +91,10 @@ registerGrader(stayedInScope);
 ```
 
 `windowFor(trace, plan)` is the one thing a custom grader has to remember. Reading `trace` directly
-counts events from before the artifact was ever in force, which is how a skill's eval ends up failing
-on a command that ran before it loaded. `window` carries the same shapes as the trace —
-`toolCalls`, `fileAccesses`, `skillInvocations`, `events`, `userMessages`, `assistantTexts`,
-`turnCount` — so switching is usually one word. And `skippedWindow(window)` is the required answer
+counts events from before the artifact was ever in force. That is how a skill's eval ends up failing
+on a command that ran before it loaded. `window` carries the same shapes as the trace:
+`toolCalls`, `fileAccesses`, `skillInvocations`, `events`, `userMessages`, `assistantTexts`, and
+`turnCount`. Switching is usually one word. And `skippedWindow(window)` is the required answer
 when the artifact governed nothing: a verdict there would be about somebody else's turns. See
 [Shared behavior](/moose-tracevals/reference/graders/#shared-behavior) for the window rules.
 
@@ -111,7 +111,7 @@ Then declare it like any built-in:
 ## Loading it from the CLI
 
 Writing the grader is half of it. `registerGrader` mutates a module-level registry, so something has
-to call it before the run reads that registry — and from `moose-tracevals run`, that something is a
+to call it before the run reads that registry. From `moose-tracevals run`, that something is a
 **grader plugin**: a module named in the config or by `--require`, imported before evals are planned.
 
 Declare it in the config when the whole repository needs it, which is the case CI cares about:
@@ -145,13 +145,13 @@ export function register({ registerGrader }) {
 ```
 
 Or it can import `registerGrader` and call it while the module evaluates, exactly as the example
-above does. That also works — but it binds to whichever copy of `moose-tracevals` the specifier
-resolves to, so a plugin published as its own package with its own copy of the dependency registers
+above does. That also works. It binds to whichever copy of `moose-tracevals` the specifier
+resolves to. A plugin published as its own package with its own copy of the dependency registers
 into a registry nobody reads. The `register` export has no such failure mode, and it lets the same
 file be loaded from a test suite that imports the package differently.
 
 <Aside type="caution" title="A grader that replaces a built-in is allowed, and reported">
-Registering a `kind` that already exists replaces it — that is how you would override `file-access`
+Registering a `kind` that already exists replaces it. That is how you would override `file-access`
 with a stricter one. It also changes what *every* eval declaring that kind means, including evals in
 artifacts you do not own, so the run says so:
 
@@ -162,7 +162,7 @@ grader plugin "./tracevals/graders.mjs" replaced the built-in grader "file-acces
 
 ### When it does not load
 
-A plugin that cannot be imported is an **operational error** — exit `2`, nothing evaluated:
+A plugin that cannot be imported is an **operational error**: exit `2`, nothing evaluated:
 
 ```
 moose-tracevals: could not load grader plugin "./tracevals/graders.mjs" (resolved to /work/demo/tracevals/graders.mjs): Cannot find module …
@@ -181,7 +181,7 @@ grader plugin "./tracevals/graders.mjs" registered no grader kinds — export a 
 ```
 
 <Aside title="Plugins load once per process">
-Naming the same module twice — in the config and again with `--require` — imports it once. A
+Naming the same module twice, in the config and again with `--require`, imports it once. A
 repeated `--require` is not a way to re-register.
 </Aside>
 
@@ -238,7 +238,7 @@ const report = await runEvals({
 const result = report.evalResults.find((r) => r.evalName === "stayed-in-scope");
 ```
 
-Test `validateOptions` directly too — it is a pure function, and it is the half that decides whether
+Test `validateOptions` directly too. It is a pure function, and it is the half that decides whether
 `fill` can ever suggest your grader.
 
 ## Where to go next

@@ -11,7 +11,7 @@ import { Tabs, TabItem, Aside, LinkCard, CardGrid } from '@astrojs/starlight/com
 regressions) is covered in [Exit codes & reports](/moose-tracevals/ci/exit-codes-and-reports/).
 Deciding what the evals assert is [Declare what to check](/moose-tracevals/declare/).
 
-The short version: **moose-tracevals can run in a build with no network call and no API key.** That is
+**moose-tracevals can run in a build with no network call and no API key.** That is
 `--deterministic-only`, and it is a complete mode in its own right.
 
 ## First, where does the trace come from?
@@ -25,11 +25,10 @@ own, so a trace has to get there. Three patterns work:
 |---|---|
 | **Evaluate in the same job that ran the agent** | An agent runs in CI and you evaluate its session immediately afterwards. Simplest, and the trace never leaves the runner. |
 | **Upload the trace, evaluate in a later job** | The agent runs in one job or workflow; the session file is uploaded as an artifact and downloaded by the evaluating job. |
-| **Evaluate a committed trace** | A small corpus of representative sessions lives in the repo and is re-evaluated whenever artifacts change — a regression suite for your instructions. |
+| **Evaluate a committed trace** | A small corpus of representative sessions lives in the repo and is re-evaluated whenever artifacts change, giving you a regression suite for your instructions. |
 
-The third is the one people underrate. If you commit a handful of traces, this gate answers a
-genuinely useful question on every pull request: *does this edit to `CLAUDE.md` break a check that
-used to pass?*
+The third is the one people underrate. Commit a handful of traces, and this gate answers a useful
+question on every pull request. *Does this edit to `CLAUDE.md` break a check that used to pass?*
 
 ### A corpus is worth more than a trace
 
@@ -39,10 +38,10 @@ Point `run` at the whole directory's worth of traces and it reports **rates** ra
 npx moose-tracevals run traces/*.jsonl --deterministic-only
 ```
 
-That changes the question from *did this session comply?* to *how often does this check hold?* —
-which is the question a skill's author actually has. One session failing an eval is an anecdote; the
-same eval at `40%` across twenty sessions is a finding, and the report names the traces that pulled
-it down so you can open them.
+That changes the question from *did this session comply?* to *how often does this check hold?*
+That second question is the one a skill's author actually has. One session failing an eval is an
+anecdote. The same eval at `40%` across twenty sessions is a finding. The report names the traces
+that pulled it down, so you can open them.
 
 Everything about a batch is built to keep that number honest:
 
@@ -56,7 +55,7 @@ Everything about a batch is built to keep that number honest:
 - **Rows are ordered deterministically**, so two runs over the same corpus are comparable.
 
 Exit `1` if any trace fails, exactly as for a single one. Naming exactly one trace still produces
-the familiar single-session report — see
+the familiar single-session report. See
 [which report you get](/moose-tracevals/reference/cli/#which-report-you-get).
 
 {/* Doc Detective inline tests: a batch really runs offline against the committed
@@ -71,16 +70,16 @@ the familiar single-session report — see
 ### Or let the tool find the sessions
 
 When the agent ran on the same machine, three selectors pull traces out of the session store instead
-of naming files — the same `--all-projects` and `--limit` that
+of naming files. They are the same `--all-projects` and `--limit` that
 [`list`](/moose-tracevals/reference/cli/#list) uses, plus a time window:
 
 ```bash
 npx moose-tracevals run --since 7d --limit 20 --deterministic-only
 ```
 
-A selector always produces the aggregate report, even when it matches one trace, so a script's
-parsing does not depend on how busy the week was. A selector that matches **nothing** exits `2`
-rather than `0`: an empty corpus and a clean corpus look identical downstream, and a gate that
+A selector always produces the aggregate report, even when it matches one trace. A script's parsing
+therefore does not depend on how busy the week was. A selector that matches **nothing** exits `2`
+rather than `0`. An empty corpus and a clean corpus look identical downstream, and a gate that
 stopped gating should say so.
 
 ## Stay offline
@@ -166,13 +165,13 @@ jobs:
           path: moose-tracevals-report.md
 ```
 
-The gate is the exit code: the step fails when `run` exits non-zero, which is exactly when an eval
+The gate is the exit code. The step fails when `run` exits non-zero, which is exactly when an eval
 failed, errored, or needs review.
 
 ### Evaluating a session the same job just produced
 
-If an agent runs earlier in the workflow, it writes its session under the runner's home directory
-and you can discover it instead of naming a file:
+An agent that runs earlier in the workflow writes its session under the runner's home directory.
+You can discover it instead of naming a file:
 
 ```yaml
       - name: Evaluate the session that just ran
@@ -187,8 +186,8 @@ that just finished.
 
 ## Carry the manifest with the trace
 
-There is one thing CI gets badly wrong on its own, and it is worth fixing before you trust the
-report: **a checkout rewrites every file's mtime**, so the
+CI gets one thing badly wrong on its own, and it is worth fixing before you trust the report.
+**A checkout rewrites every file's mtime**, so the
 [staleness heuristic](/moose-tracevals/declare/coverage/#staleness) flags every artifact in your
 repository on every run. The warning is technically correct and completely useless.
 
@@ -199,7 +198,7 @@ rather than timestamps. The mechanics are the same three patterns above:
 |---|---|
 | **Evaluate in the same job** | `capture` wrote it to `.moose-tracevals/sessions/<id>.json` in the workspace, and `run` finds it there. Nothing to do. |
 | **Upload the trace** | Upload the manifest with it. Name it `<trace>.manifest.json` and `run` picks it up beside the trace with no flag. |
-| **Committed corpus** | `.moose-tracevals/` is gitignored, so copy the manifest next to the trace when you commit it — `traces/refactor-session.manifest.json`. |
+| **Committed corpus** | `.moose-tracevals/` is gitignored, so copy the manifest next to the trace when you commit it, as `traces/refactor-session.manifest.json`. |
 
 ```yaml
       - name: Upload the session and its manifest
@@ -216,8 +215,8 @@ free.
 
 <Aside title="Nothing breaks without one">
 An absent manifest is the default and always will be. Every hash check reports `skipped` with the
-reason, the mtime heuristic stands, and no verdict, summary count, or exit code moves either way — a
-manifest is an observation about the artifacts, never an input to a verdict.
+reason, the mtime heuristic stands, and no verdict, summary count, or exit code moves either way.
+A manifest is an observation about the artifacts, never an input to a verdict.
 </Aside>
 
 ## Other CI platforms

@@ -1,6 +1,6 @@
 ---
 title: Fill in evals across a project
-description: Use fill to propose evals for every skill, agent, slash command, and rules file in a project — understand the gate that gets applied, and review the diff before anything is written.
+description: Use fill to propose evals for every skill, agent, slash command, and rules file in a project. Understand the gate that gets applied, and review the diff before anything is written.
 sidebar:
   order: 2
 ---
@@ -12,8 +12,8 @@ the vocabulary from [Declare what to check](/moose-tracevals/declare/) and is ab
 
 ## What `fill` does
 
-`fill` scans a project for instruction artifacts, asks a model to extract the evals each
-artifact's own instructions already imply, and appends the ones that survive a gate. It needs no
+`fill` scans a project for instruction artifacts. It asks a model to extract the evals each
+artifact's own instructions already imply, then appends the ones that survive a gate. It needs no
 trace.
 
 This is the only command that touches your files, so here is exactly what it refuses to do:
@@ -96,10 +96,10 @@ Proposals are checked in this order:
    A slash command carries the skill list unchanged, because it is the same shape of artifact: an
    injected procedure graded over the span it governed.
 
-   Two exclusions are deliberate. `cost` and `json-output` are **whole-session** graders — tokens
-   and the session's final message are not attributable to whichever artifact was governing — so a
-   budget declared inside one skill would silently constrain everything, and they are never
-   proposed. `turn-count` is windowed and no longer has that problem, but it stayed out of the
+   Two exclusions are deliberate. `cost` and `json-output` are **whole-session** graders. Tokens
+   and the session's final message are not attributable to whichever artifact was governing.
+   A budget declared inside one skill would therefore silently constrain everything, so they are
+   never proposed. `turn-count` is windowed and no longer has that problem, but it stayed out of the
    allowlist: widening it is a separate decision. And `skill-invoked` is excluded from skills, slash
    commands, and agents, because an artifact asserting that it was itself invoked is permanently
    green.
@@ -107,9 +107,9 @@ Proposals are checked in this order:
 3. **`invalid-options`**: the grader itself refused the options. Every grader validates its own
    options, and a grader that cannot do so is rejected outright.
 
-4. **`ungrounded-target`**: the proposal names something that does not exist here. A tool that is
-   absent from the project's vocabulary, a skill the scan never found, or an absolute file path
-   where a repository-relative suffix belongs.
+4. **`ungrounded-target`**: the proposal names something that does not exist here. The target may
+   be a tool absent from the project's vocabulary, or a skill the scan never found. It may be an
+   absolute file path where a repository-relative suffix belongs.
 
 5. **`low-confidence`**: and only now, below `--confidence` (default `0.7`).
 
@@ -119,7 +119,7 @@ Proposals are checked in this order:
 
 </Steps>
 
-That ordering is the point: a high-confidence proposal naming a tool your project does not have is
+That ordering is the point. A high-confidence proposal naming a tool your project does not have is
 still rejected. Confidence can only lose you an eval, never win you one.
 
 <Aside type="tip" title="Re-gating is free">
@@ -172,10 +172,10 @@ measurement stops meaning anything the moment the subject can read it.
 So the proposals are printed, and you decide which ones to carry over by hand. The reasoning is
 recorded in [ADR 01005](https://github.com/hawkeyexl/moose-tracevals/blob/main/adrs/01005-fill-proposes-evals-at-authoring-time.md).
 
-**Slash commands are written**, like skills and agents. The distinction is not "does the agent read
-this file" but *"does the agent read this file's frontmatter"*: Claude Code consumes a command's
-`description`, `argument-hint`, and `allowed-tools` itself and injects only the body as the prompt,
-so an eval block there never reaches the session under test. Project rules are injected verbatim,
+**Slash commands are written**, like skills and agents. What matters is not whether the agent reads
+the file. What matters is whether it reads that file's frontmatter. Claude Code consumes a command's
+`description`, `argument-hint`, and `allowed-tools` itself, and injects only the body as the prompt.
+An eval block there never reaches the session under test. Project rules are injected verbatim,
 frontmatter included, which is what makes them the exception.
 
 ## Where to go next

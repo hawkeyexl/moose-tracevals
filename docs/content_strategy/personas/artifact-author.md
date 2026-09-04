@@ -1,7 +1,7 @@
 ---
 id: persona-artifact-author
 type: persona
-name: "Priya — Skill & agent author"
+name: "Priya, skill & agent author"
 audience: aud-artifact-authors
 role: Senior engineer who maintains her team's agent instruction artifacts
 proficiency: [markdown, yaml-frontmatter, git, cli, agent-skill-authoring]
@@ -30,7 +30,7 @@ journeys:
 lead: true
 ---
 
-# Persona: Priya — Skill & agent author
+# Persona: Priya, skill & agent author
 
 **Scope:** the owner persona for [`aud-artifact-authors`](../audiences/artifact-authors.md), and the
 **lead persona** for the documentation set.
@@ -41,7 +41,7 @@ most of it herself over six months, in response to specific things going wrong. 
 engineer and a complete novice at evaluation: she has heard "LLM-as-judge" and is mildly suspicious
 of it.
 
-**Goal:** close the loop between the instructions she wrote and what her agents actually did — and
+**Goal:** close the loop between the instructions she wrote and what her agents actually did. And
 be told when a rule she added months ago quietly stops being followed.
 
 **Pains:**
@@ -56,21 +56,21 @@ be told when a rule she added months ago quietly stops being followed.
 - Hand-writing evals for eleven artifacts is the step most likely to end her adoption right
   after her first successful run.
 
-**How she uses moose-tracevals:** she runs it against a session that already happened — no
-instrumentation, no re-running work — and reads the report. Once convinced, she runs `fill
+**How she uses moose-tracevals:** she runs it against a session that already happened, with no
+instrumentation and no re-running work. Then she reads the report. Once convinced, she runs `fill
 --dry-run` across the project, reviews what it proposes, and keeps the evals that are honest.
 Later she wires it into CI, at which point she hands the pipeline half to Devin. She returns when
 she adds a skill or when a report surprises her.
 
-**What success looks like for her:** an artifact she edited last week shows an eval that fails,
-and the failure names the tool call that broke the rule. That is the moment the tool stops being a
+**What success looks like for her:** an artifact she edited last week shows an eval that fails.
+The failure names the tool call that broke the rule. That is the moment the tool stops being a
 demo.
 
 **Why she is the lead persona:** she is the primary adopter and the only persona who touches every
-layer — install, artifact resolution, evals authoring, grader choice, reporting, and eventually
-CI. Her backbone journey [`cuj-first-eval`](../journeys/cuj-first-eval.md) threads through all of
+layer. That means install, artifact resolution, evals authoring, grader choice, reporting, and
+eventually CI. Her backbone journey [`cuj-first-eval`](../journeys/cuj-first-eval.md) threads through all of
 them in a single line, and every other persona either serves her or intersects her.
 
 **Careful with:** Priya's main path must not be gated on judge internals. Ensembles, consensus, and
-confidence zones are one link away from her journey, never a prerequisite inside it — the moment
+confidence zones are one link away from her journey, never a prerequisite inside it. The moment
 she has to understand consensus arithmetic to read her first report, the on-ramp has failed.

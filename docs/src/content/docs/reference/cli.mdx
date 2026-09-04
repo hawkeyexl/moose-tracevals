@@ -91,15 +91,15 @@ moose-tracevals: no trace given; pass a trace file or run `moose-tracevals list`
 ### Which report you get
 
 One command, two report shapes. What decides is **how the traces were selected**, not how many came
-back — so a script can be written against the shape before it runs:
+back. A script can therefore be written against the shape before it runs:
 
 | Invocation | Report |
 |---|---|
-| `run <trace>` | [`RunReport`](/moose-tracevals/reference/report-and-exit-codes/#--format-json) — one session |
-| `run <a> <b> …` | [`BatchReport`](/moose-tracevals/reference/report-and-exit-codes/#batch-runs) — rates across sessions |
+| `run <trace>` | [`RunReport`](/moose-tracevals/reference/report-and-exit-codes/#--format-json), for one session |
+| `run <a> <b> …` | [`BatchReport`](/moose-tracevals/reference/report-and-exit-codes/#batch-runs), with rates across sessions |
 | `run --all-projects` / `--since` / `--limit` | `BatchReport`, **even when the selector matches exactly one trace** |
 
-Naming traces *and* passing a selector is an error rather than a precedence rule — either answer
+Naming traces *and* passing a selector is an error rather than a precedence rule. Either answer
 would silently discard something you asked for:
 
 ```
@@ -118,29 +118,29 @@ moose-tracevals: no traces matched (--all-projects, --since 7d); run `moose-trac
 | Flag | Argument | Default | Description |
 |---|---|---|---|
 | `--project` | `<dir>` | the trace's recorded `cwd` | Artifact-lookup root, **and** the discovery scope when a selector is used without `--all-projects`. |
-| `--all-projects` | — | off | Evaluate traces from every project in the session store. |
-| `--since` | `<duration>` | — | Keep only traces modified within the window: `30m`, `24h`, `7d`, `2w`. Anything else is exit 2. |
+| `--all-projects` | none | off | Evaluate traces from every project in the session store. |
+| `--since` | `<duration>` | none | Keep only traces modified within the window: `30m`, `24h`, `7d`, `2w`. Anything else is exit 2. |
 | `--limit` | `<n>` | unlimited | Maximum traces to evaluate, applied after newest-first sorting. A whole number `>= 1`; anything else is exit `2`. |
 | `--provider` | `<name>` | `provider.default` (`claude-cli`) | Judge provider: `claude-cli`, `anthropic`, `openai`, `mock`. |
 | `--model` | `<model>` | the selected provider's configured model | Judge model override. |
 | `--runs` | `<n>` | `judge.ensembleRuns` (`3`) | Ensemble runs per judged eval. A whole number `>= 1`; anything else is exit `2`. |
-| `--deterministic-only` | — | off | Skip judged evals entirely. They are reported as `skipped`, not failed. No model call is made, so nothing leaves the machine. |
-| `--commands` / `--no-commands` | — | config | Override [`graders.command.enabled`](/moose-tracevals/reference/configuration/#graders). `--no-commands` does not execute [`command`-graded evals](/moose-tracevals/reference/graders/#command) — they report `skipped` with the reason stated, never `pass`. Pass neither and the config value stands. |
-| `--no-cache` | — | cache on | Bypass the judge cache. |
-| `--max-cost-usd` | `<usd>` | `judge.maxCostUsd` (unset) | Judge cost budget for the whole invocation, **shared across every trace in a batch** — not applied per trace. A finite number `>= 0`; anything else is exit `2`. Exhausting it makes a batch exit `1` — see [Exit codes](#exit-codes). |
+| `--deterministic-only` | none | off | Skip judged evals entirely. They are reported as `skipped`, not failed. No model call is made, so nothing leaves the machine. |
+| `--commands` / `--no-commands` | none | config | Override [`graders.command.enabled`](/moose-tracevals/reference/configuration/#graders). `--no-commands` does not execute [`command`-graded evals](/moose-tracevals/reference/graders/#command); they report `skipped` with the reason stated, never `pass`. Pass neither and the config value stands. |
+| `--no-cache` | none | cache on | Bypass the judge cache. |
+| `--max-cost-usd` | `<usd>` | `judge.maxCostUsd` (unset) | Judge cost budget for the whole invocation, **shared across every trace in a batch**, not applied per trace. A finite number `>= 0`; anything else is exit `2`. Exhausting it makes a batch exit `1`; see [Exit codes](#exit-codes). |
 | `-f, --format` | `<format>` | `human` | `human`, `json`, or `markdown`. |
-| `-o, --output` | `<file>` | — | Also write the rendered report to a file. |
-| `--history` | — | off | Append to the history file and compare with the previous run for the same session. In a batch this is **one entry per trace**, since history is matched per session. |
-| `--report-unused-artifacts` | — | `reportUnusedArtifacts` (`false`) | List every skill and agent the session was [offered and never used](/moose-tracevals/declare/coverage/#offered-used-and-never-on-the-menu), instead of only counting them. Never changes the exit code. |
-| `--fail-on-needs-review` / `--no-fail-on-needs-review` | — | config | Override [`failOnNeedsReview`](/moose-tracevals/reference/configuration/). Pass neither and the config value stands. |
-| `--require` | `<module>` | — | Load a grader plugin. **Repeatable**, and **added to** [`plugins`](/moose-tracevals/reference/configuration/#plugins) rather than replacing it. |
-| `--manifest` | `<file>` | searched | A [session manifest](#capture) to compare artifacts against. Single-trace only. Without it one is looked for automatically; **with** it, a file that is missing, unreadable, or recorded for a different session is exit `2` rather than a shrug. |
+| `-o, --output` | `<file>` | none | Also write the rendered report to a file. |
+| `--history` | none | off | Append to the history file and compare with the previous run for the same session. In a batch this is **one entry per trace**, since history is matched per session. |
+| `--report-unused-artifacts` | none | `reportUnusedArtifacts` (`false`) | List every skill and agent the session was [offered and never used](/moose-tracevals/declare/coverage/#offered-used-and-never-on-the-menu), instead of only counting them. Never changes the exit code. |
+| `--fail-on-needs-review` / `--no-fail-on-needs-review` | none | config | Override [`failOnNeedsReview`](/moose-tracevals/reference/configuration/). Pass neither and the config value stands. |
+| `--require` | `<module>` | none | Load a grader plugin. **Repeatable**, and **added to** [`plugins`](/moose-tracevals/reference/configuration/#plugins) rather than replacing it. |
+| `--manifest` | `<file>` | searched | A [session manifest](#capture) to compare artifacts against. Single-trace only. Without it one is looked for automatically. **With** it, a file that is missing, unreadable, or recorded for a different session is exit `2` rather than a shrug. |
 
 <Aside type="caution" title="A numeric flag that does not parse is exit 2">
 `parseFloat("abc")` is `NaN`, and every comparison against `NaN` is false. A budget of `NaN` would
-not fall back to the config — `undefined` is what defers to the config — it would reach the budget
-gate as a ceiling that can never be hit, so the run bills without a limit while the report still
-claims one. `--limit=-1` has the same shape: it reaches `slice(0, -1)` and quietly evaluates every
+not fall back to the config, because `undefined` is what defers to the config. It would reach the
+budget gate as a ceiling that can never be hit. The run then bills without a limit while the report
+still claims one. `--limit=-1` has the same shape: it reaches `slice(0, -1)` and quietly evaluates every
 trace except the oldest.
 
 ```
@@ -153,12 +153,12 @@ moose-tracevals: --limit must be a whole number of at least 1, got -1
 
 | Code | Meaning |
 |---|---|
-| `0` | every eval passed or was skipped — in a batch, on **every** trace |
-| `1` | any `fail` or `error` — and `needs-review`, unless `failOnNeedsReview: false`. In a batch, also any trace that could not be parsed, **and a batch whose shared judge budget ran out mid-corpus** |
-| `2` | operational error: bad usage, an unreadable trace named on its own, unknown format, a selector that matched nothing, a bad `--since`, a numeric flag that is not a number or is out of range, a grader plugin that will not load |
+| `0` | every eval passed or was skipped, and in a batch on **every** trace |
+| `1` | any `fail` or `error`, and `needs-review` unless `failOnNeedsReview: false`. In a batch, also any trace that could not be parsed, **and a batch whose shared judge budget ran out mid-corpus** |
+| `2` | an operational error. That covers bad usage, an unreadable trace named on its own, an unknown format, and a selector that matched nothing. It also covers a bad `--since`. So do a numeric flag that is not a number or is out of range, and a grader plugin that will not load |
 
 <Aside title="An unreadable trace inside a batch is an entry, not an abort">
-Naming one bad trace on its own is exit 2. Naming it alongside good ones is different: it becomes a
+Naming one bad trace on its own is exit 2. Naming it alongside good ones is different. It becomes a
 report entry carrying its error, the other traces keep their verdicts, and the run exits 1. One
 unreadable file in a corpus of fifty must not cost the other forty-nine.
 </Aside>
@@ -173,7 +173,7 @@ Runs the same batch `run` does, then joins the results against a
 [labels sidecar](/moose-tracevals/judge/calibrate/#write-down-what-you-decided) and reports how often
 the tool agreed with you. **Read-only**: labels, traces, and artifacts are never written.
 
-Every `run` flag applies except `--history`, which is deliberately absent — calibration measures a
+Every `run` flag applies except `--history`, which is deliberately absent. Calibration measures a
 corpus, not a point in one session's timeline.
 
 ### Options beyond `run`'s
@@ -181,7 +181,7 @@ corpus, not a point in one session's timeline.
 | Flag | Argument | Default | Description |
 |---|---|---|---|
 | `--labels` | `<file>` | [`calibrate.labels`](/moose-tracevals/reference/configuration/#calibrate) (`tracevals/labels.yaml`) | The ground-truth sidecar. A path here resolves against the working directory; the config default resolves against the config file. |
-| `--sweep` | — | off | Re-score the corpus across the configured grid, from cached verdicts. |
+| `--sweep` | none | off | Re-score the corpus across the configured grid, from cached verdicts. |
 | `--max-false-pass` | `<n>` | `calibrate.maxFalsePass` *(unset)* | Exit `1` above this many false passes. |
 | `--max-false-fail` | `<n>` | `calibrate.maxFalseFail` *(unset)* | Exit `1` above this many false fails. |
 | `--max-review` | `<n>` | `calibrate.maxReview` *(unset)* | Exit `1` above this many `needs-review` outcomes across the corpus. |
@@ -190,14 +190,14 @@ corpus, not a point in one session's timeline.
 
 | Code | Meaning |
 |---|---|
-| `0` | the corpus was measured — **including when it disagreed**. Disagreement is the finding, not a failure |
-| `1` | a threshold above was asked for and exceeded, or the measurement is incomplete: a trace could not be evaluated, the shared judge budget cut the corpus short, or **nothing was scored at all** |
+| `0` | the corpus was measured, **including when it disagreed**. Disagreement is the finding, not a failure |
+| `1` | a threshold above was asked for and exceeded, or the measurement is incomplete. Incomplete means a trace could not be evaluated, the shared judge budget cut the corpus short, or **nothing was scored at all** |
 | `2` | operational: no labels file, an invalid one, a label naming a trace outside the corpus, a label matching no eval result, or any `run` operational error |
 
 <Aside type="caution" title="A measurement that measured nothing is exit 1">
-When every label joins to a `skipped` result — `--deterministic-only` over `ai`-graded labels, or a
-budget exhausted on the first trace — `scored` is `0`, `agreement` is `null`, and each `--max-*`
-threshold reads *"0 of at most N, not exceeded"*. The thresholds are honest; the denominator behind
+When every label joins to a `skipped` result, `scored` is `0` and `agreement` is `null`. Each
+`--max-*` threshold then reads *"0 of at most N, not exceeded"*. That happens under
+`--deterministic-only` over `ai`-graded labels, or with a budget exhausted on the first trace. The thresholds are honest; the denominator behind
 them is empty, so exiting `0` would certify a corpus nobody measured:
 
 ```
@@ -241,14 +241,14 @@ moose-tracevals: no such file or directory: ./nope
 | Flag | Argument | Default | Description |
 |---|---|---|---|
 | `--project` | `<dir>` | current directory | Project root to scan. |
-| `--dry-run` | — | off | Report proposals without writing them. **Recommended first invocation.** |
+| `--dry-run` | none | off | Report proposals without writing them. **Recommended first invocation.** |
 | `--confidence` | `<n>` | `fill.confidenceThreshold` (`0.7`) | Minimum confidence to write, `0`–`1`. |
 | `--max-evals` | `<n>` | `fill.maxEvalsPerArtifact` (`8`) | Maximum evals per artifact, **including existing ones**. |
 | `--max-cost-usd` | `<usd>` | `fill.maxCostUsd` (unset) | Proposal cost budget. |
-| `--no-cache` | — | cache on | Bypass the proposal cache. |
+| `--no-cache` | none | cache on | Bypass the proposal cache. |
 | `--provider` | `<name>` | `provider.default` | `claude-cli`, `anthropic`, `openai`, `mock`. |
 | `--model` | `<model>` | the selected provider's configured model | Model override. |
-| `--require` | `<module>` | — | Load a grader plugin, same semantics as on `run`. |
+| `--require` | `<module>` | none | Load a grader plugin, same semantics as on `run`. |
 | `-f, --format` | `<format>` | `human` | `human` or `json`. Note: no `markdown` here. |
 
 Numeric flags are range-checked before anything runs. Out of range, or not a number:
@@ -258,7 +258,7 @@ moose-tracevals: --confidence must be a number between 0 and 1, got 1.5
 ```
 
 <Aside title="`--require` changes little here">
-`fill` never proposes a custom grader kind — the per-artifact-type allowlist is fixed. Loading a
+`fill` never proposes a custom grader kind, because the per-artifact-type allowlist is fixed. Loading a
 plugin matters only when it *replaces* a built-in, since the gate ground-checks proposals with the
 registered grader's `validateOptions`. It is honoured so that a repository's config means the same
 thing to every command.
@@ -284,13 +284,13 @@ proposed but **never written**. See [Fill in evals](/moose-tracevals/declare/fil
 moose-tracevals capture [options]
 ```
 
-Records a **session manifest**: the sha256 of every instruction artifact in the project, plus the
-git SHA, at the moment a session starts. `run` reads it back and turns
+Records a **session manifest**, holding the sha256 of every instruction artifact in the project plus
+the git SHA, at the moment a session starts. `run` reads it back and turns
 [staleness](/moose-tracevals/declare/coverage/#staleness) from an mtime guess into content identity.
 
 It is meant to be wired to a Claude Code `SessionStart` hook, and reads that hook's JSON payload on
-**stdin** — `session_id`, `cwd`, `transcript_path`, and `hook_event_name`. Run by hand, name the
-session yourself.
+**stdin**. That payload is `session_id`, `cwd`, `transcript_path`, and `hook_event_name`. Run by
+hand, name the session yourself.
 
 {/* Doc Detective inline tests: capture really writes a manifest, and run really
     sharpens staleness with it, both against this repository's fixtures. */}
@@ -318,7 +318,7 @@ Captured session demo
 |---|---|---|---|
 | `--project` | `<dir>` | the payload's `cwd` | Project root to scan, and the base every recorded path is relative to. |
 | `--session-id` | `<id>` | the payload's `session_id` | Names the manifest and is the key `run` joins on. |
-| `-o, --out` | `<file>` | `<project>/<capture.dir>/<id>.json` | Write somewhere else — how you put a manifest beside a trace you are about to upload. |
+| `-o, --out` | `<file>` | `<project>/<capture.dir>/<id>.json` | Write somewhere else. This is how you put a manifest beside a trace you are about to upload. |
 | `-f, --format` | `<format>` | `human` | `human` or `json`. |
 
 ### Exit codes
@@ -330,13 +330,13 @@ Captured session demo
 
 <Aside title="In hook mode it writes nothing to stdout">
 Claude Code adds a `SessionStart` hook's **stdout to the model's context**. So whenever `capture`
-reads a payload from stdin, its report goes to **stderr** instead — otherwise the tool would be
+reads a payload from stdin, its report goes to **stderr** instead. Otherwise the tool would be
 writing into the very session it is observing. Run by hand it behaves like every other command.
 </Aside>
 
 ### Wire it up
 
-Install the bundled plugin, which pre-wires the hook — `plugin/.claude-plugin/plugin.json` and
+Install the bundled plugin, which pre-wires the hook. `plugin/.claude-plugin/plugin.json` and
 `plugin/hooks/hooks.json` ship in the package. Or add it to `settings.json` yourself:
 
 ```json
@@ -354,13 +354,13 @@ Install the bundled plugin, which pre-wires the hook — `plugin/.claude-plugin/
 }
 ```
 
-`startup` rather than every event: a manifest describes what the artifacts said when the session
+`startup` rather than every event. A manifest describes what the artifacts said when the session
 **began**, which is exactly the "then" that staleness compares against. `compact` and `clear` reset
 the model's context without re-reading a single artifact.
 
-`resume` is left out for the same reason, and it is worth knowing what that means: **a resumed
+`resume` is left out for the same reason, and it is worth knowing what that means. **A resumed
 session keeps the manifest captured at its original start.** Edit a `SKILL.md`, resume, and the
-turns after the resume are compared against what the file said before the edit — reported as
+turns after the resume are compared against what the file said before the edit. That is reported as
 `mismatch`, which is true of the session as a whole and blunt about the later turns. Add `resume` to
 the matcher if you would rather each resume re-snapshot the project; the policy lives in your
 `settings.json`, not in the command.
@@ -371,16 +371,16 @@ Most specific first, and the first usable hit wins:
 
 1. `<trace>.manifest.json`, beside the trace file
 2. `<trace's directory>/<capture.dir>/<session-id>.json`
-3. `<project>/<capture.dir>/<session-id>.json` — where `capture` writes by default
+3. `<project>/<capture.dir>/<session-id>.json`, where `capture` writes by default
 
 A manifest whose `sessionId` does not match the trace's is **refused**, and the run proceeds as if
-there were none: it is evidence about a different session.
+there were none. It is evidence about a different session.
 
-So is one the trace gives no way to check. A trace that records **no** session id — a `claude -p`
-stream-json transcript captured without its `system`/`init` record, say — cannot be joined to any
-manifest by convention, so locations 2 and 3 have no key to look under and location 1 is refused
-with a warning naming the file. Name it with `--manifest` to use it anyway: that is your assertion
-that the file belongs to this trace, and for such a trace it is the only one available.
+So is one the trace gives no way to check. A trace that records **no** session id cannot be joined
+to any manifest by convention. Locations 2 and 3 then have no key to look under, and location 1 is
+refused with a warning naming the file. A `claude -p` stream-json transcript captured without its
+`system`/`init` record is one such trace. Name it with `--manifest` to use it anyway. That is your
+assertion that the file belongs to this trace, and for such a trace it is the only one available.
 
 ## `list`
 
@@ -396,12 +396,12 @@ success.
 | Flag | Argument | Default | Description |
 |---|---|---|---|
 | `-p, --project` | `<dir>` | current directory | Scope to one project's sessions. |
-| `-a, --all-projects` | — | off | Scan every project in the session store. |
+| `-a, --all-projects` | none | off | Scan every project in the session store. |
 | `-l, --limit` | `<n>` | unlimited | Maximum traces to list. A whole number `>= 1`; anything else is exit `2`. |
-| `--json` | — | off | Emit `{ "traces": [...] }` instead of a table. |
+| `--json` | none | off | Emit `{ "traces": [...] }` instead of a table. |
 
-Each table entry is three lines: timestamp and first prompt, then project, session id, and size,
-then the file path:
+Each table entry is three lines. First the timestamp and first prompt, then project, session id,
+and size, then the file path:
 
 ```
   1. 2026-07-02 00:00  Write a README for this repo.
@@ -419,7 +419,7 @@ No traces found. Pass --all-projects to scan every project, or --project <dir> t
 
 | Field | Type | Description |
 |---|---|---|
-| `file` | string | Absolute path — pass this to `run`. |
+| `file` | string | Absolute path. Pass this to `run`. |
 | `mtimeMs` | number | Modification time; the sort key, newest first. |
 | `sizeBytes` | number | File size. |
 | `sessionId` | string? | The session's id, when present in the file. |

@@ -17,8 +17,8 @@ report structure is in the
 | Code | Meaning | What it tells you |
 |---|---|---|
 | `0` | every eval passed or was skipped | Nothing to do. |
-| `1` | some eval failed, errored, or needs review | **The agent session** did something worth looking at. In a batch, also a corpus the run stopped measuring — see [A batch that ran out of budget](#a-batch-that-ran-out-of-budget). |
-| `2` | moose-tracevals could not run | **The tool** could not do its job — bad usage, an unreadable trace, an unknown format, a nonexistent path. |
+| `1` | some eval failed, errored, or needs review | **The agent session** did something worth looking at. In a batch, also a corpus the run stopped measuring. See [A batch that ran out of budget](#a-batch-that-ran-out-of-budget). |
+| `2` | moose-tracevals could not run | **The tool** could not do its job, through bad usage, an unreadable trace, an unknown format, or a nonexistent path. |
 
 The `1` versus `2` distinction is the most useful thing on this page. `1` means the check worked and
 the answer was bad; `2` means you never got an answer. A pipeline that treats them identically will
@@ -51,9 +51,9 @@ An eval has five possible outcomes, not two:
 | `needs-review` | the judge did not reach confident agreement | **yes, by default** |
 | `skipped` | the check did not run | no |
 
-`needs-review` is the one that surprises pipelines. It is a **designed** outcome: when an ensemble
-of judge runs does not land confidently in the pass or fail zone, moose-tracevals declines to decide and
-routes the eval to a human. Errored judge runs count against consensus, which means they can push an
+`needs-review` is the one that surprises pipelines. It is a **designed** outcome. When an ensemble
+of judge runs does not land confidently in the pass or fail zone, moose-tracevals declines to decide.
+It routes the eval to a human instead. Errored judge runs count against consensus, which means they can push an
 eval into review. They can never push one into a silent pass.
 
 By default that counts as a failure, on the reasoning that an unreviewed ambiguous result should not
@@ -67,8 +67,8 @@ tracevals:
 Now `needs-review` no longer contributes to a non-zero exit. It still appears in the report and in
 the summary counts, so you can surface it without blocking on it.
 
-To decide per invocation instead — a strict pre-merge job and a lenient nightly one sharing a config
-— override it on the command line:
+To decide per invocation instead, override it on the command line. That lets a strict pre-merge job
+and a lenient nightly one share one config:
 
 ```bash
 npx moose-tracevals run <trace> --no-fail-on-needs-review
@@ -81,9 +81,9 @@ Pick a policy when you install the gate. Meeting `needs-review` for the first ti
 nobody can explain is the avoidable version of this.
 </Aside>
 
-`skipped` never fails a run, and it has several unrelated causes: a deterministic-only run, an
-exhausted cost budget, a trace with no usage data for a `cost` check, or an artifact that opted out. Each is
-listed with its reason in the report. See
+`skipped` never fails a run, and it has several unrelated causes. Those are a deterministic-only
+run, an exhausted cost budget, a `cost` check on a trace with no usage data, or an artifact that
+opted out. Each is listed with its reason in the report. See
 [Read a failing eval](/moose-tracevals/triage/#why-something-was-skipped).
 
 ## A batch that ran out of budget
@@ -93,7 +93,7 @@ ceiling on the **whole invocation**, shared across every trace in a batch. That 
 judge, one budget, so fifty traces cannot bill fifty times the configured cap.
 
 The consequence is that a budget can run out *part way through the corpus*. Every remaining judged
-eval is then `skipped` — nothing failed and nothing errored, so scoring the batch on those two
+eval is then `skipped`. Nothing failed and nothing errored, so scoring the batch on those two
 counts alone would exit `0` after judging four traces out of fifty. **It does not.** A batch cut
 short by its own budget exits `1`, says so beside the headline, and carries a `budget` block:
 
@@ -115,16 +115,16 @@ In `--format json`:
 ```
 
 Exit `1` rather than `2`, because the report is real: the traces that were judged carry genuine
-verdicts and are worth keeping. It is the same reasoning that makes a selector matching **no** trace
-exit `2` — there is nothing to keep in that case — and neither may quietly exit `0`.
+verdicts and are worth keeping. The same reasoning makes a selector matching **no** trace
+exit `2`, since there is nothing to keep in that case. Neither may quietly exit `0`.
 
 {/* test {"testId":"budget-exhausted-batch","description":"A batch cut short by its own budget is reported and is never green."} */}
 {/* step {"description":"A clean corpus whose budget ran out still exits 1.","runShell":{"command":"moose-tracevals run --all-projects --limit 1 --project test/fixtures/project --provider mock --max-cost-usd 0","exitCodes":[1],"stdio":"BUDGET EXHAUSTED"}} */}
 {/* test end */}
 
 <Aside type="tip" title="Raise the ceiling, or narrow the corpus">
-The warning names both remedies. A gate that keeps hitting this is either budgeted for one trace and
-pointed at fifty, or judging evals a `--deterministic-only` job could have answered for free.
+The warning names both remedies. A gate that keeps hitting this is budgeted for one trace and
+pointed at fifty. Or it is judging evals a `--deterministic-only` job could have answered for free.
 </Aside>
 
 ## Keep the report
@@ -138,7 +138,7 @@ npx moose-tracevals run <trace> --format markdown --output moose-tracevals-repor
 
 | Format | Use it for |
 |---|---|
-| `human` (default) | reading in a terminal — colored, with vote splits on non-passing judged evals |
+| `human` (default) | reading in a terminal, colored, with vote splits on non-passing judged evals |
 | `json` | anything programmatic; the full report structure |
 | `markdown` | a build summary or a PR comment |
 
@@ -178,18 +178,18 @@ The markdown format renders as tables:
 ```
 
 The last row has an empty location on purpose. Project rules resolve as one aggregated entry
-covering several files, so it is resolved with no single path; every location it checked is in the
+covering several files, so it is resolved with no single path. Every location it checked is in the
 entry's `tried` list. See
 [Reports & exit codes](/moose-tracevals/reference/report-and-exit-codes/#the-location-shown-for-an-entry).
 
-`--format json` emits the same run as a structured document: trace metadata, per-eval outcomes with
-findings and consensus, the coverage list including every location that was tried, warnings, summary
-counts, cost, and duration. Every field is documented in
+`--format json` emits the same run as a structured document. That document carries trace metadata,
+per-eval outcomes with findings and consensus, and the coverage list including every location that
+was tried. It also carries warnings, summary counts, cost, and duration. Every field is documented in
 [Reports & exit codes](/moose-tracevals/reference/report-and-exit-codes/).
 
 <Aside title="Capture output rather than composing it">
-Both examples above were produced by running the CLI against this repository's committed fixtures,
-and the commands that produce them are re-run on every push. A hand-written sample output is a
+Both examples above were produced by running the CLI against this repository's committed fixtures.
+The commands that produce them are re-run on every push. A hand-written sample output is a
 sample that will eventually be wrong.
 </Aside>
 

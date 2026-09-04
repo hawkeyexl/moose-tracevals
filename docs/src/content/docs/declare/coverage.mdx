@@ -7,8 +7,8 @@ sidebar:
 
 import { Aside, LinkCard, CardGrid } from '@astrojs/starlight/components';
 
-**Scope:** the *denominator* — every instruction file a session referenced, including the ones that
-could not be found. Deciding what to check on a resolved artifact is
+**Scope:** the *denominator*, meaning every instruction file a session referenced, including the
+ones that could not be found. Deciding what to check on a resolved artifact is
 [Declare what to check](/moose-tracevals/declare/).
 
 Every report ends with a coverage section, and it answers a question the eval list cannot:
@@ -45,9 +45,9 @@ Availability
 | What you see | Meaning | What to do |
 |---|---|---|
 | `✓` with a path | Resolved and evaluated. | Nothing. |
-| `✓` with no path | Resolved to **several** files. Only project rules do this. | Nothing — see [below](#project-rules-resolve-as-one-entry). |
+| `✓` with no path | Resolved to **several** files. Only project rules do this. | Nothing; see [below](#project-rules-resolve-as-one-entry). |
 | `○ built-in agent (no definition file)` | A built-in agent, which has no file anywhere. | Nothing. Expected. |
-| `○ built-in slash command, or not installed here` | A `/name` with no command file and no skill file anywhere. | Usually nothing — see [below](#slash-commands-are-one-of-three-things). |
+| `○ built-in slash command, or not installed here` | A `/name` with no command file and no skill file anywhere. | Usually nothing; see [below](#slash-commands-are-one-of-three-things). |
 | `○ not found (<n> location(s) tried)` | The trace referenced it; no file matched. | [Close the gap](#fix-an-unresolved-reference). |
 | Absent from the list entirely | The session never referenced it. | Nothing. |
 
@@ -59,7 +59,7 @@ exactly what the table is telling you.
 ## Offered, used, and never on the menu
 
 The list above answers *what did the session reference*. The **Availability** block answers a
-different question — *what could it have referenced* — and keeps three states apart:
+different question, *what could it have referenced*, and keeps three states apart:
 
 | State | Meaning | What to do |
 |---|---|---|
@@ -68,8 +68,8 @@ different question — *what could it have referenced* — and keeps three state
 | **not offered** | The session referenced it, but it was never on the roster. | Fix the **configuration**. This is not an adherence failure. |
 
 That third state is the one that wastes an afternoon. A skill or agent someone expected but which
-was never on the menu produces evals that fail — or, worse, skip — for a reason that has nothing to
-do with the session's behaviour. It is labelled inline:
+was never on the menu produces evals that fail, or worse skip. The reason has nothing to do with
+the session's behaviour. It is labelled inline:
 
 ```
   ✓ agent: doc-writer [not offered]  /work/demo-project/.claude/agents/doc-writer.md
@@ -79,12 +79,12 @@ The definition file exists on disk and resolved fine; it was simply never offere
 Look at plugin installation, agent scope, and whether the name was renamed after the session ran.
 
 **None of this is an eval outcome.** Availability never appears in the summary counts and never moves
-the exit code — it is an observation about the session's configuration, not a verdict on its
+the exit code. It is an observation about the session's configuration, not a verdict on its
 behaviour.
 
 ### Listing what went unused
 
-Offered-and-unused artifacts are **counted, not listed** by default: a real roster runs to a couple
+Offered-and-unused artifacts are **counted, not listed** by default. A real roster runs to a couple
 of hundred skills and would bury the evals above it. To see them with the descriptions that Claude
 Code itself uses to decide whether to invoke:
 
@@ -107,16 +107,16 @@ npx moose-tracevals run <trace> --deterministic-only --report-unused-artifacts
 {/* test end */}
 
 A row like `bare-listing` above shows nothing after the dash because the roster carried no
-description for it — Claude Code truncates its listing text, and past that cap it names skills alone.
+description for it. Claude Code truncates its listing text, and past that cap it names skills alone.
 Absent means *not recorded*, never "has none".
 
 An unused row is marked `·` rather than `○`, and reports `n/a` under **Resolved** in markdown, because
 nothing was ever looked for on disk. Saying "not found" would be a claim about a search that never ran.
 
 <Aside title="Where the roster comes from">
-Not a filesystem scan — the transcript itself. Claude Code records what it offered as structured
-attachment records, so the evidence travels inside the trace and the answer is the same on any
-machine. Full detail in [the traces reference](/moose-tracevals/reference/traces/#the-availability-roster).
+Not a filesystem scan, but the transcript itself. Claude Code records what it offered as structured
+attachment records, so the evidence travels inside the trace. The answer is therefore the same on
+any machine. Full detail in [the traces reference](/moose-tracevals/reference/traces/#the-availability-roster).
 
 A trace with **no** roster reports it as unknown rather than as zero. Older sessions and
 `claude-stream` transcripts carry no listing records at all.
@@ -124,13 +124,13 @@ A trace with **no** roster reports it as unknown rather than as zero. Older sess
 
 To act on an unused artifact rather than just look at it, hang a
 [conditionally-triggered eval](/moose-tracevals/reference/graders/#conditional-triggers) on
-`CLAUDE.md` — the one artifact that resolves for every session.
+`CLAUDE.md`. That is the one artifact that resolves for every session.
 
 ## How an artifact is resolved
 
-Resolution is **deterministic** — trace content plus filesystem lookup, with no model involved. The
-trace records which skills were invoked and which agents were spawned; moose-tracevals then looks for the
-matching files in a fixed order and records every location it tried.
+Resolution is **deterministic**, from trace content plus filesystem lookup, with no model involved.
+The trace records which skills were invoked and which agents were spawned. moose-tracevals then
+looks for the matching files in a fixed order, and records every location it tried.
 
 ### Skills
 
@@ -140,11 +140,11 @@ For a plain reference like `fix-bug`, in order:
 2. `<project>/src/skills/fix-bug/SKILL.md`
 3. `<project>/.claude/skills/fix-bug/SKILL.md`
 4. `<home>/.claude/skills/fix-bug/SKILL.md`
-5. `<home>/.claude/plugins/**/skills/fix-bug/SKILL.md` — searched recursively, because plugin store
+5. `<home>/.claude/plugins/**/skills/fix-bug/SKILL.md`, searched recursively, because plugin store
    layouts nest differently
 
-A `plugin:skill` reference **skips steps 1–4** and goes straight to the plugin store, matching on
-the short name with the plugin name required somewhere in the path.
+A `plugin:skill` reference **skips steps 1–4** and goes straight to the plugin store. It matches on
+the short name, with the plugin name required somewhere in the path.
 
 ### Agents
 
@@ -165,21 +165,21 @@ filesystem can say which. Resolution tries them in order:
 
 1. `<project>/.claude/commands/<name>.md`
 2. `<home>/.claude/commands/<name>.md`
-3. the same two directories searched recursively — a subdirectory under `commands/` **organizes**
+3. the same two directories searched recursively, since a subdirectory under `commands/` **organizes**
    without renaming, so `commands/release/tag.md` is still `/tag`
 4. failing all of those, the [skill order](#skills) above, because a skill can be invoked by typing
    its slash form
-5. failing that too, it is a **built-in** — one of Claude Code's own commands (`/model`, `/compact`,
+5. failing that too, it is a **built-in**, one of Claude Code's own commands (`/model`, `/compact`,
    `/clear`), which has no file anywhere by design
 
 A `plugin:command` reference **skips steps 1–3** and goes straight to
-`<home>/.claude/plugins/**/commands/<name>.md`, matching on the short name with the plugin name
-required somewhere in the path — the same rule plugin skills follow.
+`<home>/.claude/plugins/**/commands/<name>.md`. It matches on the short name, with the plugin name
+required somewhere in the path, exactly as plugin skills do.
 
 Step 5 is a note, not a warning, because a built-in is the expected outcome rather than a defect.
-The note says `built-in slash command, or not installed here` and the row still carries every
-location tried, so a command that genuinely *is* missing on this machine is still diagnosable from
-the `tried` list. Nothing here is checked against the availability roster: the transcript records no
+The note says `built-in slash command, or not installed here`, and the row still carries every
+location tried. A command that genuinely *is* missing on this machine is still diagnosable from
+the `tried` list. Nothing here is checked against the availability roster. The transcript records no
 roster of slash commands, so calling one `not offered` would be a claim about evidence that was
 never collected.
 
@@ -193,8 +193,8 @@ default, capped at 32 levels), then `<project-root>/.claude/`. In each one it ch
 `AGENTS.md` gets both evaluated.
 
 <Aside title="`--project` when the workspace has moved">
-Resolution starts from the session's recorded `cwd`. If that directory no longer exists — the trace
-came from another machine, or the checkout was moved — point it somewhere else:
+Resolution starts from the session's recorded `cwd`. That directory may no longer exist, because the
+trace came from another machine or the checkout was moved. Point it somewhere else:
 
 ```bash
 npx moose-tracevals run <trace> --project ./my-repo
@@ -223,7 +223,7 @@ Read the list and the cause is usually one of:
 
 - **The plugin is not installed** on the machine running moose-tracevals. Install it, or run with
   `MOOSE_TRACEVALS_HOME` pointed at a directory that has it.
-- **The artifact moved** relative to the project — a skill relocated from `skills/` to
+- **The artifact moved** relative to the project. A skill relocated from `skills/` to
   `.claude/skills/` resolves fine, but one moved outside those roots will not.
 - **The project root is wrong**, so the walk started somewhere unexpected. Set `--project`.
 - **It was renamed** after the session ran. The trace holds the old name; nothing on disk matches.
@@ -238,8 +238,9 @@ Warnings
 ## Staleness
 
 Evals are read from the artifact **as it is now**. The session followed it **as it was then**. Edit
-a `SKILL.md` after a session and you are grading that session against instructions it never saw — a
-`fail` on a rule that did not exist yet, or a `pass` on one whose wording has since changed.
+a `SKILL.md` after a session and you are grading that session against instructions it never saw.
+That means a `fail` on a rule that did not exist yet, or a `pass` on one whose wording has since
+changed.
 
 Every resolved artifact is compared against the session's end time, and one that is newer is marked:
 
@@ -255,8 +256,8 @@ In JSON, the entry carries `stale: true` and `modifiedAt`.
 
 <Aside type="caution" title="It is a heuristic, and a noisy one in CI">
 The comparison is **mtime**, which is not content identity. In particular, `git clone` and
-`git checkout` rewrite every mtime to *now* — so **a CI job that checks out the repository and then
-evaluates an older trace flags every artifact**. That is the heuristic working as designed, not a
+`git checkout` rewrite every mtime to *now*. **A CI job that checks out the repository and then
+evaluates an older trace flags every artifact.** That is the heuristic working as designed, not a
 bug, and it is exactly why this is a warning.
 
 It **never becomes an eval outcome and never changes the exit code**. The artifact still resolves,
@@ -265,19 +266,19 @@ how much to trust them
 ([ADR 01021](https://github.com/hawkeyexl/moose-tracevals/blob/main/adrs/01021-warn-when-an-artifact-changed-after-the-session.md)).
 </Aside>
 
-A trace with no recorded end time is never flagged: there is nothing to compare against, and
+A trace with no recorded end time is never flagged. There is nothing to compare against, and
 inferring one would manufacture a warning out of no evidence.
 
-An unresolved **slash command** is the one exception to the warning: it gets its coverage row and
-its `tried` list but no note, because the common case — a built-in — is not a gap to close.
+An unresolved **slash command** is the one exception to the warning. It gets its coverage row and
+its `tried` list but no note. The common case is a built-in, which is not a gap to close.
 
 ## Make staleness exact with a session manifest
 
 Everything above is a guess, and the section below is how you stop guessing.
 
-Run [`moose-tracevals capture`](/moose-tracevals/reference/cli/#capture) from a `SessionStart` hook
-and it records, before the session does any work, the **sha256 of every instruction artifact in the
-project** plus the **git SHA** it ran against. `run` finds that manifest and compares. The
+Run [`moose-tracevals capture`](/moose-tracevals/reference/cli/#capture) from a `SessionStart` hook.
+Before the session does any work it records the **sha256 of every instruction artifact in the
+project**, plus the **git SHA** it ran against. `run` finds that manifest and compares. The
 comparison is content identity, not a timestamp:
 
 ```
@@ -311,19 +312,20 @@ Three states per row, and the JSON carries them as `contentCheck.status`:
 | `skipped` | No manifest, or none covering this artifact. | Runs, exactly as above. `reason` says which. |
 
 That first row is the point. A `git checkout` rewrites every mtime, so in CI the heuristic flags
-your whole repository — and with a manifest, every artifact it recorded reads clean instead. The
+your whole repository. With a manifest, every artifact it recorded reads clean instead. The
 observation is not hidden: `modifiedAt` is still reported, only the conclusion drawn from it changes.
 
-`skipped` is not a quiet `match`. An artifact outside the project root — a user-level or plugin
-skill — was never recordable, because `capture` is project-scoped; it says so and keeps the guess.
+`skipped` is not a quiet `match`. An artifact outside the project root was never recordable, because
+`capture` is project-scoped. A user-level or plugin skill is such an artifact; the report says so
+and keeps the guess.
 
 <Aside type="caution" title="A manifest is a claim, not proof">
 It is written by the machine the session ran on and travels with the repository, so it is evidence
 **about that device**. It never becomes an eval outcome, never changes the exit code, and cannot
-turn a `skipped` eval into a `pass` — it is not consulted anywhere a verdict is formed. A manifest
-that cannot be shown to belong to this trace is refused outright and the run proceeds as if there
-were none — whether it names a **different session**, or the trace records no session id to check it
-against at all
+turn a `skipped` eval into a `pass`. It is not consulted anywhere a verdict is formed. A manifest
+that cannot be shown to belong to this trace is refused outright, and the run proceeds as if there
+were none. That holds whether it names a **different session**, or the trace records no session id
+to check it against at all
 ([ADR 01024](https://github.com/hawkeyexl/moose-tracevals/blob/main/adrs/01024-capture-a-session-manifest-so-staleness-is-exact.md)).
 In the second case the run warns and names the file it ignored; pass
 [`--manifest`](/moose-tracevals/reference/cli/#run) to assert that it does belong.
@@ -332,24 +334,24 @@ In the second case the run warns and names the file it ignored; pass
 A manifest only helps sessions recorded **after** you install the hook. Everything already on disk
 keeps the mtime heuristic, which is why that heuristic exists and stays.
 
-It also describes one moment: the session's **start**. The hook fires on `startup`, not `resume`, so
-a session you come back to days later is still compared against the snapshot taken when it first
-began — which is the honest meaning of "changed since the session started", and a partial answer for
+It also describes one moment, the session's **start**. The hook fires on `startup`, not `resume`.
+A session you come back to days later is still compared against the snapshot taken when it first
+began. That is the honest meaning of "changed since the session started", and a partial answer for
 the turns after the resume. See
 [wiring the hook](/moose-tracevals/reference/cli/#wire-it-up) if you would rather re-snapshot on
 every resume.
 
 ### Fixing a flagged row
 
-Evaluate against the artifact as it was: check out the commit the session ran on and re-run with
-`--project` pointed at that working tree. With a manifest you do not have to guess which commit —
-it recorded the git SHA, and the report prints it.
+Evaluate against the artifact as it was. Check out the commit the session ran on, and re-run with
+`--project` pointed at that working tree. With a manifest you do not have to guess which commit.
+It recorded the git SHA, and the report prints it.
 
 ## Project rules resolve as one entry
 
 Project rules appear as a single row named `project rules` with **no path**, because the entry
 covers however many files matched. Its `tried` array holds every location checked, and each matched
-file is evaluated as its own artifact — which is why `CLAUDE.md` and `AGENTS.md` show up separately
+file is evaluated as its own artifact. That is why `CLAUDE.md` and `AGENTS.md` show up separately
 in the eval list above.
 
 If none matched, the row reads `○ project-rules: project rules  no CLAUDE.md or AGENTS.md found`.
@@ -380,8 +382,8 @@ keeps it visible rather than silently absent. Full field reference in the
 ## Duplicate references collapse
 
 A skill invoked six times produces **one** coverage row and one set of evals. Deduplication is by
-reference name for coverage, and by resolved path for artifacts — so two references that resolve to
-the same file are evaluated once.
+reference name for coverage, and by resolved path for artifacts. Two references that resolve to
+the same file are therefore evaluated once.
 
 ## Where to go next
 

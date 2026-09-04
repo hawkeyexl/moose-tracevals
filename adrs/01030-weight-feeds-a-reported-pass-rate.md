@@ -13,8 +13,8 @@ than its neighbours to an aggregate. moose-tracevals had no aggregate for it to 
 `RunSummary` carried counts (`pass`, `fail`, `error`, `needsReview`, `skipped`) and no rate, and
 there are no suites to attach a target to.
 
-So the field could be written and would mean nothing — the worst outcome, because a schema that
-accepts a value it ignores teaches authors that the schema is decoration.
+So the field could be written and would mean nothing. That is the worst outcome, because a schema
+that accepts a value it ignores teaches authors that the schema is decoration.
 
 ## Decision Drivers
 
@@ -32,33 +32,33 @@ accepts a value it ignores teaches authors that the schema is decoration.
 
 ## Decision Outcome
 
-Chosen option: **a run-level weighted `passRate` on `RunSummary`**, reported and never gated.
+The chosen option is **a run-level weighted `passRate` on `RunSummary`**, reported and never gated.
 
-It is the weighted share of the **graded** set — `pass + fail + error` — exactly the membership
-the counts already use, so `needs-review` and `skipped` stay out of both halves and a session
-awaiting review neither helps nor hurts. The exit code is untouched: it still derives from
+It is the weighted share of the **graded** set, meaning `pass + fail + error`. That is exactly the
+membership the counts already use, so `needs-review` and `skipped` stay out of both halves.
+A session awaiting review neither helps nor hurts. The exit code is untouched: it still derives from
 outcomes and `failOnNeedsReview`.
 
 ### Consequences
 
 - Good, because `weight` now does something observable, and a secondary check can report without
   dominating the number.
-- Good, because it is inert by default: with every weight at 1 the rate is plain pass-over-graded,
+- Good, because it is inert by default. With every weight at 1 the rate is plain pass-over-graded,
   which is what the counts already imply. The human reporter prints it **only** when some weight
   differs from 1, so the common run gains no second way to read the same number.
 - Good, because counts stay unweighted. "1 failed" answers how many evals failed; the rate answers
   how much that mattered. Weighting both would make each answer the other's question.
-- Good, because the weight is stamped onto each `EvalResult`, so a `--format json` consumer can
+- Good, because the weight is stamped onto each `EvalResult`. A `--format json` consumer can
   see *why* a rate moved rather than having to re-derive it from the config.
 - Neutral, because there is deliberately no target to miss. Inventing an exit-code rule around a
-  number nobody configured would be a gate no one asked for — and the page side's
+  number nobody configured would be a gate no one asked for. The page side's
   `target-pass-rate` is a *suite* property, which is the concept this repo does not have.
 - Bad, because a rate with no threshold is easy to ignore. That is the honest cost of not
   inventing suites, and the decision is revisable the day suites arrive.
 
 ### Confirmation
 
-`test/unit/engine.test.ts` pins that every result carries a weight defaulting to 1, that the rate
-reduces to plain pass-over-graded at that default, that `needs-review` and `skipped` are in
-neither half, and that changing an eval's contribution never changes its own outcome or the
-counts.
+`test/unit/engine.test.ts` pins that every result carries a weight defaulting to 1, and that the
+rate reduces to plain pass-over-graded at that default. It also pins that `needs-review` and
+`skipped` are in neither half, and that changing an eval's contribution never changes its own
+outcome or the counts.

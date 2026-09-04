@@ -29,8 +29,8 @@ The implicit eval is coarse on purpose. It answers *did the session follow this 
 verdict, which is hard to act on when the file contains fifteen instructions and only one of them
 matters to you today.
 
-A declared eval is **named, scoped to one instruction, and stable across runs**, so you can
-point at it when it fails and watch it specifically over time.
+A declared eval is **named, scoped to one instruction, and stable across runs**. You can point at
+it when it fails, and watch it specifically over time.
 
 Evals live **in the artifact's own frontmatter**, next to the instruction they check. Not in a
 separate suite or a config file, but in the same `SKILL.md` you edit when the instruction changes.
@@ -67,7 +67,7 @@ metadata:
 Two forms, and the difference matters more than it looks:
 
 - **A string** is shorthand for a judged assertion at `error` severity. One line, no ceremony. It
-  gets an automatic name derived from its position (`eval-3` for the third entry), so it suits
+  gets an automatic name derived from its position (`eval-3` for the third entry). That suits
   anything you will not need to refer to by name.
 - **An object** gives you a stable `name`, a grader, and options. Use it for anything you want to
   track, reference, or decide deterministically.
@@ -80,7 +80,7 @@ The full block shape, including every optional field, is in the
 This is the decision the whole page exists for, and the one most likely to be made badly.
 
 **Ask first: can this be decided from the trace alone?** If yes, use a deterministic grader.
-Reaching for the judge when `tool-usage` would answer the same question is a downgrade: you trade a
+Reaching for the judge when `tool-usage` would answer the same question is a downgrade. You trade a
 certain answer for a probabilistic one, and you pay for it.
 
 | If the instruction is about… | Use | Grader |
@@ -97,7 +97,7 @@ certain answer for a probabilistic one, and you pay for it.
 Every deterministic grader, its options, and its exact failure messages are in the
 [grader reference](/moose-tracevals/reference/graders/).
 
-### The third answer: not testable at all
+### The third answer is not testable at all
 
 Some instructions are neither. *"Produce high-quality work"* has no measurable bar, so no session
 could fail it. Turning it into a judged assertion produces a check that is permanently green and
@@ -108,8 +108,8 @@ could violate is a defect in the artifact. `fill` names these for you explicitly
 [instructions that cannot be tested](/moose-tracevals/declare/fill/#instructions-that-cannot-be-tested).
 
 <Aside type="tip" title="Write the assertion so a stranger could adjudicate it">
-The test for a good judged assertion is whether someone who has never seen your project could read
-it, read the session, and reach the same verdict you would. "Reproduce the bug with a failing test
+A good judged assertion passes one test. Someone who has never seen your project could read it,
+read the session, and reach the same verdict you would. "Reproduce the bug with a failing test
 before applying the fix" passes that test. "Follow best practices" does not.
 </Aside>
 

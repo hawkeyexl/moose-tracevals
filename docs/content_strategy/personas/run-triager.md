@@ -1,7 +1,7 @@
 ---
 id: persona-run-triager
 type: persona
-name: "Theo — Session triager"
+name: "Theo, session triager"
 audience: aud-run-triagers
 role: Contributor, reviewer, or on-call engineer looking at one failed eval
 proficiency: [reading-ci-logs, git]
@@ -22,7 +22,7 @@ journeys:
   - cuj-triage-failure
 ---
 
-# Persona: Theo — Session triager
+# Persona: Theo, session triager
 
 **Scope:** the arrival persona for [`aud-run-triagers`](../audiences/run-triagers.md). Theo is
 looking at exactly one result and did not choose this tool.
@@ -35,19 +35,19 @@ context on this tool, no appetite for acquiring much, and one specific question.
 
 **Pains:**
 
-- **`REVIEW` means nothing to him.** Neither does `SKIP` — and skip has several unrelated causes
-  (deterministic-only mode, an exhausted cost budget, a trace carrying no usage data, an artifact
-  marked to skip), each implying a different next move.
+- **`REVIEW` means nothing to him.** Neither does `SKIP`. Skip has several unrelated causes:
+  deterministic-only mode, an exhausted cost budget, a trace carrying no usage data, or an artifact
+  marked to skip. Each implies a different next move.
 - **The message stops short of a remedy.** Knowing a forbidden tool was used does not tell him
-  whether to change the session's behavior or challenge the rule — and "the eval is wrong" is
-  rarely his first guess even when it is the right answer.
+  whether to change the session's behavior or challenge the rule. And "the eval is wrong" is
+  rarely his first guess, even when it is the right answer.
 - **A judged verdict without its vote split reads as noise.** Show him three-to-nothing with a
   cited observation and he will act on it; show him a bare `FAIL` and he will escalate.
 - **He often cannot fix it.** The artifact belongs to someone else. He needs the path to that
   person as much as the diagnosis.
 
-**How he uses moose-tracevals:** he does not. He reads one page, once, and leaves. If that page does not
-resolve it, he pings whoever owns the artifact — and if the page did its job, he pings them with a
+**How he uses moose-tracevals:** he does not. He reads one page, once, and leaves. If that page does
+not resolve it, he pings whoever owns the artifact. If the page did its job, he pings them with a
 specific question instead of a screenshot.
 
 **What success looks like for him:** under two minutes from red line to a decision he is confident
@@ -55,11 +55,11 @@ in, and never opening a second page.
 
 **Careful with:** the single page serving Theo must define *artifact*, *eval*, and *outcome*
 **in place**, one sentence each. A reader who has to follow a link to understand the first line has
-already been lost. It must assume nothing about ensembles, zones, providers, or configuration — the
+already been lost. It must assume nothing about ensembles, zones, providers, or configuration. The
 vote split is shown to him as evidence to weigh, never as a mechanism to understand. Everything
 else lives behind links he is not expected to take.
 
 **Traffic note:** this is expected to be the highest-traffic persona by page views and the
 shallowest by depth. Every person who ever trips an eval lands here, most of them exactly once.
-That asymmetry justifies a disproportionately well-crafted single page — and argues against
+That asymmetry justifies a disproportionately well-crafted single page. It argues against
 spreading his journey across several.

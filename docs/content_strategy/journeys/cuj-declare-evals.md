@@ -3,9 +3,9 @@ id: cuj-declare-evals
 type: cuj
 title: Turn an instruction into a testable eval
 personas: [persona-artifact-author, persona-eval-owner]
-trigger: "The implicit whole-artifact eval is too coarse — the reader wants a named check on one specific instruction."
+trigger: "The implicit whole-artifact eval is too coarse, and the reader wants a named check on one specific instruction."
 entry_point: /moose-tracevals/declare/
-success_criteria: "An eval is declared in an artifact's frontmatter, is picked up on the next run, and fails when the session violates it — with the right grader and the right severity."
+success_criteria: "An eval is declared in an artifact's frontmatter, is picked up on the next run, and fails when the session violates it, with the right grader and the right severity."
 steps:
   - { stage: "See why the implicit eval is not enough", doc: "/moose-tracevals/declare/#from-implicit-to-declared", exists: true }
   - { stage: "Add the metadata.evals block", doc: "/moose-tracevals/declare/#declare-your-first-eval", exists: true, note: "string shorthand first, object form second" }
@@ -28,17 +28,17 @@ artifact"* verdict is too coarse to act on. They want a named check on the one i
 actually care about.
 
 **Narrative.** This is where the product's central idea becomes concrete: **evals live in the
-artifact, next to the instruction they check.** Not in a separate suite, not in a config file — in
-the frontmatter of the same `SKILL.md` a person edits when the instruction changes. That colocation
+artifact, next to the instruction they check.** Not in a separate suite, and not in a config file,
+but in the frontmatter of the same `SKILL.md` a person edits when the instruction changes. That colocation
 is what keeps the two from drifting, and saying so explicitly is what makes the frontmatter block
 feel obvious rather than arbitrary.
 
-The journey has one genuinely hard decision in the middle, and it is where readers stall: **is this
+The journey has one genuinely hard decision in the middle, and it is where readers stall. **Is this
 instruction decidable by a deterministic grader, judgeable by a model, or not testable at all?**
-The content has to make that call easy, because getting it wrong produces the two worst outcomes in
-the system — an eval that can never fail, or a judged assertion so vague every verdict is noise.
-The string shorthand is the right on-ramp precisely because it is one line, but it must not be
-presented as the default answer: reaching for the judge when `tool-usage` would decide the same
+The content has to make that call easy. Getting it wrong produces the two worst outcomes in
+the system. Those are an eval that can never fail, or a judged assertion so vague every verdict is
+noise. The string shorthand is the right on-ramp precisely because it is one line. It must not be
+presented as the default answer. Reaching for the judge when `tool-usage` would decide the same
 question is a downgrade, not a shortcut.
 
 Severity is the quiet trap. Only `error` findings fail an eval; `warning` and `info` report and

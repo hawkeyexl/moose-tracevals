@@ -9,7 +9,7 @@ decision-makers: [hawkeyexl]
 ## Context and Problem Statement
 
 ADR 01001 decided to reuse docevals' provider and consensus layer rather than reimplement it. That
-was the right call on substance and the wrong one on packaging: docevals is a *tool*, not a library,
+was the right call on substance and the wrong one on packaging. docevals is a *tool*, not a library,
 and it is not on npm. Consuming it meant `"docevals": "file:../docevals"`, which npm publishes
 verbatim, so moose-tracevals could not be published at all.
 
@@ -43,37 +43,37 @@ published on npm, with a flat library-owned `ProviderSpec` in place of consumer 
 
 ## Decision Outcome
 
-Chosen option: **depend on `@hawkeyexl/inference`**. The dependency on docevals is removed
-entirely — `npm ls docevals` is empty.
+The chosen option is to **depend on `@hawkeyexl/inference`**. The dependency on docevals is removed
+entirely, and `npm ls docevals` is empty.
 
-What stays in moose-tracevals is what only moose-tracevals can decide: the prompts and `PROMPT_VERSION`, the
-trace-worded verdict schema (passed as the library's `schema` override so its field descriptions
-survive), the cache-key composition, the per-plan cost budget, and the `JudgedEval` shape the
-reporters consume.
+What stays in moose-tracevals is what only moose-tracevals can decide. That is the prompts and
+`PROMPT_VERSION`, and the trace-worded verdict schema (passed as the library's `schema` override so
+its field descriptions survive). It is also the cache-key composition, the per-plan cost budget, and
+the `JudgedEval` shape the reporters consume.
 
 Two consequences beyond a straight swap:
 
 1. **The provider config section is now typed and schema-validated.** It was
-   `Record<string, unknown>` only because it was being re-serialized into docevals' parser; a
-   misspelled `default: antropic` or `anthropc:` section passed validation and the run quietly used
+   `Record<string, unknown>` only because it was being re-serialized into docevals' parser. A
+   misspelled `default: antropic` or `anthropc:` section passed validation, and the run quietly used
    a different provider than the author intended. It is now an enum plus per-section properties with
    `additionalProperties: false`.
 2. **`fill` resolves the provider identity through the library.** It previously read
-   `config.provider[name].model` by hand and fell back to `""`, so a cache key could record an empty
-   model while the request used the provider's default — letting a cached proposal be replayed for a
-   model that never produced it. `resolveProviderIdentity(providerSpecFor(...))` applies the same
+   `config.provider[name].model` by hand and fell back to `""`. A cache key could therefore record
+   an empty model while the request used the provider's default. A cached proposal could then be replayed for
+   a model that never produced it. `resolveProviderIdentity(providerSpecFor(...))` applies the same
    defaults `makeProvider` would.
 
 The package is also renamed to `@hawkeyexl/agentevals`: the unscoped `agentevals` on npm belongs to
 an unrelated project, so it was never available. The `bin` stays `agentevals`.
 
 > **Superseded by [ADR 01008](01008-rename-the-project-to-moose-tracevals.md).** The project was later
-> renamed to `moose-tracevals`, which *was* available unscoped — so the scope/bin split described above no
-> longer exists.
+> renamed to `moose-tracevals`, which *was* available unscoped, so the scope/bin split described
+> above no longer exists.
 
 ### Consequences
 
-- Good, because moose-tracevals is publishable — the `file:` blocker is gone, and so is the name
+- Good, because moose-tracevals is publishable. The `file:` blocker is gone, and so is the name
   collision.
 - Good, because setup is a clean clone; the sibling checkout, the worktree junction, and two CI
   steps per workflow are deleted.
@@ -103,12 +103,12 @@ gates exercise the real built CLI through the mock provider on both Linux and Wi
 ### Wait for docevals to publish
 
 - Good, because it needs no new package.
-- Bad, because it leaves moose-tracevals unpublishable on someone else's release schedule, and keeps a
-  peer tool as the vendor of a shared layer — docevals' public API would have to stay frozen around
-  moose-tracevals' needs.
+- Bad, because it leaves moose-tracevals unpublishable on someone else's release schedule. It also
+  keeps a peer tool as the vendor of a shared layer. docevals' public API would have to stay frozen
+  around moose-tracevals' needs.
 
 ### Vendor the code back in
 
 - Good, because it removes the dependency entirely.
-- Bad, because it recreates exactly the drift this extraction was done to end: the three original
+- Bad, because it recreates exactly the drift this extraction was done to end. The three original
   copies each ended up holding a fix the others lacked.

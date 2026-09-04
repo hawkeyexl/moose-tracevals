@@ -1,7 +1,7 @@
 ---
 id: persona-eval-owner
 type: persona
-name: "Sam — Eval standard owner"
+name: "Sam, eval standard owner"
 audience: aud-eval-standard
 role: Quality engineer who owns what "adhered" means
 proficiency: [json-schema, llm-evaluation, sampling-and-nondeterminism, classifier-calibration, semver]
@@ -28,26 +28,26 @@ journeys:
   - cuj-declare-evals
 ---
 
-# Persona: Sam — Eval standard owner
+# Persona: Sam, eval standard owner
 
 **Scope:** the standard-setting persona for
 [`aud-eval-standard`](../audiences/eval-standard.md). Sam decides what an eval is allowed to
-assert and whether a verdict can be believed — not what the instructions say and not how the gate
-is wired.
+assert, and whether a verdict can be believed. That is not what the instructions say, and not how
+the gate is wired.
 
 Sam does evaluation work for an agent platform team. In a smaller organization this is Priya on a
 different day, and the job is distinct enough to need its own content either way. Unlike Priya, Sam
 arrives with the vocabulary already intact and a well-earned suspicion of anything that lets a
 language model grade work.
 
-**Goal:** define a evals standard that is honest — one where a green run is evidence rather than
-decoration — and change it over time without invalidating everything already declared.
+**Goal:** define an evals standard that is honest, where a green run is evidence rather than
+decoration. Then change it over time without invalidating everything already declared.
 
 **Pains:**
 
 - **Judge trust is the gate on everything else.** Sam will not let a judged eval block anything
-  before seeing how many runs there are, how their votes combine, what happens when a run errors,
-  and where the boundary that produces `needs-review` sits. "Errors can never produce a silent
+  before seeing how many runs there are and how their votes combine. He also wants to know what
+  happens when a run errors, and where the boundary that produces `needs-review` sits. "Errors can never produce a silent
   pass" is the specific claim that has to be demonstrated rather than asserted.
 - **Grader selection is unguided.** Seven deterministic kinds exist with real scope differences.
   Some judge the whole session, some a single artifact, and nothing tells you which one fits the
@@ -59,15 +59,15 @@ decoration — and change it over time without invalidating everything already d
 - **Stale caches.** A cached verdict that outlives a prompt revision is a wrong answer delivered
   with full confidence.
 
-**How they use moose-tracevals:** Sam reads the consensus and zone rules before running anything. Then
-they tune — runs, zones, temperature, a cost ceiling — against a corpus of sessions with known
-outcomes, checking whether the tool agrees with their own judgment. Once calibrated, they set the
+**How they use moose-tracevals:** Sam reads the consensus and zone rules before running anything.
+Then they tune runs, zones, temperature, and a cost ceiling against a corpus of sessions with known
+outcomes. That checks whether the tool agrees with their own judgment. Once calibrated, they set the
 conventions the rest of the team's evals follow, and they own the schema version those evals
 are pinned to.
 
-**What success looks like for them:** they can state, in one sentence and with the arithmetic to
-back it, why a given eval came out `needs-review` instead of `pass` — and change a threshold and
-watch that answer change predictably.
+**What success looks like for them:** they can say, with the arithmetic behind it, why an eval came
+out `needs-review` rather than `pass`. They can also change a threshold and watch that answer change
+predictably.
 
 **Careful with:** the concept order carries weight. *Ensemble* → *consensus* → *zone* → *outcome*,
 in that sequence: a zone threshold is meaningless before consensus is defined. `capability` vs

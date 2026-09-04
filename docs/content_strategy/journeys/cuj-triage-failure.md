@@ -5,7 +5,7 @@ title: Read a failing eval and decide what to do
 personas: [persona-run-triager]
 trigger: "A build went red, or a report shows FAIL, ERROR, REVIEW, or SKIP, and the reader has no context on this tool."
 entry_point: /moose-tracevals/triage/
-success_criteria: "Within one page and under two minutes, the reader knows which instruction was violated, whether the verdict is trustworthy, and whether to change the session's behavior, challenge the eval, or escalate — and to whom."
+success_criteria: "Within one page and under two minutes, the reader knows which instruction was violated, whether the verdict is trustworthy, and whether to change the session's behavior, challenge the eval, or escalate, and to whom."
 steps:
   - { stage: "Read one result line", doc: /moose-tracevals/triage/, exists: true, note: "artifact, eval, and outcome defined in place" }
   - { stage: "Understand a deterministic failure", doc: "/moose-tracevals/triage/#a-check-failed", exists: true, note: "the finding names what the session did" }
@@ -20,41 +20,42 @@ steps:
 # CUJ: Read a failing eval and decide what to do
 
 **Scope:** one result, one page, one decision. This journey deliberately does **not** teach
-configuration, evals authoring, or judge internals — every one of those is a link the reader is
+configuration, evals authoring, or judge internals. Every one of those is a link the reader is
 not expected to take.
 
 **Trigger.** A red line. The reader did not install this tool and may not have known it existed
 until a moment ago.
 
-**Narrative.** This is the highest-traffic and shallowest journey in the set, and its constraint is
+**Narrative.** This is the highest-traffic and shallowest journey in the set. Its constraint is
 unusual enough to state as a rule: **it must be complete in a single page.** A reader who has to
 follow a link to understand the first line has already escalated. That means *artifact*,
 *eval*, and *outcome* are defined in place, in a sentence each, even though every other page in
 the set assumes them.
 
-The reader's questions arrive in a fixed order — what failed, is the verdict trustworthy, what do I
-do — and the page should answer them in that order rather than by document logic.
+The reader's questions arrive in a fixed order. What failed, is the verdict trustworthy, and what
+do I do? The page should answer them in that order rather than by document logic.
 
 The genuinely difficult content is that **five outcomes are not equally self-explanatory**:
 
 - **`FAIL`** is the easy one: an eval was violated and the finding names what the session did.
-- **`ERROR`** means the check itself broke, not that the session misbehaved — a malformed evals
-  block, a grader given options it rejects, an unreadable trace. Different remedy, different owner.
+- **`ERROR`** means the check itself broke, not that the session misbehaved. That is a malformed
+  evals block, a grader given options it rejects, or an unreadable trace. Different remedy,
+  different owner.
 - **`REVIEW`** means the judge did not reach confident agreement. It is a designed outcome, not a
   bug, and the honest instruction is "a human decides, and today that is you."
-- **`SKIP`** has several unrelated causes — judged evals skipped because the run was
-  deterministic-only, a cost budget exhausted, a trace carrying no usage data for a cost check, an
-  artifact opted out. Each implies a different action, and collapsing them into one explanation is
+- **`SKIP`** has several unrelated causes. The run may have been deterministic-only, or a cost
+  budget may have been exhausted. A trace may carry no usage data for a cost check, or an artifact
+  may have opted out. Each implies a different action, and collapsing them into one explanation is
   the fastest way to strand this reader.
-- **A row in the coverage table is not an outcome at all**: an artifact that could not be resolved
-  is reported there and is usually somebody's missing file rather than anything about this session.
+- **A row in the coverage table is not an outcome at all.** An artifact that could not be resolved
+  is reported there. It is usually somebody's missing file rather than anything about this session.
 
 The third question is the one most likely to be under-served. The right answer is sometimes *"the
-eval is wrong"*, and that is rarely the reader's first guess — an eval that no session
+eval is wrong"*, and that is rarely the reader's first guess. An eval that no session
 could satisfy is a defect in the artifact, and this reader is often the first person to notice.
 Naming that option explicitly, alongside "fix the behavior" and "escalate to the artifact's owner",
 is what turns a diagnosis into a decision.
 
 **Coverage.** No gaps. `triage/` stays the single self-contained page this reader needs, and
-`triage/faq/` is the follow-up shelf — deliberately a *second* page so the first keeps its length
+`triage/faq/` is the follow-up shelf, deliberately a *second* page so the first keeps its length
 discipline.

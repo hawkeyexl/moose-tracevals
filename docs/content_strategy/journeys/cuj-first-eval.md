@@ -6,7 +6,7 @@ personas: [persona-artifact-author, persona-platform-engineer]
 backbone: true
 trigger: "Someone suspects their agent is not following the instructions it was given, and wants proof either way."
 entry_point: /moose-tracevals/get-started/
-success_criteria: "A real past session is evaluated and the reader can say, per artifact, which instructions held and which did not — without an API key and without re-running any work."
+success_criteria: "A real past session is evaluated and the reader can say, per artifact, which instructions held and which did not, without an API key and without re-running any work."
 steps:
   - { stage: "Understand what is being checked", doc: /moose-tracevals/, exists: true }
   - { stage: "Install and confirm the CLI runs", doc: /moose-tracevals/get-started/, exists: true }
@@ -19,7 +19,7 @@ steps:
 
 # CUJ: Evaluate your first session end to end
 
-**Scope:** the **backbone journey** — first contact through a real, readable result. It stops at the
+**Scope:** the **backbone journey**, from first contact through a real, readable result. It stops at the
 moment the reader trusts the output. Making the checks say something specific is
 [`cuj-declare-evals`](cuj-declare-evals.md); putting it in a pipeline is
 [`cuj-gate-ci`](cuj-gate-ci.md).
@@ -27,9 +27,9 @@ moment the reader trusts the output. Making the checks say something specific is
 **Trigger.** Someone has a repository full of agent instructions and a growing suspicion that some
 of them are decorative. They want evidence before investing further.
 
-**Narrative.** This journey is short by construction, and its length is the product's main claim:
-because artifacts are resolved deterministically from the trace and the filesystem, and because
-artifacts with no declared evals still get one implicit whole-artifact eval, a first run produces
+**Narrative.** This journey is short by construction, and its length is the product's main claim.
+Artifacts are resolved deterministically from the trace and the filesystem, and artifacts with no
+declared evals still get one implicit whole-artifact eval. A first run therefore produces
 something meaningful with **zero configuration**. Nothing needs authoring before the first result.
 
 Three things must land in order, and each is a place the journey can be lost:
@@ -38,13 +38,13 @@ Three things must land in order, and each is a place the journey can be lost:
    re-running work. Readers who expect to install a wrapper and re-run their agent stop here.
 2. **The first run costs nothing.** `--deterministic-only` makes no model call at all, and
    `--provider mock` exercises the full pipeline offline. A first-run experience that demands an API
-   key loses both personas at once — which is why the default provider uses the local agent CLI's
+   key loses both personas at once. That is why the default provider uses the local agent CLI's
    own auth rather than a key anyone has to provision.
 3. **The report is legible without a glossary.** Outcome, artifact, eval, finding. If reading
    the first report requires understanding consensus arithmetic, the on-ramp has failed.
 
-Priya and Devin both walk this journey but leave it by different doors — she toward declaring
-evals, he toward CI — so it must end with a fork, not a single next step.
+Priya and Devin both walk this journey but leave it by different doors. She goes toward declaring
+evals, and he toward CI, so it must end with a fork rather than a single next step.
 
 **Coverage.** No gaps. `get-started/` carries install, trace discovery, the first offline run, and a
 line-by-line read of the report. `declare/coverage/` closes the last step: why an unresolved

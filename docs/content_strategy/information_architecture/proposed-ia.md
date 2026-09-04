@@ -11,27 +11,27 @@ base_path: /moose-tracevals
 
 # Proposed information architecture
 
-**Scope:** the structure of the published site — everything under `docs/src/content/docs/`. It
+**Scope:** the structure of the published site, meaning everything under `docs/src/content/docs/`. It
 excludes the repository's contributor-facing files (`README.md`, `CLAUDE.md`, `adrs/`) and this
 strategy directory, none of which are built into the site. The gaps this structure exposes are
 enumerated in [`ia-gap-analysis.md`](ia-gap-analysis.md).
 
-Unusually for this method, the scope is the *entire* published subtree rather than one nav section:
-the docset is new, so there is no adjacent section to leave alone.
+Unusually for this method, the scope is the *entire* published subtree rather than one nav section.
+The docset is new, so there is no adjacent section to leave alone.
 
-## Method — CUJ-first, not content-first
+## Method: CUJ-first, not content-first
 
-The structure is derived from [`../journeys/`](../journeys/_overview.md): each top-level nav group
+The structure is derived from [`../journeys/`](../journeys/_overview.md). Each top-level nav group
 carries one persona's set of journeys, and **every page is justified by the CUJ it serves**. Pages
 were not inventoried from what the code happens to contain and then grouped by topic.
 
 Two consequences follow, and both are deliberate:
 
 - **No Diátaxis split at the top level.** Tutorial / how-to / explanation / reference is a useful
-  lens on a single page and a poor organizing principle for a site, because it sorts content by the
+  lens on a single page, and a poor organizing principle for a site. It sorts content by the
   writer's genre instead of the reader's job. Nav groups here are jobs.
 - **Reference is a flat lookup shelf.** It supports every journey and drives none.
-  Journey pages explain the path and deep-link into reference for exhaustive detail; reference pages
+  Journey pages explain the path and deep-link into reference for exhaustive detail. Reference pages
   never carry navigational chrome, because nobody arrives at one except from a link or a search.
 
 The landing page is a **router**: "what do you want to do?" plus a proof that runs in thirty
@@ -72,14 +72,14 @@ Home — router + a proof that runs offline
 | Build on moose-tracevals | `extend/` | `/moose-tracevals/extend/` |
 | Reference | `reference/` | `/moose-tracevals/reference/` |
 
-Each group is a single `autogenerate` directory in the Starlight sidebar — no page is enumerated in
-config. Ordering inside a group is controlled by `sidebar.order` frontmatter, used only where
+Each group is a single `autogenerate` directory in the Starlight sidebar, and no page is enumerated
+in config. Ordering inside a group is controlled by `sidebar.order` frontmatter, used only where
 sequence carries meaning.
 
 ## Proposed structure
 
 Every page in the content set is written. A `[NEW]` marker here would mean a section the CUJs
-require that does not exist yet; there are none, and one reappearing is the signal that a journey
+require that does not exist yet. There are none, and one reappearing is the signal that a journey
 has outgrown its pages.
 
 ```
@@ -117,7 +117,7 @@ reference/
 ```
 
 **24 pages, all written.** Every one of the ten journeys now reaches its stated `success_criteria`
-without a missing step: no CUJ carries an `exists: false`, which the
+without a missing step. No CUJ carries an `exists: false`, which the
 [strategy gate](../../../scripts/check-content-strategy.mjs) enforces on every push.
 
 The launch set was the 14 pages that made four journeys usable end to end; the remaining 10 closed
@@ -147,8 +147,8 @@ Every journey has a primary home, and no page belongs to zero journeys.
 - **A site exists.** Today there is one 202-line README and nothing else user-facing.
 - **The README stops being the product's documentation** and becomes a hook, an install, one worked
   example, and a link table into the site.
-- **Commands are shown as the installed binary**, not as `node dist/cli.js` — a form that only works
-  inside a clone of this repository and is unusable by anyone consuming the published package.
+- **Commands are shown as the installed binary**, not as `node dist/cli.js`. That form only works
+  inside a clone of this repository, and is unusable by anyone consuming the published package.
 - **Six substantial surfaces get their first documentation**: artifact coverage, the report
   structure, history and regressions, judge calibration, evals-schema versioning, and the
   programmatic API.

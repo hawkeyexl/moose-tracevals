@@ -8,7 +8,7 @@ decision-makers: [hawkeyexl, Claude]
 
 ## Context and Problem Statement
 
-Agent session traces exist in multiple formats — Claude Code session files (`~/.claude/projects/<slug>/*.jsonl`), legacy `claude -p` stream-json, OpenAI Codex rollouts (`~/.codex/sessions/**/rollout-*.jsonl`), and others. Which formats does this release parse, and what happens when a trace references artifacts that cannot be resolved?
+Agent session traces exist in multiple formats: Claude Code session files (`~/.claude/projects/<slug>/*.jsonl`), legacy `claude -p` stream-json, OpenAI Codex rollouts (`~/.codex/sessions/**/rollout-*.jsonl`), and others. Which formats does this release parse, and what happens when a trace references artifacts that cannot be resolved?
 
 ## Decision Drivers
 
@@ -25,7 +25,7 @@ Agent session traces exist in multiple formats — Claude Code session files (`~
 
 ## Decision Outcome
 
-Chosen option: "Claude Code only, with an adapter seam". `src/trace/detect.ts` sniffs the format from the first parseable line; `TraceSource` is a union type; the engine consumes only the normalized `Trace` model. Codex support is deferred, not rejected — a future adapter maps rollouts into the same model with its own instruction semantics. Degradation is a first-class behavior: unresolved skill/agent refs and absent project rules become `warnings` plus entries in the report's artifact-coverage table (listing the paths tried); a trace that yields zero artifacts produces skipped evals and exit 0, never a crash. The `--project` flag overrides the trace's recorded cwd for artifact lookup when the original workspace is gone.
+Chosen option: "Claude Code only, with an adapter seam". `src/trace/detect.ts` sniffs the format from the first parseable line; `TraceSource` is a union type; the engine consumes only the normalized `Trace` model. Codex support is deferred, not rejected; a future adapter maps rollouts into the same model with its own instruction semantics. Degradation is a first-class behavior. Unresolved skill/agent refs and absent project rules become `warnings` plus entries in the report's artifact-coverage table, listing the paths tried. A trace that yields zero artifacts produces skipped evals and exit 0, never a crash. The `--project` flag overrides the trace's recorded cwd for artifact lookup when the original workspace is gone.
 
 ### Consequences
 
@@ -35,7 +35,7 @@ Chosen option: "Claude Code only, with an adapter seam". `src/trace/detect.ts` s
 
 ### Confirmation
 
-Adapter tests run against captured fixtures in `test/fixtures/traces/`; degradation is pinned by tests asserting warnings + coverage entries for unresolvable refs and exit 0 for zero-artifact traces. `detect.ts` rejects unknown formats with an operational error (exit 2) naming the supported formats.
+Adapter tests run against captured fixtures in `test/fixtures/traces/`. Degradation is pinned by tests asserting warnings and coverage entries for unresolvable refs, and exit 0 for zero-artifact traces. `detect.ts` rejects unknown formats with an operational error (exit 2) naming the supported formats.
 
 ## Pros and Cons of the Options
 

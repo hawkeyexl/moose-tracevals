@@ -8,7 +8,7 @@ sidebar:
 import { Aside, LinkCard, CardGrid } from '@astrojs/starlight/components';
 
 **Scope:** consuming moose-tracevals as a library rather than a CLI. It assumes the vocabulary from the
-journey pages — a custom grader cannot be explained before the
+journey pages, because a custom grader cannot be explained before the
 [built-in graders](/moose-tracevals/reference/graders/) are.
 
 ```bash
@@ -59,14 +59,14 @@ Omit both and judged evals have nothing to run them.
 
 <Aside title="`runEvals` does not load plugins; `runRun` does">
 `config.plugins` is imported by the `run` and `fill` commands, which know the directory the config
-came from. Calling `runEvals` directly you are already holding `registerGrader` — call it yourself,
+came from. Calling `runEvals` directly you are already holding `registerGrader`. Call it yourself,
 or call `loadGraderPlugins({ plugins, configDir })` if you want the CLI's resolution and warnings.
 </Aside>
 
 ## Injection seams
 
-Every place moose-tracevals reaches outside the process is injectable, so anything you build on top can
-keep its own suite hermetic — the same seams this project's tests use.
+Every place moose-tracevals reaches outside the process is injectable. Anything you build on top can
+keep its own suite hermetic, through the same seams this project's tests use.
 
 | Seam | Where | Replaces |
 |---|---|---|
@@ -117,7 +117,7 @@ console.log(trace.turnCount, trace.skillInvocations.map((s) => s.name));
 ```
 
 Every field is described in [Traces reference](/moose-tracevals/reference/traces/). Note `usage` is
-absent for Claude Code session files — only stream-json transcripts carry cost.
+absent for Claude Code session files. Only stream-json transcripts carry cost.
 
 ## The trace-adapter seam
 
@@ -134,7 +134,7 @@ and the shape a new adapter has to conform to is the normalised `Trace`:
 - **Instruction semantics are the adapter's job.** What counts as a "skill" differs between agent
   tools; the adapter decides, and everything downstream consumes the normalised result.
 
-Adding one is a change to this repository rather than something you can register at runtime — the
+Adding one is a change to this repository, not something you can register at runtime. The
 seam is a shape to conform to, not a plugin point.
 
 ## Where to go next
