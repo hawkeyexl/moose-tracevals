@@ -136,6 +136,19 @@ mkdir -p .tmp && npm test > .tmp/output.txt 2>&1
 - `npm run docs:check-strategy` checks anchor integrity, orphans, CUJ route resolution, and link resolution across `docs/content_strategy/` and the pages
 - `npm run docs:build` / `npm run docs:dev` builds or serves the Starlight site (`docs/` is a nested npm project; run `npm install` inside it once)
 - `npx doc-detective` runs the inline tests embedded in the docs pages. Needs a built `dist/` and the `moose-tracevals` bin on PATH.
+- `vale sync && vale .` lints every document against the house voice. `sync` fetches `.vale/styles/`, which is gitignored rather than committed.
+
+## Prose and the house voice (required)
+
+Every document in this repository is held to the Moose voice package (`Voices` + `Direct`), and [vale.yml](.github/workflows/vale.yml) **blocks** on an error. The corpus is at zero, so the first alert you see is your own. Run `vale .` before you push prose.
+
+- Four rules bite most often. No em dash (`—`) or ` -- `. No sentence over 25 words. No banned or inflated word (`harness`, `leverage`, `utilize`, `robust`, …). No `Something specific: lowercase clause` opener at the start of a line.
+- **Split the sentence rather than swapping the punctuation.** An em dash traded for a semicolon or a comma splice is the thing the rule exists to catch.
+- Vale skips fenced code blocks and inline code spans. **Captured CLI output keeps its em dashes** because the reporters really emit them, and a sample rewritten for a linter is no longer a sample. The same applies to a verbatim quotation: put it in a code span rather than paraphrasing it.
+- `test/fixtures/**` is the **one** voice exemption, and `.vale.ini` says why beside it. Fixture prose is test input whose bytes CI asserts on. Never exempt prose anyone wrote; fix it instead. (`.tmp/**` and `moose-tracevals-*.txt` are also excluded, because Vale does not read `.gitignore` and both hold generated output.)
+- `Voices.ColonReveal` is a warning upstream, so it annotates without failing. Do not re-grade a rule's severity here. That belongs in [moose-vale](https://github.com/hawkeyexl/moose-vale).
+
+See [ADR 01033](adrs/01033-work-the-prose-corpus-to-zero-and-make-the-vale-gate-blocking.md).
 
 ## Docs & content strategy
 
@@ -211,6 +224,7 @@ To add a knob, write the schema first (+ positive and negative config tests) →
 | Docs frontmatter (`title` + `description`) | [docs.yml](.github/workflows/docs.yml), which dogfoods `docmeta`; gates the Pages deploy |
 | Docs ↔ CLI agreement | [doc-detective.yml](.github/workflows/doc-detective.yml), which runs every documented command against the local build over `test/fixtures/` |
 | Content-strategy anchors, orphans, routes, links | [docs.yml](.github/workflows/docs.yml) via `npm run docs:check-strategy` ([scripts/check-content-strategy.mjs](scripts/check-content-strategy.mjs)) |
+| House voice in every document | [vale.yml](.github/workflows/vale.yml), reading the whole tree on every PR; errors block, warnings annotate |
 | Automated review | [claude-pr-review.yml](.github/workflows/claude-pr-review.yml), [claude.yml](.github/workflows/claude.yml) |
 
 The husky hook installs through the `prepare` script on `npm install`. If commits stop being linted, check `git config core.hooksPath`. It should be `.husky/_`. Run `npx husky` to reinstall.

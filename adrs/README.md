@@ -46,3 +46,4 @@ Every **behavior change** in moose-tracevals ships with an ADR here. The ADR rec
 | [01030](01030-weight-feeds-a-reported-pass-rate.md) | `weight` feeds a reported pass rate, not a gate | accepted |
 | [01031](01031-per-eval-runs-and-model.md) | Per-eval `runs` and `model`, and the judge context that carries them | accepted |
 | [01032](01032-the-criterion-axis-of-self-preference.md) | The criterion axis of self-preference, and reading `eval-provenance` back | accepted |
+| [01033](01033-work-the-prose-corpus-to-zero-and-make-the-vale-gate-blocking.md) | Work the prose corpus to zero, and make the Vale gate blocking | accepted |
