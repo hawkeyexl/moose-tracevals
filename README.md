@@ -1,6 +1,6 @@
 # moose-tracevals
 
-Adherence evals for AI agent session traces. Point moose-tracevals at a [Claude Code](https://docs.anthropic.com/en/docs/claude-code) session, and it deterministically looks up every skill, agent definition, and project-rules file the session used, then evaluates whether the session **adhered to the instructions in those artifacts** — with deterministic graders where possible and an ensemble LLM judge everywhere else.
+Adherence evals for AI agent session traces. Point moose-tracevals at a [Claude Code](https://docs.anthropic.com/en/docs/claude-code) session, It looks up every skill, agent definition, and project-rules file that session used. Then it evaluates whether the session **adhered to the instructions in those artifacts**. Deterministic graders answer what they can, and an ensemble LLM judge answers the rest.
 
 Built on two sibling libraries: [@hawkeyexl/inference](https://github.com/hawkeyexl/inference) (providers, ensemble consensus, confidence zones, response caching) and [docmeta](https://github.com/hawkeyexl/docmeta) (frontmatter extraction, JSON-Schema validation).
 
@@ -13,8 +13,8 @@ npm install --save-dev moose-tracevals
 ```
 
 > **The package and the binary are both named `moose-tracevals`.** `npx` resolves by *package* name,
-> so `npx moose-tracevals` reaches this tool either way — from `node_modules/.bin` when it is a local
-> dependency, and straight from the registry when nothing is installed.
+> so `npx moose-tracevals` reaches this tool either way. It runs from `node_modules/.bin` when it is
+> a local dependency, and straight from the registry when nothing is installed.
 
 ## Quick start
 
@@ -59,11 +59,11 @@ deterministic graders ──> ensemble AI judge (N runs, consensus, zones)
 report (human / json / markdown) + artifact coverage + history
 ```
 
-- **Deterministic lookup.** Which skills, agents, and rules a session used is read from the trace plus the filesystem — no LLM guessing. Unresolved references degrade to warnings and a coverage table, never a crash.
-- **Declared evals.** Artifacts declare checks in a `metadata.evals` frontmatter block implementing [`docmeta:artifact-evals`](schemas/artifact-evals-1.0.0-proposal.1.json) — a common vocabulary published by [docmeta](https://github.com/hawkeyexl/docmeta), not by this tool. An eval is either a string (AI-judged) or an object naming a grader: the ensemble judge, a human review queue, a script run over the trace, or one of seven deterministic checks.
-- **Implicit eval.** Artifacts with no declared evals still get one judged eval — *"the session adhered to the instructions in this artifact"* — so every used artifact is evaluated with zero configuration.
+- **Deterministic lookup.** Which skills, agents, and rules a session used is read from the trace plus the filesystem, with no LLM guessing. Unresolved references degrade to warnings and a coverage table, never a crash.
+- **Declared evals.** Artifacts declare checks in a `metadata.evals` frontmatter block implementing [`docmeta:artifact-evals`](schemas/artifact-evals-1.0.0-proposal.1.json). That vocabulary is published by [docmeta](https://github.com/hawkeyexl/docmeta), not by this tool. An eval is either a string (AI-judged) or an object naming a grader. The graders are the ensemble judge, a human review queue, a script run over the trace, and seven deterministic checks.
+- **Implicit eval.** Artifacts with no declared evals still get one judged eval, worded *"the session adhered to the instructions in this artifact"*. Every used artifact is therefore evaluated with zero configuration.
 - **Trustworthy judging.** N independent runs at temperature 0, consensus where errored runs can never produce a silent pass, and confidence zones that route anything non-unanimous to `needs-review`.
-- **Measurable judging.** `calibrate` joins a run against a labels sidecar of verdicts you decided by hand and reports false passes, false fails, and review volume — plus which eval disagreed. `--sweep` re-scores cached verdicts at other zone thresholds and ensemble sizes, so asking "what would `autoPass: 0.9` have done?" costs no inference.
+- **Measurable judging.** `calibrate` joins a run against a labels sidecar of verdicts you decided by hand. It reports false passes, false fails, review volume, and which eval disagreed. `--sweep` re-scores cached verdicts at other zone thresholds and ensemble sizes, so asking "what would `autoPass: 0.9` have done?" costs no inference.
 - **Read-only.** `run` and `calibrate` never modify a trace or the artifacts they evaluate. `fill` is the one write path, and it never writes project rules.
 
 ## Documentation
@@ -77,8 +77,8 @@ Full guides, recipes, and reference live on the documentation site:
 | [Get started](https://hawkeyexl.github.io/moose-tracevals/get-started/) | Install, find a session, and read your first result. |
 | [Declare what to check](https://hawkeyexl.github.io/moose-tracevals/declare/) | Turn an instruction into an eval; propose evals across a project with `fill`. |
 | [Run it in CI](https://hawkeyexl.github.io/moose-tracevals/ci/) | An offline GitHub Actions recipe, the exit-code contract, and report formats. |
-| [Trust the judge](https://hawkeyexl.github.io/moose-tracevals/judge/) | Ensembles, consensus, and confidence zones — with the arithmetic, and `calibrate` to check it against your own answers. |
-| [Read a failing eval](https://hawkeyexl.github.io/moose-tracevals/triage/) | One page: what failed, whether the verdict holds, and what to do. |
+| [Trust the judge](https://hawkeyexl.github.io/moose-tracevals/judge/) | Ensembles, consensus, and confidence zones, with the arithmetic. `calibrate` checks the judge against your own answers. |
+| [Read a failing eval](https://hawkeyexl.github.io/moose-tracevals/triage/) | What failed, whether the verdict holds, and what to do, on one page. |
 | [Reference](https://hawkeyexl.github.io/moose-tracevals/reference/) | Every CLI flag, config key, grader option, eval field, and report field. |
 
 ## Development
