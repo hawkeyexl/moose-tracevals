@@ -3,7 +3,7 @@ id: aud-platform-ci
 type: audience
 segment: AI-platform and CI engineers
 maturity: scaleup-to-enterprise
-docs_owner: nobody on this team — they consume artifacts other teams own
+docs_owner: nobody on this team; they consume artifacts other teams own
 firmographics: [platform-team, devex-team, multi-repo, regulated]
 relationship_stages: [prospect, customer]
 personas: [persona-platform-engineer]
@@ -22,7 +22,7 @@ features_emphasized:
 **Scope:** people who run moose-tracevals as a gate in automation across repositories they do not
 author. It does not cover writing the instruction artifacts (see
 [`aud-artifact-authors`](artifact-authors.md)) or deciding what the evals should assert (see
-[`aud-eval-standard`](eval-standard.md)) — this audience plumbs a check whose content someone else
+[`aud-eval-standard`](eval-standard.md)). This audience plumbs a check whose content someone else
 owns.
 
 ## Who they are
@@ -33,13 +33,13 @@ a gate once and never thinking about it again. Some sit in regulated environment
 did the work" needs an artifact trail.
 
 They are fluent in CI configuration, exit-code contracts, and JSON pipelines. They have low
-tolerance for a tool that needs per-repository configuration, and near-zero tolerance for one that
-makes a network call from a build.
+tolerance for a tool that needs per-repository configuration. They have near-zero tolerance for one
+that makes a network call from a build.
 
 ## What they're trying to do
 
-Add a check to automation that answers one question mechanically — *did this agent session follow
-the instructions it was given?* — and route the answer into whatever the organization already uses
+Add a check to automation that answers one question mechanically. *Did this agent session follow
+the instructions it was given?* Then route the answer into whatever the organization already uses
 for reporting.
 
 ## Defining pains
@@ -67,10 +67,10 @@ for reporting.
 ## Qualified reader (for docs targeting)
 
 - **Prerequisites they bring:** CI configuration (GitHub Actions at minimum); process exit-code
-  semantics; JSON processing on the command line; environment-variable-based configuration;
-  npm/npx installation.
-- **Subject dependencies:** they need *trace*, *artifact*, and *eval outcome* defined, but only to
-  the depth required to read a report — they do not need to understand evals authoring to install
+  semantics; JSON processing on the command line. They also bring environment-variable-based
+  configuration and npm/npx installation.
+- **Subject dependencies.** They need *trace*, *artifact*, and *eval outcome* defined, but only to
+  the depth required to read a report. They do not need to understand evals authoring to install
   the gate. The `needs-review` outcome and `failOnNeedsReview` must be introduced together, because
   the first is meaningless to them without the second. Judge calibration is explicitly **not** a
   dependency: their recommended path avoids the judge entirely.

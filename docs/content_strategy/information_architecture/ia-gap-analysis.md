@@ -25,7 +25,7 @@ whose sections re-home like this:
 | "How it works" pipeline diagram | `/` and `get-started/` | Keep the diagram; move the four supporting bullets into the pages that need them. |
 | "Quick start" | `get-started/` | Rewrite. Every command shown uses `node dist/cli.js`, which only works inside a clone; the site shows the installed binary. |
 | "Declaring evals" | `declare/` | Expand into a journey. The block example survives; grader choice and severity are new. |
-| "Deterministic grader kinds" table | `reference/graders/` | Move and expand — options, validation rules, and the actual failure messages. |
+| "Deterministic grader kinds" table | `reference/graders/` | Move and expand, to cover options, validation rules, and the actual failure messages. |
 | "Filling in evals" | `declare/fill` | Expand into a workflow with a worked proposal report. The rejection-reason table moves with it. |
 | "Configuration" YAML sample | `reference/configuration/` | Move. The sample stays; a per-key table with types and defaults is new. |
 | "Exit codes" table | `reference/report-and-exit-codes/` and `ci/exit-codes-and-reports` | Move; the CI page carries the policy discussion, reference carries the table. |
@@ -39,7 +39,7 @@ install line for the published package, and a link table into the site.
 
 **None.** All 24 pages in the content set are written, and no CUJ step carries an `exists: false`.
 
-That is the state to defend, not a finish line: this section exists so a gap can be recorded the
+That is the state to defend, not a finish line. This section exists so a gap can be recorded the
 moment a journey outgrows its pages. Add a row here the same day you notice one.
 
 ### What closed, and in what order
@@ -49,8 +49,8 @@ Kept because the sequencing reasoning is the useful part, not the list.
 | Wave | Pages | Reasoning |
 |---|---|---|
 | **Launch (14)** | landing, get-started, declare + fill, ci + exit-codes, judge, triage, and the five-page reference shelf | Chosen to make four journeys usable end to end, and to serve the highest-traffic journey (`cuj-triage-failure`) with its one required page. Reference came in whole because every journey deep-links into it; without it the journey pages inflate with tables. |
-| **P1 (4)** | `declare/coverage`, `ci/consume-results`, `judge/calibrate`, `judge/schema-versioning` | Each closed a journey that dead-ended. Two journeys — `cuj-cover-every-artifact` and `cuj-evolve-evals` — had no page at all until this wave. |
-| **P2 (6)** | `triage/faq`, `extend/` ×2, `reference/traces`, `reference/api`, `reference/glossary` | Four of the six are the toolsmith journey, which was 100% gaps and entirely self-contained — deferring it stranded nobody. |
+| **P1 (4)** | `declare/coverage`, `ci/consume-results`, `judge/calibrate`, `judge/schema-versioning` | Each closed a journey that dead-ended. Two journeys, `cuj-cover-every-artifact` and `cuj-evolve-evals`, had no page at all until this wave. |
+| **P2 (6)** | `triage/faq`, `extend/` ×2, `reference/traces`, `reference/api`, `reference/glossary` | Four of the six are the toolsmith journey, which was 100% gaps and entirely self-contained. Deferring it stranded nobody. |
 
 Two things learned in the P2 wave, worth remembering:
 
@@ -69,7 +69,7 @@ Two repository files are **not** published. That is a decision, recorded here so
 | File | Disposition |
 |---|---|
 | `CLAUDE.md` | Keep in the repository. Contributor working agreements are not user documentation; it gains a pointer block to this strategy directory. |
-| `adrs/` | Keep in the repository. Decision records are reviewable history, not a user-facing surface. Journey pages may link to a specific ADR when a reader benefits from the reasoning — the `fill` page linking the decision that project rules are never written is the model. |
+| `adrs/` | Keep in the repository. Decision records are reviewable history, not a user-facing surface. Journey pages may link to a specific ADR when a reader benefits from the reasoning. The `fill` page linking the decision that project rules are never written is the model. |
 
 ## 4. Source-of-truth mapping
 
@@ -80,14 +80,14 @@ or revising one:
 |---|---|
 | `reference/cli` | `src/cli.ts` |
 | `reference/configuration` | `src/core/config-schema.json`, `src/core/config.ts` |
-| `reference/graders` | `src/graders/` — one file per kind, plus `registry.ts` and `util.ts` for the shared validators and their exact messages |
+| `reference/graders` | `src/graders/`, one file per kind, plus `registry.ts` and `util.ts` for the shared validators and their exact messages |
 | `reference/evals-schema` | `schemas/artifact-evals-1.0.0-proposal.1.json` (vendored from docmeta), `src/evals/` |
 | `reference/report-and-exit-codes` | `src/types.ts`, `src/reporters/`, `src/history.ts` |
-| `reference/traces` | `src/trace/` — `detect.ts`, `claude.ts`, `discover.ts` |
+| `reference/traces` | `src/trace/`, in `detect.ts`, `claude.ts`, and `discover.ts` |
 | `reference/api` | `src/index.ts` |
 | `declare/coverage` | `src/artifacts/resolve.ts` |
 | `declare/fill` | `src/fill/gate.ts`, `src/commands/fill.ts` |
-| `judge/*` | `src/judge/` — `trace-judge.ts`, `prompt.ts`, `cache.ts`, `provider.ts` |
+| `judge/*` | `src/judge/`, in `trace-judge.ts`, `prompt.ts`, `cache.ts`, and `provider.ts` |
 
 Two cautions carried over from the sibling project, both learned the hard way:
 

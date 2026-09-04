@@ -19,8 +19,9 @@ cross_cutting: true
 
 # Audience: Toolsmiths building on moose-tracevals
 
-**Scope:** people writing code that imports moose-tracevals, beyond invoking its CLI: custom graders,
-wrappers, dashboards, and eventually trace adapters for formats other than Claude Code's. This is a
+**Scope:** people writing code that imports moose-tracevals, beyond invoking its CLI. That means
+custom graders, wrappers, dashboards, and eventually trace adapters for formats other than Claude
+Code's. This is a
 **cross-cutting lens** rather than a fifth point on the ownership axis. It does not cover CLI usage,
 which every other audience covers better.
 
@@ -31,13 +32,13 @@ overlaps the others instead of sitting beside them:
 
 | Overlaps | When |
 |---|---|
-| [`aud-platform-ci`](platform-ci.md) | Parsing `RunReport` into a dashboard, or embedding a run in a larger harness. |
+| [`aud-platform-ci`](platform-ci.md) | Parsing `RunReport` into a dashboard, or embedding a run in a larger test rig. |
 | [`aud-eval-standard`](eval-standard.md) | Reaching for a check no built-in grader performs, and registering one. |
 | [`aud-artifact-authors`](artifact-authors.md) | Maintaining an in-house agent framework that wraps the library directly. |
 
-The same person moves in and out of this audience by task. What justifies a separate segment is
-that the *content* they need (the export surface, the grader contract, the adapter seam) is disjoint
-from everything the primaries read, and that content has no other home.
+The same person moves in and out of this audience by task. A separate segment is justified because
+the *content* they need is disjoint from everything the primaries read. That content is the export
+surface, the grader contract, and the adapter seam, and it has no other home.
 
 ## Who they are
 
@@ -47,7 +48,7 @@ an invitation.
 
 ## What they're trying to do
 
-Extend moose-tracevals instead of reimplementing it: add a check the built-ins do not cover, consume
+Extend moose-tracevals instead of reimplementing it. Add a check the built-ins do not cover, consume
 results structurally, or teach it to read a trace format it does not know yet.
 
 ## Defining pains
@@ -56,11 +57,11 @@ results structurally, or teach it to read a trace format it does not know yet.
   artifacts, evals, graders, judge, config, engine, reporters, and commands. Nothing says which
   parts are the intended entry points and which are internals that happen to be reachable.
 - **An undocumented extension point.** `registerGrader()` is exported and is exactly what a custom
-  check needs, but a grader has a two-part contract, grading *and* option validation, and omitting
+  check needs. A grader has a two-part contract, grading *and* option validation. Omitting
   the second half means the eval can never be proposed by `fill`. None of that is discoverable
   from the type alone.
 - **An adapter seam whose shape is implied.** Support for other trace formats is a deferred design
-  decision, and someone attempting it needs to know what the normalized model requires and what
+  decision. Someone attempting it needs to know what the normalized model requires, and what
   degrades gracefully when a field is absent.
 - **Report shape undocumented.** Building on a JSON structure discovered by inspection means every
   release is a gamble.
@@ -78,7 +79,7 @@ results structurally, or teach it to read a trace format it does not know yet.
 - **Prerequisites they bring:** TypeScript, ESM module resolution, npm package consumption, JSON
   Schema, and dependency injection for test seams. They will read a type signature as
   documentation.
-- **Subject dependencies:** the entire domain vocabulary (*trace*, *artifact*, *eval*, *plan*,
+- **Subject dependencies.** The entire domain vocabulary (*trace*, *artifact*, *eval*, *plan*,
   *grader*, *finding*, *outcome*) must already be established. This audience's content sits
   at the top of the dependency stack and should assume the journey pages, linking back rather than
   restating. A custom grader cannot be explained before the built-in graders are.

@@ -20,8 +20,8 @@ features_emphasized:
 
 # Audience: Eval and quality owners
 
-**Scope:** people who own *what "adhered" means* — which graders are legitimate, what severity a
-violation carries, how the evals schema evolves, and whether the judge can be trusted. It does
+**Scope:** people who own *what "adhered" means*. That covers which graders are legitimate, what
+severity a violation carries, how the evals schema evolves, and whether the judge can be trusted. It does
 not cover authoring the instruction artifacts themselves (see
 [`aud-artifact-authors`](artifact-authors.md)) or operating the gate (see
 [`aud-platform-ci`](platform-ci.md)).
@@ -29,18 +29,18 @@ not cover authoring the instruction artifacts themselves (see
 ## Who they are
 
 Quality, ML-evaluation, or agent-platform practitioners. In a large organization this is a distinct
-role with a distinct mandate; in a small one it is the same person as the artifact author wearing a
-second hat — but the job is different enough to need its own content. Some maintain an open-source
+role with a distinct mandate. In a small one it is the same person as the artifact author wearing a
+second hat. The job is still different enough to need its own content. Some maintain an open-source
 agent framework and set the evals conventions their downstream users inherit.
 
 Unlike the lead audience, they arrive with eval vocabulary intact. They know what an LLM-as-judge
-is, they are appropriately suspicious of one, and they will want to see the consensus rule before
+is, and they are appropriately suspicious of one. They will want to see the consensus rule before
 they believe a verdict.
 
 ## What they're trying to do
 
-Define a evals standard that is honest — one where a passing result means something and a
-failing result is actionable — and evolve it without invalidating everything already declared.
+Define an evals standard that is honest, where a passing result means something and a failing
+result is actionable. Then evolve it without invalidating everything already declared.
 
 Two sub-jobs, distinct enough that they generate separate journeys:
 
@@ -52,8 +52,8 @@ Two sub-jobs, distinct enough that they generate separate journeys:
 ## Defining pains
 
 - **Judge trust.** A single sampled verdict is not evidence. They need to see the ensemble, the
-  consensus arithmetic, what happens to errored runs, and where the `needs-review` boundary sits —
-  before they will let a judged eval gate anything.
+  consensus arithmetic, what happens to errored runs, and where the `needs-review` boundary sits.
+  Only then will they let a judged eval gate anything.
 - **Grader selection is unguided.** Seven deterministic kinds exist with real scope differences
   (some are whole-session, some are per-artifact) and nothing tells you which fits.
 - **Evals that are permanently green.** An eval that no session could fail inflates the pass
@@ -77,9 +77,9 @@ Two sub-jobs, distinct enough that they generate separate journeys:
 ## Qualified reader (for docs targeting)
 
 - **Prerequisites they bring:** JSON Schema; sampling and non-determinism in language models; the
-  general LLM-as-judge pattern and its failure modes; precision/recall intuition for a classifier;
-  semantic versioning of a published contract.
-- **Subject dependencies:** *eval*, *grader*, and *finding* must be established first — this
+  general LLM-as-judge pattern and its failure modes. They also bring precision/recall intuition
+  for a classifier, and semantic versioning of a published contract.
+- **Subject dependencies.** *Eval*, *grader*, and *finding* must be established first. This
   audience's content sits one level above the authoring vocabulary and assumes it. *Ensemble* →
   *consensus* → *zone* → *outcome* must be introduced in that order; a zone threshold is
   meaningless before consensus is defined. `capability` vs `regression` depends on the evals

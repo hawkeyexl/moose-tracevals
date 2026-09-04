@@ -5,7 +5,7 @@ title: Propose evals across a whole project and review the diff
 personas: [persona-artifact-author]
 trigger: "There are more artifacts than anyone will hand-write evals for, and adoption is about to stall on authoring cost."
 entry_point: /moose-tracevals/declare/fill/
-success_criteria: "Every instruction artifact in the project has been offered evals, the reader has reviewed a real diff, and only evals they accept have been written — with project rules left untouched."
+success_criteria: "Every instruction artifact in the project has been offered evals, the reader has reviewed a real diff, and only evals they accept have been written, with project rules left untouched."
 steps:
   - { stage: "See what fill is for and what it refuses to do", doc: "/moose-tracevals/declare/fill/#what-fill-does", exists: true }
   - { stage: "Dry-run across the project", doc: "/moose-tracevals/declare/fill/#dry-run-first", exists: true, note: "--dry-run is the recommended first invocation, always" }
@@ -39,15 +39,15 @@ files without earning that right is uninstallable:
   design decision worth stating as one, not a limitation to apologize for.
 
 The subtler content problem is the **gate**. A reader's instinct is that confidence is the filter,
-so a low threshold means "more evals". It is not: proposals are checked mechanically first —
-duplicate name, grader allowed for this artifact type, options the grader itself accepts, a target
-that actually exists in this project — and **no confidence score overrides any of those**.
+so a low threshold means "more evals". It is not. Proposals are checked mechanically first, for a
+duplicate name and a grader allowed for this artifact type. They are also checked for options the
+grader itself accepts, and a target that actually exists in this project. **No confidence score overrides any of those.**
 Confidence is the last gate, not the only one. Explaining the order is what makes a rejection
 report readable instead of arbitrary.
 
 The **needs-sharpening** output is the part most likely to be skimmed and is arguably the most
-valuable thing the command produces. An instruction too vague to test is a defect in the artifact,
-and naming it beats silently converting it into an assertion that can never fail. Content should
+valuable thing the command produces. An instruction too vague to test is a defect in the artifact.
+Naming it beats silently converting it into an assertion that can never fail. Content should
 treat those notes as a to-do list for the artifact author, not as a diagnostic footnote.
 
 **Coverage.** No gaps. `declare/fill/` carries the workflow, a captured proposal report, the gate in

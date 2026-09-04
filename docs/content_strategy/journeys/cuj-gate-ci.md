@@ -5,7 +5,7 @@ title: Gate agent work in CI, offline
 personas: [persona-platform-engineer]
 trigger: "Agent-assisted work is routine and someone has asked whether any of it can be verified before merge."
 entry_point: /moose-tracevals/ci/
-success_criteria: "A workflow runs moose-tracevals on every push, makes no network call, and fails the build on a real adherence violation — with a stated policy for every exit code and for needs-review."
+success_criteria: "A workflow runs moose-tracevals on every push, makes no network call, and fails the build on a real adherence violation, with a stated policy for every exit code and for needs-review."
 steps:
   - { stage: "Copy the GitHub Actions recipe", doc: /moose-tracevals/ci/, exists: true }
   - { stage: "Run deterministic graders only", doc: "/moose-tracevals/ci/#stay-offline", exists: true, note: "--deterministic-only makes no model call; --provider mock exercises the full pipeline" }
@@ -26,7 +26,7 @@ steps:
 **Trigger.** Agent-assisted work has moved past experiment, and the platform team has been asked
 whether any of it can be verified before merge.
 
-**Narrative.** Devin's entire evaluation of this product happens in the first thirty seconds and
+**Narrative.** Devin's entire evaluation of this product happens in the first thirty seconds. It
 turns on one question: **can this run in a build without a network call?** The answer is yes, and
 the content must lead with it rather than arriving there after a tour of judge features. A page that
 opens with ensembles has already lost him.
@@ -35,16 +35,16 @@ Three things carry the journey:
 
 1. **The deterministic subset is a real, complete mode, not a degraded one.** Seven grader kinds
    decide their questions from the trace alone. `--deterministic-only` skips judged evals rather
-   than failing them — skipped is a distinct outcome, which matters when he is reading exit codes.
+   than failing them. Skipped is a distinct outcome, which matters when he is reading exit codes.
    `--provider mock` is the second offline mode, exercising the whole pipeline for a smoke test.
 2. **The exit-code contract is the API.** `0` pass, `1` a check failed, `2` the tool itself broke.
    The distinction between `1` and `2` is what lets him tell "the agent misbehaved" from "the trace
-   was unreadable", and it is the single most important thing on the page.
-3. **`needs-review` needs a decision, not a discovery.** It is a third outcome, it counts as a
-   failure by default, and the config key that changes that must be introduced in the same breath —
-   otherwise he meets it for the first time as a red build he cannot explain.
+   was unreadable". It is the single most important thing on the page.
+3. **`needs-review` needs a decision, not a discovery.** It is a third outcome, and it counts as a
+   failure by default. The config key that changes that must be introduced in the same breath.
+   Otherwise he meets it for the first time as a red build he cannot explain.
 
-Environment control is the quiet requirement: trace discovery reads a session store under a home
+Environment control is the quiet requirement. Trace discovery reads a session store under a home
 directory, and on a shared runner that has to be pinned explicitly rather than inherited.
 
 **Coverage.** No gaps. `ci/` carries where a trace comes from in CI, the offline modes,

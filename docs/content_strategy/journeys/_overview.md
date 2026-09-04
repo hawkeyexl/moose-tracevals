@@ -22,7 +22,7 @@ these journeys produce is in
 [`../information_architecture/proposed-ia.md`](../information_architecture/proposed-ia.md).
 
 A CUJ is a complete outcome a persona reaches *using the product*, not a topic. Each file maps its
-steps to real site routes and marks each route `exists: true`, `partial`, or `false` — the `false`
+steps to real site routes and marks each route `exists: true`, `partial`, or `false`. The `false`
 ones are `[GAP]`s, and enumerating them is the point.
 
 ## The journeys
@@ -59,13 +59,13 @@ ones are `[GAP]`s, and enumerating them is the point.
 
 Every persona has at least one primary journey; every journey has at least one persona. Priya
 carries four because she is the lead persona and touches every layer; Theo carries exactly one by
-design — see [`run-triager`](../personas/run-triager.md).
+design; see [`run-triager`](../personas/run-triager.md).
 
 ## The backbone
 
 [`cuj-first-eval`](cuj-first-eval.md) is the backbone journey. It is the first thing the lead
-persona does, it threads install → trace discovery → artifact resolution → evaluation → report in a
-single line, and every other journey either branches off it or presumes it has been completed.
+persona does, and it threads install → trace discovery → artifact resolution → evaluation → report
+in a single line. Every other journey either branches off it or presumes it has been completed.
 
 It is also the only journey two personas walk together, and they leave by different doors: Priya
 toward [`cuj-declare-evals`](cuj-declare-evals.md), Devin toward
@@ -77,7 +77,7 @@ Before declaring any launch CUJ complete, follow its linked pages start to finis
 
 1. The persona reaches the stated `success_criteria` without leaving the track, except for
    deliberate Reference lookups.
-2. Every command shown runs offline — `--deterministic-only` or `--provider mock` — against a
-   committed fixture, and is covered by a Doc Detective inline test that CI actually executes.
+2. Every command shown runs offline against a committed fixture, under `--deterministic-only` or
+   `--provider mock`, and is covered by a Doc Detective inline test that CI actually executes.
 3. Every step whose route is marked `exists: true` resolves to a real page.
 4. Every page has `title` and `description` frontmatter.

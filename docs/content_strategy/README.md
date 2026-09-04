@@ -27,7 +27,7 @@ audience ──< persona ──< journey ──> doc touchpoint
 
 | Artifact | ID prefix | References |
 |---|---|---|
-| Audience | `aud-*` | — |
+| Audience | `aud-*` | none |
 | Persona | `persona-*` | `audience:` → one `aud-*` |
 | CUJ | `cuj-*` | `personas:` → one or more `persona-*`; `steps[].doc` → real site routes |
 | IA | (none) | derives from `cuj-*` |
@@ -62,8 +62,8 @@ Before drafting or editing any page under `docs/src/content/docs/**`:
 
 ## Verifying technical claims
 
-moose-tracevals documents a real CLI, so every flag, exit code, output string, config default, and grader
-rule must match the code, never the writer's assumption.
+moose-tracevals documents a real CLI. Every flag, exit code, output string, config default, and
+grader rule must match the code, never the writer's assumption.
 
 - **Source files are the contract for behavior.** `information_architecture/ia-gap-analysis.md`
   carries a source-of-truth table naming the `src/` file each reference page must be cross-read
@@ -74,15 +74,15 @@ rule must match the code, never the writer's assumption.
   against `test/fixtures/`, instead of hand-writing it. That keeps docs and CI in lockstep, and
   the Doc Detective inline tests in each page then run those same commands on every push.
 - **Two gates enforce this mechanically.** `.github/workflows/docs.yml` blocks the Pages deploy
-  unless every page's frontmatter validates (moose-tracevals dogfoods its own `docmeta` dependency to do
-  it), and `.github/workflows/doc-detective.yml` runs every documented command against the fixture
-  corpus.
+  unless every page's frontmatter validates, and moose-tracevals dogfoods its own `docmeta`
+  dependency to do it. `.github/workflows/doc-detective.yml` runs every documented command against
+  the fixture corpus.
 
 ## Evidence basis, and its limitation
 
-**These segments are not derived from user research.** The usual method for this strategy, which is
-to cluster recorded customer and prospect calls into segments bottom-up, was unavailable: moose-tracevals
-has no call evidence. What is written here is derived from three real but indirect sources:
+**These segments are not derived from user research.** The usual method for this strategy is to
+cluster recorded customer and prospect calls into segments bottom-up. That was unavailable, because
+moose-tracevals has no call evidence. What is written here is derived from three real but indirect sources:
 
 1. **The product's own surface**: the CLI in `src/cli.ts`, the config schema, the grader registry,
    the artifact-evals schema, and the export surface in `src/index.ts`. Every knob implies someone
@@ -90,7 +90,7 @@ has no call evidence. What is written here is derived from three real but indire
 2. **The seven accepted ADRs in [`adrs/`](../../adrs/)**, which record who each decision was made
    for and what it deliberately refuses to do.
 3. **The validated segmentation of the sibling [docmeta](https://github.com/hawkeyexl/docmeta)
-   project**, whose audience of teams running a metadata gate in a docs-as-code repo is adjacent
+   project**. Its audience of teams running a metadata gate in a docs-as-code repo is adjacent
    enough that its four-way split transferred cleanly.
 
 Treat every audience and persona here as a **falsifiable hypothesis**. The first

@@ -1,7 +1,7 @@
 ---
 id: persona-toolsmith
 type: persona
-name: "Rin — Toolsmith"
+name: "Rin, toolsmith"
 audience: aud-toolsmiths
 role: TypeScript engineer building tooling on top of moose-tracevals
 proficiency: [typescript, esm, json-schema, dependency-injection, npm-packaging]
@@ -28,13 +28,13 @@ journeys:
 cross_cutting: true
 ---
 
-# Persona: Rin — Toolsmith
+# Persona: Rin, toolsmith
 
 **Scope:** the builder persona for [`aud-toolsmiths`](../audiences/toolsmiths.md), the cross-cutting
 audience. Rin imports the library; the CLI is incidental to them.
 
-Rin maintains internal tooling, or an open-source agent framework, and has decided moose-tracevals is
-close enough to what they need that extending it beats rebuilding it. They opened `src/index.ts`
+Rin maintains internal tooling, or an open-source agent framework. They have decided moose-tracevals
+is close enough to what they need that extending it beats rebuilding it. They opened `src/index.ts`
 before they opened any guide, and treat an undocumented export as an invitation.
 
 **Goal:** extend instead of reimplementing. Add the check the built-ins miss, consume results as data,
@@ -54,16 +54,16 @@ and eventually read a trace format the tool does not support yet.
 - **Undocumented report shape.** Parsing a structure they reverse-engineered means every release
   is a gamble.
 
-**How they use moose-tracevals:** as a dependency. They register a grader at startup, run the engine
-with an injected judge so their own suite stays offline, and read the typed report instead of the
-rendered one. They will contribute upstream if the seam is clear enough to make it obvious where
+**How they use moose-tracevals:** as a dependency. They register a grader at startup, and run the
+engine with an injected judge so their own suite stays offline. They read the typed report instead
+of the rendered one. They will contribute upstream if the seam is clear enough to make it obvious where
 their change belongs.
 
 **What success looks like for them:** a custom grader written, registered, and passing in their
-own test suite inside an afternoon, with no fork and no import from a deep path.
+own test suite inside an afternoon. No fork, and no import from a deep path.
 
 **Careful with:** Rin sits at the top of the dependency stack. Their content should assume the
-journey pages and link back instead of restating: a custom grader cannot be explained before the
-built-in graders are. Resist the pull to make this content an exhaustive symbol dump: what Rin
-needs is the *map* (which exports are the front door) and the *contracts* (what a grader owes its
-caller), not a list of every name.
+journey pages and link back instead of restating. A custom grader cannot be explained before the
+built-in graders are. Resist the pull to make this content an exhaustive symbol dump. Rin needs a
+*map* of which exports are the front door. Rin also needs the *contracts* of what a grader owes its
+caller, not a list of every name.
