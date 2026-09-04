@@ -1,6 +1,6 @@
 ---
 title: Triage FAQ
-description: Short answers to the questions that come up after reading a failing moose-tracevals result — skipped checks, missing artifacts, judged verdicts you disagree with, and who owns the fix.
+description: Short answers to the questions that come up after reading a failing moose-tracevals result. Covers skipped checks, missing artifacts, judged verdicts you disagree with, and who owns the fix.
 sidebar:
   order: 2
 ---
@@ -8,12 +8,12 @@ sidebar:
 import { Aside } from '@astrojs/starlight/components';
 
 **Scope:** the follow-up questions that survive [Read a failing eval](/moose-tracevals/triage/). If you
-have not read that page yet, start there — it decodes a result in one pass.
+have not read that page yet, start there. It decodes a result in one pass.
 
 ## About the result
 
 **The eval says `SKIP`. Did anything actually run?**
-Not that one. The reason is always printed underneath, and there are four unrelated causes: a
+Not that one. The reason is always printed underneath. There are four unrelated causes: a
 `--deterministic-only` run, no judge configured, an artifact that opted out, or an exhausted cost
 budget. A grader can also skip itself when the trace lacks the data it needs. None of them fail the
 build.
@@ -39,7 +39,7 @@ action.
 ## About judged verdicts
 
 **The judge is wrong. What now?**
-Check its `observed` line first — it cites what the judge claims it saw. If that citation does not
+Check its `observed` line first. It cites what the judge claims it saw. If that citation does not
 match the session, the verdict is unsound and worth saying so to whoever owns the artifact. If the
 citation is accurate but the conclusion is not, the assertion is probably ambiguous, which is a
 eval problem rather than a session problem.
@@ -55,7 +55,7 @@ against consensus and can only push a result toward review, never toward a silen
 
 **Why did it pass when I would have failed it?**
 An auto-pass needs unanimity *and* mean confidence above the threshold, so a pass is not a weak
-signal. If you disagree, the assertion likely does not say what you meant — that is worth fixing at
+signal. If you disagree, the assertion likely does not say what you meant. That is worth fixing at
 the eval, because it will keep passing otherwise.
 
 ## About re-running
@@ -85,7 +85,7 @@ npx moose-tracevals run <trace-file> --project ./my-repo --deterministic-only
 ## About ownership
 
 **Who fixes this?**
-The coverage table printed the artifact's file path, and that file is in version control — `git log`
+The coverage table printed the artifact's file path, and that file is in version control. `git log`
 on it names the owner. Bring them the artifact name, the eval name, and for a judged verdict
 the vote split plus the cited observation.
 
@@ -96,10 +96,10 @@ changing your work to satisfy it.
 
 **The build is red and I cannot fix it right now.**
 `needs-review` counting as a failure is configurable (`failOnNeedsReview: false`), and severity is
-per eval — but both are decisions for whoever owns the gate, not a workaround to apply under
+per eval. Both are decisions for whoever owns the gate, though, not a workaround to apply under
 time pressure.
 
 <Aside title="Still stuck?">
-The two pages worth opening next are [How the judge decides](/moose-tracevals/judge/) if the verdict is
-what puzzles you, and [Declare what to check](/moose-tracevals/declare/) if the *eval* is.
+Open [How the judge decides](/moose-tracevals/judge/) next if the verdict is what puzzles you.
+Open [Declare what to check](/moose-tracevals/declare/) if the *eval* is.
 </Aside>

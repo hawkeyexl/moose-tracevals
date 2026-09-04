@@ -1,6 +1,6 @@
 ---
 title: How the judge decides
-description: Ensembles, consensus, and confidence zones — the arithmetic behind a judged verdict, why an errored run can never produce a silent pass, and exactly what a judged run sends to the provider.
+description: Ensembles, consensus, and confidence zones. The arithmetic behind a judged verdict, why an errored run can never produce a silent pass, and exactly what a judged run sends to the provider.
 sidebar:
   order: 1
 ---
@@ -30,8 +30,8 @@ Each run returns a structured verdict:
 | `confidence` | the model's own 0–1 confidence |
 | `reasoning` | why |
 
-A run that fails to produce a valid verdict, whether from an API failure or malformed JSON after a
-retry, is recorded as an **errored run**. It does not disappear. That single fact is what the rest
+A run that fails to produce a valid verdict is recorded as an **errored run**. That covers an API
+failure and malformed JSON after a retry. It does not disappear. That single fact is what the rest
 of this page is built on.
 
 ## From votes to consensus
@@ -50,7 +50,7 @@ meanConfidence = mean confidence across non-errored runs
 Two choices here have consequences:
 
 - **`partial` counts as a failure** for the binary outcome. A session that partly followed an
-  instruction did not follow it. The partial votes stay visible in the report, so you can still see
+  instruction did not follow it. The partial votes stay visible in the report. You can still see
   the difference between a clean three-nil fail and a genuinely ambiguous one.
 - **A tie goes to `fail`.** `pass > failVotes` is a strict comparison, so an evenly split ensemble
   does not resolve as a pass. In practice such a split routes to review anyway (see below).
@@ -74,7 +74,7 @@ Both auto-resolving zones require zero errored runs. So if a judge run fails, wh
 out or the model returned unparseable JSON, the eval cannot land in `auto-pass`. The worst it can do
 is push the result to `needs-review`.
 
-This is the invariant to check if you are deciding whether to trust this system: a failure of the
+This is the invariant to check if you are deciding whether to trust this system. A failure of the
 measuring instrument surfaces as *"a human should look"*, never as *"everything is fine"*.
 </Aside>
 
@@ -122,37 +122,38 @@ That `observed` line is the evidence, and it is what makes a judged verdict some
 A verdict citing a specific turn and file can be audited; one that says "the session did not comply"
 cannot.
 
-The prompt asks for exactly that: cited messages, tool calls, and instructions followed or violated.
+The prompt asks for exactly that. It wants cited messages, tool calls, and instructions followed
+or violated.
 It is also why an assertion written so a stranger could adjudicate it produces better verdicts than
 one written as a slogan.
 
 ## What leaves the machine
 
 A judged eval sends one request per ensemble run to the configured provider. With
-`--deterministic-only`, **no provider is constructed and nothing is sent at all** — that is the only
+`--deterministic-only`, **no provider is constructed and nothing is sent at all**. That is the only
 setting under which this section has no content.
 
 Otherwise, each request carries exactly this:
 
 | Part | Redacted? |
 |---|---|
-| The eval's `assertion`, `evidence`, and `examples` | No — text you authored |
-| The source artifact's body, capped at 8 000 characters | **No** — see below |
-| Session header: source, model, `cwd`, git branch, turn count, skill and agent names | Yes |
+| The eval's `assertion`, `evidence`, and `examples` | No, this is text you authored |
+| The source artifact's body, capped at 8 000 characters | **No**, see below |
+| Session header, with source, model, `cwd`, git branch, turn count, skill and agent names | Yes |
 | User prompts and assistant text, **within the eval's window** | Yes |
 | Tool **names** and tool **call inputs** | Yes |
 | Tool **results**, file contents, command stdout/stderr | **Not sent at all** |
 
 Two things are worth reading twice. Tool *results* are never rendered, so a file this session read
 does not travel with it. And an eval is judged against
-[the window its artifact governed](/moose-tracevals/reference/graders/), so a skill's request
+[the window its artifact governed](/moose-tracevals/reference/graders/). A skill's request
 usually carries a fraction of the session rather than all of it.
 
 ### Redaction
 
 Everything marked *Yes* above is filtered before it is sent. The built-in shapes are always on:
 
-- vendor API-key prefixes — `sk-…`, `AKIA…`, `gh[pousr]_…`, `xox…`, `AIza…`, and JWTs
+- vendor API-key prefixes such as `sk-…`, `AKIA…`, `gh[pousr]_…`, `xox…`, `AIza…`, and JWTs
 - `Authorization` values behind `Bearer`, `Basic`, and `Token`
 - `-----BEGIN … PRIVATE KEY-----` blocks
 - secret-named assignments in shell (`DATABASE_PASSWORD=…`) and JSON (`"apiKey": "…"`) form, plus
@@ -161,18 +162,18 @@ Everything marked *Yes* above is filtered before it is sent. The built-in shapes
 Add your own with [`judge.redact`](/moose-tracevals/reference/configuration/#judgeredact); they are
 applied **on top of** the built-ins, never instead of them.
 
-Matches are **replaced, not deleted**, with a labelled placeholder — `[redacted:api-key]`,
-`[redacted:auth-token]`, `[redacted:secret-value]` — so the judge can still see that a credential
-was used, which is often the adherence question. `Bearer [redacted:auth-token]` keeps the scheme;
+Matches are **replaced, not deleted**, with a labelled placeholder. The labels are
+`[redacted:api-key]`, `[redacted:auth-token]`, and `[redacted:secret-value]`. The judge can still
+see that a credential was used, which is often the adherence question. `Bearer [redacted:auth-token]` keeps the scheme;
 `AWS_SECRET_ACCESS_KEY=[redacted:secret-value]` keeps the variable name.
 
 Redaction runs **before** the truncation caps, so a `maxBlockChars` boundary can never land
 mid-secret and ship the surviving prefix.
 
 <Aside type="caution" title="Best-effort, not a guarantee">
-Pattern matching recognizes *shapes*. A secret that looks like ordinary prose — an internal
-hostname, a customer name, a password with no surrounding assignment — will not be caught, and no
-pattern list will catch it. **`--deterministic-only` is the only guarantee that nothing leaves the
+Pattern matching recognizes *shapes*. A secret that looks like ordinary prose will not be caught,
+and no pattern list will catch it. That covers an internal hostname, a customer name, and a
+password with no surrounding assignment. **`--deterministic-only` is the only guarantee that nothing leaves the
 machine.**
 
 The **artifact body is deliberately not redacted**: it is your own instruction file, and its exact
@@ -180,8 +181,8 @@ text is part of the cache key. A secret in a `SKILL.md` is a problem to fix in t
 ([ADR 01020](https://github.com/hawkeyexl/moose-tracevals/blob/main/adrs/01020-redact-the-judge-digest-before-it-leaves-the-machine.md)).
 </Aside>
 
-Redaction and the cache work together without a knob: the digest is hashed into the cache key, so a
-redacted run gets its own entry and can never replay a verdict formed on unredacted text. A pattern
+Redaction and the cache work together without a knob. The digest is hashed into the cache key, so a
+redacted run gets its own entry. It can never replay a verdict formed on unredacted text. A pattern
 that matches nothing leaves the digest byte-identical and still hits the existing entry, so adding a
 precautionary pattern costs nothing.
 

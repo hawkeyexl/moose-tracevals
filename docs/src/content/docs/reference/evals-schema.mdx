@@ -15,8 +15,8 @@ import { Aside } from '@astrojs/starlight/components';
 
 The block implements **`docmeta:artifact-evals:1.0.0-proposal.1`**, a common metadata vocabulary
 published by [docmeta](https://github.com/hawkeyexl/docmeta) rather than by this tool. moose-tracevals
-ships a byte-identical copy of the schema and implements the *behavior* — the graders, the judge, the
-reports — against it. Any session-grading tool can implement the same vocabulary.
+ships a byte-identical copy of the schema and implements the *behavior* against it. That behavior is
+the graders, the judge, and the reports. Any session-grading tool can implement the same vocabulary.
 
 <Aside type="caution" title="Still a proposal">
 The vocabulary is open for community review, which is what the `-proposal.1` suffix records. It is a
@@ -46,16 +46,16 @@ metadata:
 ---
 ```
 
-`metadata` stays **open** — other tools' members pass through untouched — while eval entries are
+`metadata` stays **open**, so other tools' members pass through untouched. Eval entries are
 closed, so a misspelled field inside one fails loudly instead of being ignored.
 
 ## The three keys
 
 | Key | Type | Default | Description |
 |---|---|---|---|
-| `metadata.evals` | string, or non-empty list | — | One assertion, or the list of them. |
+| `metadata.evals` | string, or non-empty list | none | One assertion, or the list of them. |
 | `metadata.eval-skip` | boolean | `false` | Skip this artifact's evals entirely. Reported as `skipped`, never silently dropped. |
-| `metadata.eval-provenance` | list | — | Which model proposed which evals, at what confidence. Written by [`fill`](/moose-tracevals/declare/fill/). |
+| `metadata.eval-provenance` | list | none | Which model proposed which evals, at what confidence. Written by [`fill`](/moose-tracevals/declare/fill/). |
 
 Because `metadata` must stay open, the schema alone cannot catch a typo like `eval-skpi`. So the
 **`eval` prefix is reserved**: any unrecognized `metadata.eval*` key is an error, not a key that
@@ -100,23 +100,23 @@ reorder the list. Use the object form for anything you want to reference or trac
 
 | Field | Type | Default | Description |
 |---|---|---|---|
-| `id` | string | **required** | Stable identifier, unique per artifact. Must match `^[a-z0-9][a-z0-9-]*$` — lowercase kebab-case. |
+| `id` | string | **required** | Stable identifier, unique per artifact. Must match `^[a-z0-9][a-z0-9-]*$`, lowercase kebab-case. |
 | `assertion` | string | **required** | What must have held in the session. |
 | `grader` | string | `ai` | How the assertion is checked. See [graders](/moose-tracevals/reference/graders/). |
-| `options` | object | — | Grader-specific options, validated by the grader itself. |
+| `options` | object | none | Grader-specific options, validated by the grader itself. |
 | `severity` | `error` \| `warning` \| `info` | `error` | Only `error` findings fail the eval. |
 | `type` | `capability` \| `regression` | `regression` | Reported, never enforced. See below. |
 | `skip` | boolean | `false` | Skip this one eval, reported as `skipped`. |
-| `evidence` | string | — | A hint telling the judge where in the session to look. Judged evals only. |
-| `examples` | object | — | `{ pass, fail }` — anchor examples for the judge. Each is one string or a list of them. |
+| `evidence` | string | none | A hint telling the judge where in the session to look. Judged evals only. |
+| `examples` | object | none | `{ pass, fail }`, anchor examples for the judge. Each is one string or a list of them. |
 | `provider` | string | config default | Judge this eval with a specific configured provider. |
-| `severity-map` | object | — | Maps a `tool:*` grader's own severities onto eval severities. Accepted for vocabulary parity; moose-tracevals implements no `tool:*` graders, so it is ignored here. |
+| `severity-map` | object | none | Maps a `tool:*` grader's own severities onto eval severities. Accepted for vocabulary parity; moose-tracevals implements no `tool:*` graders, so it is ignored here. |
 
 Command-graded evals take four more fields, covered under
 [the command grader](/moose-tracevals/reference/graders/#command).
 
 **Ids are required on the object form** because a position-derived name breaks the history join
-whenever entries move — a rename reads as one eval removed and another added, and the trend line
+whenever entries move. A rename reads as one eval removed and another added, and the trend line
 resets. If an eval is worth an object, it is worth a stable name.
 
 ```yaml
@@ -149,7 +149,7 @@ Both are reported; **neither changes enforcement**. A failing `capability` eval 
 still contributes to a non-zero exit code.
 
 That restraint is deliberate. A `capability` eval that could not fail the build would just be a
-comment; the value of the field is that reports and history can tell the two apart, so a failing
+comment. The value of the field is that reports and history can tell the two apart. A failing
 probe is never read as a regression. New evals, including everything `fill` writes, default to
 `regression`, the conservative choice.
 
@@ -169,7 +169,7 @@ metadata:
 ```
 
 Entries merge by `generated-by`, so repeated fills by one model extend one entry. **You delete the
-entry once you have reviewed those evals** — that is what makes the trail mean something.
+entry once you have reviewed those evals**. That is what makes the trail mean something.
 
 ## The implicit eval
 
@@ -192,7 +192,7 @@ The schema ships with the package:
 import schema from "moose-tracevals/schemas/artifact-evals-1.0.0-proposal.1.json" with { type: "json" };
 ```
 
-You do not need to pin anything to author evals — moose-tracevals validates against the shipped copy.
+You do not need to pin anything to author evals. moose-tracevals validates against the shipped copy.
 Importing it matters when *your own* tooling reads or generates these blocks.
 
 ## When the block is invalid
@@ -208,11 +208,11 @@ an `error` outcome, a JSON Pointer to the offending field, and a source line num
 <Aside type="caution" title="Migrating from artifact-evals-0.2">
 The pre-1.0 spellings fail loudly rather than degrading, which is the point:
 
-- `metadata.evals.criteria:` — the container is gone; the list is the value of `evals`.
-- `- name:` on an object entry — now `- id:`, and required.
-- `metadata.evals.skip` — now `metadata.eval-skip`, a sibling of `evals` rather than nested inside it.
-- `grader: llm` — now `grader: ai`. This one passes the schema (the grader enum is open) and is
-  rejected by the grader registry at run time, with a message naming every kind it knows.
+- `metadata.evals.criteria:` is gone. The list is now the value of `evals`.
+- `- name:` on an object entry is now `- id:`, and required.
+- `metadata.evals.skip` is now `metadata.eval-skip`, a sibling of `evals` rather than nested in it.
+- `grader: llm` is now `grader: ai`. It passes the schema, because the grader enum is open. The
+  grader registry rejects it at run time, with a message naming every kind it knows.
 </Aside>
 
 <Aside title="Only YAML frontmatter can be written">

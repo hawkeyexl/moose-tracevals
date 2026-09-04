@@ -18,13 +18,13 @@ import { Aside } from '@astrojs/starlight/components';
 |---|---|
 | `0` | every eval passed or was skipped |
 | `1` | any `fail` or `error`, and `needs-review` unless `failOnNeedsReview: false` |
-| `2` | operational error — bad usage, unreadable trace, unknown format, nonexistent path |
+| `2` | operational error, from bad usage, an unreadable trace, an unknown format, or a nonexistent path |
 
 `2` is written to stderr as `moose-tracevals: <message>`; `0` and `1` write the report to stdout.
 
 [`calibrate`](/moose-tracevals/reference/cli/#calibrate) reads `0` and `1` differently, because it
-measures rather than gates: disagreeing with your labels is exit `0`, and only a threshold you asked
-for — or a trace that could not be evaluated — makes it `1`.
+measures rather than gates. Disagreeing with your labels is exit `0`. Only a threshold you asked
+for, or a trace that could not be evaluated, makes it `1`.
 
 ## Outcomes
 
@@ -32,7 +32,7 @@ for — or a trace that could not be evaluated — makes it `1`.
 |---|---|---|
 | `pass` | the eval held | no |
 | `fail` | the eval was violated by an `error`-severity finding | yes |
-| `error` | the check itself broke — invalid options, an invalid evals block, an unknown grader kind | yes |
+| `error` | the check itself broke, through invalid options, an invalid evals block, or an unknown grader kind | yes |
 | `needs-review` | the judge did not reach confident agreement | yes, by default |
 | `skipped` | the check did not run; the reason is always given | no |
 
@@ -86,13 +86,13 @@ The complete `RunReport`:
 |---|---|---|
 | `evalName` | string | The eval's name, or `adheres-to-artifact` / `evals-block-valid`. |
 | `artifact` | string | Absolute path to the artifact file. |
-| `artifactName` | string | Its display name — `fix-bug`, `CLAUDE.md`. |
+| `artifactName` | string | Its display name, such as `fix-bug` or `CLAUDE.md`. |
 | `artifactType` | string | `skill`, `agent`, `project-rules`, or `slash-command`. |
 | `grader` | string | The grader kind, `ai` for judged. |
 | `implicit` | boolean | `true` for the whole-artifact eval. |
 | `outcome` | string | One of the five outcomes above. |
 | `findings` | array? | Deterministic findings: `{ evalName, artifact, message, severity }`. |
-| `consensus` | object? | Judged evals only — see below. |
+| `consensus` | object? | Judged evals only, see below. |
 | `error` | string? | Why the check broke, when `outcome` is `error`. |
 | `skipReason` | string? | Why it was skipped. |
 | `costUsd` | number? | Judged evals only. |
@@ -133,9 +133,9 @@ One entry per artifact reference found in the trace, resolved or not.
 An unresolved reference is **not** a failing eval. It is a coverage note plus a warning, so a missing
 plugin never crashes a run or turns a build red on its own.
 
-`stale` is likewise **never** an eval outcome and never an exit code — it is a heuristic
-(mtime is not content identity, and a checkout rewrites every mtime) that says how much to trust the
-verdicts, not what they are. See [Staleness](/moose-tracevals/declare/coverage/#staleness).
+`stale` is likewise **never** an eval outcome and never an exit code. It is a heuristic that says
+how much to trust the verdicts, not what they are. mtime is not content identity, and a checkout
+rewrites every mtime. See [Staleness](/moose-tracevals/declare/coverage/#staleness).
 
 #### The location shown for an entry
 
@@ -153,8 +153,8 @@ covering several files (`CLAUDE.md` *and* `AGENTS.md`), so the entry is `resolve
 ### `availability`
 
 What the session was **offered**, next to what it used. `recorded: false` means the trace carried no
-availability roster at all — *unknown*, not *nothing offered* — and every `CoverageEntry` then reads
-`unknown`.
+availability roster at all. That is *unknown*, not *nothing offered*, and every `CoverageEntry`
+then reads `unknown`.
 
 | Field | Type | Notes |
 |---|---|---|
@@ -203,8 +203,8 @@ Warnings
 12 eval(s): 4 pass, 1 fail, 0 error, 1 needs-review, 6 skipped
 ```
 
-`forbidden-tool` forbids `Bash`, and this session ran it twice — but only once after the `fix-bug`
-skill was invoked, and only that one is the skill's business. `doc-writer` was spawned and recorded
+`forbidden-tool` forbids `Bash`, and this session ran it twice. Only one of those came after the
+`fix-bug` skill was invoked, and only that one is the skill's business. `doc-writer` was spawned and recorded
 no turns, so its evals report `skipped` rather than a verdict about work it had no part in. Both are
 [eval windowing](/moose-tracevals/reference/graders/#shared-behavior).
 
@@ -218,10 +218,10 @@ extra lines appear: the vote split and the first `observed`.
 ```
 
 Coverage marks: `✓` resolved, `○` referenced but not found, `·` offered and never used. The location
-follows the rule [above](#the-location-shown-for-an-entry) — except for a `·` row, which reports
+follows the rule [above](#the-location-shown-for-an-entry). A `·` row is the exception. It reports
 `offered, never used` plus the roster's own description, because nothing was ever looked for on disk.
-A stale entry appends `⚠ modified after the session ended (<iso>)` after the location — in markdown,
-into the same **Where** cell, so the table keeps its column count.
+A stale entry appends `⚠ modified after the session ended (<iso>)` after the location. In markdown
+that goes into the same **Where** cell, so the table keeps its column count.
 
 ## `--format markdown`
 
@@ -233,8 +233,8 @@ in messages are escaped. Suited to a build summary or a PR comment.
 
 ## Batch runs
 
-Naming more than one trace — or selecting them with `--all-projects`, `--since`, or `--limit` —
-emits a **`BatchReport`** instead. It answers a different question: not *did this hold?* but *how
+Naming more than one trace emits a **`BatchReport`** instead, as does selecting them with
+`--all-projects`, `--since`, or `--limit`. It answers a different question: not *did this hold?* but *how
 often does it hold?*
 
 Naming exactly one trace still emits the `RunReport` above, byte for byte. What decides the shape is
@@ -276,7 +276,7 @@ One artifact, or one eval within it, summed across the batch.
 | `traces` | number | Traces that produced at least one result for this row. |
 | `total` | number | Eval results contributing. |
 | `counts` | object | `{ pass, fail, error, needsReview, skipped }`. |
-| `graded` | number | `total` minus `skipped` — the pass-rate denominator. |
+| `graded` | number | `total` minus `skipped`, the pass-rate denominator. |
 | `passRate` | number\|null | `pass / graded`, or `null` when nothing was graded. |
 | `failingTraces` | string[] | Traces where this row produced a `fail` or `error`, in batch order. |
 | `reviewTraces` | string[] | Traces where it produced a `needs-review`. |
@@ -310,8 +310,8 @@ corpus produce comparable reports on any platform.
 
 <Aside type="caution" title="The judge budget is shared, not per trace">
 `maxCostUsd` applies to the whole invocation. Once it is exhausted the remaining evals report
-`skipped` with the reason `judge cost budget exhausted ($N)` — on later traces as well as later
-evals — and the reason survives into the row's `skipReasons`. It is never a `pass`, and never a
+`skipped` with the reason `judge cost budget exhausted ($N)`. That applies on later traces as well
+as later evals, and the reason survives into the row's `skipReasons`. It is never a `pass`, and never a
 silently absent row.
 </Aside>
 
@@ -375,14 +375,14 @@ Traces
 ```
 
 Three rows worth reading closely. `forbidden-tool` is `0%` over the one trace that invoked the
-skill — the other trace never did, so it is not in the denominator. `refactor-preserved-intent` is
+skill. The other trace never did, so it is not in the denominator. `refactor-preserved-intent` is
 `0%` for a different reason: it is awaiting human review, named under `review:` rather than
 `failing:`. And `doc-writer`'s rows are `—`, because that agent governed no turns in either trace;
 a `100%` there would be a rate computed from nothing.
 
-The markdown form is the same content as three tables — `## Eval pass rates`
+The markdown form is the same content as three tables: `## Eval pass rates`
 (`| Rate | Artifact | Eval | Grader | Traces | Outcomes | Outliers |`), `## Artifact pass rates`, and
-`## Traces` — suited to a build summary or a PR comment.
+`## Traces`. It suits a build summary or a PR comment.
 
 ## Calibration runs
 
@@ -415,7 +415,7 @@ It answers *was it right?*, so it leads with the two kinds of mistake rather tha
 | Field | Type | Notes |
 |---|---|---|
 | `counts.labels` | number | Labels that joined to a result. A label matching nothing is exit `2`, never a missing row. |
-| `counts.scored` | number | `labels` minus `skipped` — the `agreement` denominator. |
+| `counts.scored` | number | `labels` minus `skipped`, the `agreement` denominator. |
 | `counts.falsePass` | number | Labelled `fail`, judged `pass`. |
 | `counts.falseFail` | number | Labelled `pass`, judged `fail`. |
 | `counts.review` | number | Labelled `pass` or `fail`, routed to a human instead. |
@@ -424,15 +424,15 @@ It answers *was it right?*, so it leads with the two kinds of mistake rather tha
 | `counts.insufficient` | number | Rows whose cached ensemble was too small to score at this setting. Non-zero also raises a warning. |
 | `counts.agreement` | number \| null | `agree / scored`; `null` when nothing was scored. |
 | `disagreements[].kind` | string | `false-pass`, `false-fail`, `review`, `missed-review`, or `error`. |
-| `disagreements[].consensus` | object? | Vote tally, agreement, mean confidence, and run count **at the setting scored** — not at the depth the corpus was judged. |
+| `disagreements[].consensus` | object? | Vote tally, agreement, mean confidence, and run count **at the setting scored**, not at the depth the corpus was judged. |
 | `disagreements[].note` | string? | Whatever you wrote in the labels file. |
 | `sweep[].axis` | string | `baseline`, `ensembleRuns`, `zones.autoPass`, or `zones.autoFail`. |
 | `sweep[].value` | number | The value of that axis on this row. |
 | `gates[].exceeded` | boolean | Any `true` makes `exitCode` `1`. |
 
-The human and markdown forms carry the same content: the headline counts, the disagreement list with
-its evidence and notes, the unscored rows with their skip reasons, the sweep table, and the
-thresholds. See [Calibrate the judge](/moose-tracevals/judge/calibrate/).
+The human and markdown forms carry the same content. That is the headline counts, the disagreement
+list with its evidence and notes, and the unscored rows with their skip reasons. It also covers the
+sweep table and the thresholds. See [Calibrate the judge](/moose-tracevals/judge/calibrate/).
 
 ## `--output`
 
@@ -459,7 +459,7 @@ Each line is a `HistoryEntry`:
 | `summary` | object | The same summary counts as the report. |
 | `exitCode` | number | `0` or `1`. |
 | `costUsd` | number | Judge spend for that run. |
-| `evals` | array | `{ artifact, evalName, outcome }` per eval — outcomes only, not findings. |
+| `evals` | array | `{ artifact, evalName, outcome }` per eval, outcomes only, not findings. |
 
 The comparison matches on `sessionId` when present, falling back to `traceFile`, and is appended to
 non-JSON output:

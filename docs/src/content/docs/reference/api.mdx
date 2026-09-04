@@ -14,9 +14,8 @@ Source of truth: `src/index.ts`.
 import { runEvals, parseTraceFile, registerGrader } from "moose-tracevals";
 ```
 
-ESM-only, Node.js 24+, types shipped. **★ marks an intended entry point** — the rest is exported
-because the CLI is built from it and it is useful for tests, but those are the ones to reach for
-first.
+ESM-only, Node.js 24+, types shipped. **★ marks an intended entry point**. The rest is exported
+because the CLI is built from it and it is useful for tests. The starred ones are where to start.
 
 ## Subpath exports
 
@@ -39,7 +38,7 @@ The CLI's four commands, callable directly. Each pairs a runner with a renderer.
 | Export | Notes |
 |---|---|
 | `runRun`, `RunCommandOptions`, `RunCommandResult` | `run`, one trace. `RunCommandOptions.judge` injects a judge. |
-| `prepareRun`, `runOne`, `RunContext`, `RunSharedOptions` | The seams a batch reuses: build the judge, config, and plugins once, then evaluate one trace. |
+| `prepareRun`, `runOne`, `RunContext`, `RunSharedOptions` | The seams a batch reuses. Build the judge, config, and plugins once, then evaluate one trace. |
 | `runBatch`, `resolveBatchTraces`, `parseSince`, `BatchCommandOptions`, `BatchCommandResult` | `run` over many traces. `BatchCommandResult.outcomes` pairs each file with its report, errors included. |
 | `runCalibrate`, `CalibrateCommandOptions`, `CalibrateCommandResult` | `calibrate`. Accepts the same judge injection through `RunSharedOptions`. |
 | `runFill`, `renderFill`, `FillOptions`, `FillReport`, `FillArtifactResult`, `FillRun`, `FillStatus`, `SharpeningNote` | `fill`. `FillOptions.providerInstance` injects a provider. |
@@ -93,7 +92,7 @@ The CLI's four commands, callable directly. Each pairs a runner with a renderer.
 | ★ `registerGrader(grader)` | Add a kind at runtime. See [Custom graders](/moose-tracevals/extend/custom-graders/). |
 | `graderFor(kind)`, `listGraderKinds()` | |
 | `BUILTIN_GRADER_KINDS` | The kinds this package ships, frozen before anything can register over them. |
-| `loadGraderPlugins({ plugins, configDir })` | Import grader plugins the way `run` and `fill` do — same resolution, same warnings. Throws `TracevalsError` on a specifier that will not load. |
+| `loadGraderPlugins({ plugins, configDir })` | Import grader plugins the way `run` and `fill` do, with the same resolution and the same warnings. Throws `TracevalsError` on a specifier that will not load. |
 | `GraderPluginApi`, `GraderPluginRegister`, `LoadGraderPluginsOptions`, `LoadedGraderPlugins` | |
 | `EvalPlan` | |
 | *(all of `graders/types`)* | `TraceGrader`, `GradeResult`, `Finding`, `TraceGraderContext`. |
@@ -110,7 +109,7 @@ The CLI's four commands, callable directly. Each pairs a runner with a renderer.
 |---|---|
 | `makeTraceJudge(options)` | Build the ensemble judge. |
 | `makeJudgeProvider(...)`, `providerSpecFor(...)` | Provider construction. `providerSpecFor` resolves identity without constructing, so a fully cached run needs no API key. |
-| `renderTrace(trace, options?, plan?)` | The transcript as the judge sees it — redacted. With a `plan`, only that artifact's window. |
+| `renderTrace(trace, options?, plan?)` | The transcript as the judge sees it, redacted. With a `plan`, only that artifact's window. |
 | `makeRedactor(extra?)` | The scrubber `renderTrace` applies. Built-in shapes plus any extra sources, which **add to** them. |
 | `REDACTION_PATTERNS`, `CUSTOM_PLACEHOLDER` | The built-in shapes with their labels, and the placeholder a configured pattern produces. |
 | `compileRedactPatterns(sources)` | Compile-check pattern sources up front; throws `TracevalsError` on one that will not compile. |
@@ -130,9 +129,9 @@ offline-able. You rarely need `makeTraceJudge` unless you want the real ensemble
 | Export | Notes |
 |---|---|
 | ★ `loadConfig(dir?)` | Read `moose.config.yaml` from `dir`, take its `tracevals` section, validate, and fully populate defaults. |
-| `parseConfig(raw)` | The same from an object. `raw` is the **section**, not the whole file — pass what sits under `tracevals:`. |
-| `DEFAULT_CONFIG_FILENAME` | `"moose.config.yaml"` — the config file shared by the moose family. |
-| `CONFIG_SECTION_KEY` | `"tracevals"` — the top-level key in that file holding this tool's settings. |
+| `parseConfig(raw)` | The same from an object. `raw` is the **section**, not the whole file. Pass what sits under `tracevals:`. |
+| `DEFAULT_CONFIG_FILENAME` | `"moose.config.yaml"`, the config file shared by the moose family. |
+| `CONFIG_SECTION_KEY` | `"tracevals"`, the top-level key in that file holding this tool's settings. |
 | `TracevalsConfig`, `ProviderConfig`, `Pricing` | |
 
 Downstream code always receives a fully-populated config, so there is no need to re-apply defaults.
@@ -151,7 +150,7 @@ Downstream code always receives a fully-populated config, so there is no need to
 | *(all of `types`)* | `TracevalsError`, `RunReport`, `EvalResult`, `RunSummary`, `Outcome`, `BatchReport`, `AggregateRow`, `BatchTraceEntry`, `BatchSummary`. |
 | *(all of `calibrate/types`)* | `CalibrationReport`, `CalibrationCounts`, `Disagreement`, `SweepCell`, `CalibrationGate`, `JudgeSetting`, `JoinKind`, `EvalLabel`, `LabelOutcome`. |
 | `loadLabels`, `parseLabels`, `labelKey`, `DEFAULT_LABELS_FILE` | The labels sidecar. `parseLabels(text, file)` resolves trace paths against `file`'s directory. |
-| `joinLabels`, `score`, `rescore`, `classify` | Pure calibration arithmetic. `rescore` re-applies zones and ensemble depth to a result's cached runs — no provider involved. |
+| `joinLabels`, `score`, `rescore`, `classify` | Pure calibration arithmetic. `rescore` re-applies zones and ensemble depth to a result's cached runs, with no provider involved. |
 
 `TracevalsError` is the operational-failure type. The CLI maps it to exit `2`; catch it if you want
 to distinguish "the tool could not run" from "a check failed".
@@ -175,6 +174,6 @@ Exported so the authoring path is testable and extensible. Most consumers will n
 
 <Aside title="Stability">
 The package is pre-1.0 and versioned by semantic-release from Conventional Commits. The ★ entry
-points are the ones the CLI itself is built on and the least likely to move; the `fill` internals
+points are the ones the CLI itself is built on, and the least likely to move. The `fill` internals
 exist mostly to serve this repository's own tests.
 </Aside>

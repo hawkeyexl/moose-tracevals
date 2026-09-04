@@ -1,6 +1,6 @@
 ---
 title: Glossary
-description: Definitions of the terms moose-tracevals uses — trace, artifact, eval, grader, plan, finding, outcome, consensus, zone, sidechain, and the rest.
+description: Definitions of the terms moose-tracevals uses, from trace and artifact to eval, grader, plan, finding, outcome, consensus, zone, and sidechain.
 sidebar:
   order: 9
 ---
@@ -23,7 +23,8 @@ order.
 never writes them. See [Traces reference](/moose-tracevals/reference/traces/).
 
 **Session store**
-: Where an agent CLI keeps its traces — `~/.claude/projects/<project-slug>/*.jsonl` for Claude Code.
+: Where an agent CLI keeps its traces, such as `~/.claude/projects/<project-slug>/*.jsonl` for
+Claude Code.
 Scanned by `moose-tracevals list` and the interactive picker.
 
 **Project slug**
@@ -33,7 +34,7 @@ character with a hyphen. `/work/demo` becomes `-work-demo`.
 **Sidechain**
 : A tool call made *inside a spawned subagent* rather than in the main conversation. Excluded from
 counts by default; `tool-usage` opts in with `includeSidechains: true`. The exception is an eval on
-an agent definition, whose window *is* a branch — there the branch's calls are the subject and are
+an agent definition, whose window *is* a branch. There the branch's calls are the subject and are
 always counted. `turnCount` counts only non-sidechain user prompts.
 
 **Turn**
@@ -53,7 +54,7 @@ command** (`.claude/commands/*.md`), or a **project-rules** file (`CLAUDE.md`, `
 when someone types `/name`. Graded over the span it governed, exactly like a skill.
 
 **Artifact resolution**
-: Mapping each reference in a trace to a file on disk, deterministically — trace content plus
+: Mapping each reference in a trace to a file on disk, deterministically, from trace content plus
 filesystem lookup, never a model. See [Account for every artifact](/moose-tracevals/declare/coverage/).
 
 **Coverage**
@@ -65,8 +66,8 @@ every reporter. An unresolved reference is a coverage row plus a warning, never 
 `Explore`, `Plan`, `statusline-setup`, `fork`. Always shows as unresolved, by design.
 
 **Built-in slash command**
-: A `/name` that resolved to neither a command file nor a skill file anywhere — Claude Code's own
-`/model`, `/compact`, `/clear`. Inferred from the absence of a file rather than from a list of
+: A `/name` that resolved to neither a command file nor a skill file anywhere, such as Claude
+Code's own `/model`, `/compact`, `/clear`. Inferred from the absence of a file rather than from a list of
 names, which would go stale every release. Shows as unresolved with a note and no warning.
 
 ---
@@ -94,8 +95,8 @@ pass. Defaults to `error`.
 *expected* to fail sometimes). Reported, never enforced. Added in artifact-evals `0.2`.
 
 **Eval plan**
-: The internal pairing of one eval with one artifact, ready to be graded. Its fingerprint —
-assertion, evidence, examples, and artifact content — is part of the judge cache key.
+: The internal pairing of one eval with one artifact, ready to be graded. Its fingerprint covers
+assertion, evidence, examples, and artifact content, and is part of the judge cache key.
 
 ---
 
@@ -108,18 +109,18 @@ name is an open enum, validated against the grader registry at run time rather t
 See the [grader reference](/moose-tracevals/reference/graders/).
 
 **Deterministic grader**
-: One that decides from the trace alone — no model call, no cost, same answer every time.
+: One that decides from the trace alone, with no model call, no cost, and the same answer every time.
 `tool-usage`, `skill-invoked`, `file-access`, `turn-count`, `cost`, `regex`, `json-output`.
 
 **Eval window**
 : The slice of a trace an artifact was actually governing, and the only evidence its evals see.
-Derived from the artifact's type — a skill's invocation up to the next skill's, an agent's own
-branch, the whole session for project rules. An empty window is `skipped` with a reason, never
+Derived from the artifact's type. A skill gets its invocation up to the next skill's, and an agent
+gets its own branch. Project rules get the whole session. An empty window is `skipped` with a reason, never
 passed. See the [grader reference](/moose-tracevals/reference/graders/).
 
 **Whole-session grader**
-: `cost` and `json-output`, which measure the entire session rather than one artifact's window:
-tokens are not attributable to whichever artifact was governing, and the final output is the
+: `cost` and `json-output`, which measure the entire session rather than one artifact's window.
+Tokens are not attributable to whichever artifact was governing, and the final output is the
 session's. Never proposed by `fill`, and neither is `turn-count`, which is windowed but stayed out
 of the allowlist.
 
@@ -139,7 +140,7 @@ through confidence zones. See [How the judge decides](/moose-tracevals/judge/).
 
 **Errored run**
 : A judge run that produced no valid verdict. It counts against consensus and can push an eval to
-review — **never** to a silent pass.
+review, **never** to a silent pass.
 
 **Consensus**
 : The tally across an ensemble: vote counts, a majority `verdict`, `agreement`, and

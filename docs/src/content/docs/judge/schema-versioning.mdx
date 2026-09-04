@@ -29,15 +29,15 @@ import schema from "moose-tracevals/schemas/artifact-evals-1.0.0-proposal.1.json
 ```
 
 <Aside title="Do I need to pin anything?">
-Not to author evals — moose-tracevals validates against the copy it ships. Importing the schema
+Not to author evals. moose-tracevals validates against the copy it ships. Importing the schema
 matters when *your own tooling* reads or generates these blocks and you need the shape to hold still.
 </Aside>
 
 <Aside type="caution" title="`-proposal.1` is a prerelease, and the hyphen is load-bearing">
-The vocabulary is under community review. `1.0.0-proposal.1` is a semver **prerelease**: it sorts
+The vocabulary is under community review. `1.0.0-proposal.1` is a semver **prerelease**. It sorts
 *below* the `1.0.0` it will register as, and standard range matching excludes it, so nobody depends
 on a draft by accident. Spelled `+proposal.1` it would be build metadata and compare **equal** to the
-release — the opposite of what a draft wants.
+release, which is the opposite of what a draft wants.
 </Aside>
 
 ## What a version bump will mean
@@ -55,7 +55,7 @@ So a bump tells you directly whether your corpus is at risk: only MAJOR can brea
 validates today.
 
 <Aside title="Adding a grader is not a schema change">
-The `grader` field is an **open enum** — any kebab-case name validates, and the
+The `grader` field is an **open enum**. Any kebab-case name validates, and the
 [grader registry](/moose-tracevals/reference/graders/) is what rejects an unknown one at run time.
 A new grader therefore never needs a new schema version. The cost is that a misspelled or retired
 name (`llm`, the pre-1.0 spelling of `ai`) passes validation and fails during the run instead.
@@ -79,11 +79,11 @@ name (`llm`, the pre-1.0 spelling of `ai`) passes validation and fails during th
 
 **Neither changes enforcement.** A failing `capability` eval still fails and still contributes to a
 non-zero exit code. That restraint is deliberate: an eval that could not fail the build would just be
-a comment. What the field buys you is the ability to read a report and a history log and know that a
-red probe is not a regression.
+a comment. The field instead lets you read a report or a history log and know that a red probe
+is not a regression.
 
-New evals default to `regression`, including everything `fill` writes — the conservative choice,
-since mislabelling a real guard as a probe is the more expensive mistake.
+New evals default to `regression`, including everything `fill` writes. That is the conservative
+choice, since mislabelling a real guard as a probe is the more expensive mistake.
 
 <Aside type="caution" title="`capability` is reported, not excused">
 If you want probes to stop blocking a pipeline, that is a severity decision, not a `type` decision.
@@ -121,12 +121,12 @@ assertion: **never flip a whole corpus to `error` at once.**
 
 </Steps>
 
-The same ratchet works in reverse for tightening an existing assertion: add the sharper eval under a
+The same ratchet works in reverse for tightening an existing assertion. Add the sharper eval under a
 new id at `warning`, let both run, and remove the old one when the new one is clean.
 
 <Aside title="Why not just tighten in place?">
-Editing an assertion changes the eval plan, which changes the cache key, which re-judges every
-session against a rule that half your artifacts have never been written for. You get a wall of red
+Editing an assertion changes the eval plan, which changes the cache key. Every session is then
+re-judged against a rule that half your artifacts have never been written for. You get a wall of red
 that tells you nothing about whether behavior changed. Adding a second eval keeps the old signal
 intact while the new one settles.
 </Aside>
@@ -143,13 +143,13 @@ ERROR  fix-bug › evals-block-valid
 ```
 
 Eval entries are closed, so a misspelled field inside one is an error rather than a key that quietly
-does nothing. `metadata` itself must stay open — it is the host tool's extension bag — so the `eval`
-prefix is reserved at run time instead: `eval-skpi` is rejected the same way. When you roll out a
+does nothing. `metadata` itself must stay open, because it is the host tool's extension bag. The
+`eval` prefix is reserved at run time instead, so `eval-skpi` is rejected the same way. When you roll out a
 convention and something breaks, you get the file, the pointer, and the line.
 
 ## Keep ids stable
 
-Eval ids are the join key for history: a regression is defined as *this artifact and this eval id
+Eval ids are the join key for history. A regression is defined as *this artifact and this eval id
 went from pass to fail*. Renaming an eval therefore reads as one eval `removed` and another `added`,
 and the trend line resets.
 
