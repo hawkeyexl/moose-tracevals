@@ -8,11 +8,11 @@ decision-makers: [hawkeyexl, Claude]
 
 ## Context and Problem Statement
 
-moose-tracevals 0.2.x was a self-contained eval framework with three modes (spec trials via `claude -p`, transcript, prompt), its own LLM judge (spawning the `claude` CLI), and regex-based criteria scraping. The judge duplicated machinery the sibling docevals project already ships (providers, ensemble consensus, confidence zones), and the multi-mode design blurred what the tool is for. What should the ground-up rework be built around, and on what foundations?
+moose-tracevals 0.2.x was a self-contained eval framework with three modes (spec trials through `claude -p`, transcript, prompt). It carried its own LLM judge, spawning the `claude` CLI, and regex-based criteria scraping. The judge duplicated machinery the sibling docevals project already ships: providers, ensemble consensus, and confidence zones. The multi-mode design also blurred what the tool is for. What should the ground-up rework be built around, and on what foundations?
 
 ## Decision Drivers
 
-- One clear job: evaluate whether an existing agent session adhered to the skills and instructions it used.
+- One clear job, evaluating whether an existing agent session adhered to the skills and instructions it used.
 - Avoid re-implementing judge safety machinery (errored-run handling, consensus, zones) that docevals already tests.
 - Frontmatter parsing and schema validation are docmeta's domain; duplicating them invites drift.
 - Live trial generation (spec mode, pass@k) coupled the tool to a specific agent CLI and made runs expensive and nondeterministic.
@@ -36,7 +36,7 @@ Chosen option: "Trace-only rework depending on docevals + docmeta". The pipeline
 
 ### Confirmation
 
-CI's dogfood gate runs the built CLI against the fixture corpus; the absence of any trial-generation code path is enforced by the package no longer spawning agent CLIs outside the judge provider layer (checked in review; the hermetic-test rule flags any new spawn).
+CI's dogfood gate runs the built CLI against the fixture corpus. The absence of any trial-generation code path is enforced by the package no longer spawning agent CLIs outside the judge provider layer. That is checked in review, and the hermetic-test rule flags any new spawn.
 
 ## Pros and Cons of the Options
 

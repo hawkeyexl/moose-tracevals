@@ -12,9 +12,9 @@ docevals exports both a full ensemble judge (`makeJudge`) and the layers beneath
 
 ## Decision Drivers
 
-- `makeJudge` is page-coupled end to end: it takes `GraderTarget[]` of `ResolvedPagePlan`s, reads page bodies and files, loads page-keyed human reviews, and its prompt hardcodes "# Page content".
+- `makeJudge` is page-coupled end to end. It takes `GraderTarget[]` of `ResolvedPagePlan`s, reads page bodies and files, and loads page-keyed human reviews. Its prompt hardcodes "# Page content".
 - docevals' `JudgeCache` and `verdict-schema.json` are not exported.
-- The safety invariants worth inheriting (errored runs count against consensus and can never produce a silent pass; a tie is not a pass; confidence-zone routing) live in `computeConsensus` and `zoneFor`, not in `makeJudge`.
+- The safety invariants worth inheriting live in `computeConsensus` and `zoneFor`, not in `makeJudge`. Those are that errored runs count against consensus and can never produce a silent pass. A tie is not a pass, and confidence-zone routing belongs there too.
 
 ## Considered Options
 
@@ -24,7 +24,7 @@ docevals exports both a full ensemble judge (`makeJudge`) and the layers beneath
 
 ## Decision Outcome
 
-Chosen option: "Reuse the provider and consensus layer". `src/judge/trace-judge.ts` implements the ensemble loop (N runs at temperature 0, retry-once-on-invalid-JSON then record an errored run, cost budget) mirroring docevals' `singleRun` behavior, with its own trace-adherence prompt (`PROMPT_VERSION`ed), its own verdict schema of identical shape (`claim`, `observed`, `match`, `confidence`, `reasoning`), and its own content-addressed cache. Consensus and zone routing are delegated to the imported docevals functions.
+Chosen option: "Reuse the provider and consensus layer". `src/judge/trace-judge.ts` implements the ensemble loop, mirroring docevals' `singleRun` behavior. That loop is N runs at temperature 0, a retry once on invalid JSON before recording an errored run, and a cost budget. It carries its own trace-adherence prompt (`PROMPT_VERSION`ed), its own verdict schema of identical shape (`claim`, `observed`, `match`, `confidence`, `reasoning`), and its own content-addressed cache. Consensus and zone routing are delegated to the imported docevals functions.
 
 ### Consequences
 
@@ -34,7 +34,7 @@ Chosen option: "Reuse the provider and consensus layer". `src/judge/trace-judge.
 
 ### Confirmation
 
-`test/unit/` judge tests drive the wrapper through `MockProvider` ensembles (pass, fail, split, errored) and assert the consensus/zone outcomes match docevals semantics — including that an all-errored ensemble routes to human-review, never pass.
+`test/unit/` judge tests drive the wrapper through `MockProvider` ensembles (pass, fail, split, errored). They assert the consensus/zone outcomes match docevals semantics, including that an all-errored ensemble routes to human-review, never pass.
 
 ## Pros and Cons of the Options
 
